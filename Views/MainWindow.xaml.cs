@@ -21,14 +21,6 @@ namespace SteamLuaManager.Views;
 
 public partial class MainWindow : Window
 {
-    private static readonly Regex LoginUserRegex = new(
-        "\"(\\d+)\"\\s*\\{[^}]*\"AccountName\"\\s+\"([^\"]+)\"[^}]*\"PersonaName\"\\s+\"([^\"]+)\"[^}]*\"AvatarHash\"\\s+\"([^\"]+)\"[^}]*\"MostRecent\"\\s+\"([^\"]+)\"",
-        RegexOptions.Singleline | RegexOptions.Compiled);
-
-    private static readonly Regex LoginUserFallbackRegex = new(
-        "\"(\\d+)\"\\s*\\{[^}]*\"AccountName\"\\s+\"([^\"]+)\"[^}]*\"PersonaName\"\\s+\"([^\"]+)\"[^}]*\"MostRecent\"\\s+\"([^\"]+)\"",
-        RegexOptions.Singleline | RegexOptions.Compiled);
-
     private readonly string[] _navOrder = ["Home", "ScriptDownload", "Extraction", "Settings", "About"];
     private string _prevTag = "Home";
 
@@ -721,34 +713,32 @@ public partial class MainWindow : Window
             var content = System.IO.File.ReadAllText(vdfPath);
             var accounts = new List<SteamAccount>();
 
-            foreach (Match match in LoginUserRegex.Matches(content))
+            foreach (Match blockMatch in Regex.Matches(content, "\\\"(\\d+)\\\"\\s*\\{(?<body>.*?)\\}", RegexOptions.Singleline))
             {
+                var body = blockMatch.Groups["body"].Value;
+                var accountName = GetVdfValue(body, "AccountName");
+                var personaName = GetVdfValue(body, "PersonaName");
+                if (string.IsNullOrEmpty(accountName))
+                    continue;
+
                 accounts.Add(new SteamAccount
                 {
-                    SteamId = match.Groups[1].Value,
-                    AccountName = match.Groups[2].Value,
-                    PersonaName = match.Groups[3].Value,
-                    AvatarHash = match.Groups[4].Value,
-                    MostRecent = match.Groups[5].Value == "1"
+                    SteamId = blockMatch.Groups[1].Value,
+                    AccountName = accountName,
+                    PersonaName = string.IsNullOrEmpty(personaName) ? accountName : personaName,
+                    AvatarHash = GetVdfValue(body, "AvatarHash"),
+                    MostRecent = GetVdfValue(body, "MostRecent") == "1"
                 });
-            }
-            // Fallback: VDF 可能没有 AvatarHash 字段
-            if (accounts.Count == 0)
-            {
-                foreach (Match match in LoginUserFallbackRegex.Matches(content))
-                {
-                    accounts.Add(new SteamAccount
-                    {
-                        SteamId = match.Groups[1].Value,
-                        AccountName = match.Groups[2].Value,
-                        PersonaName = match.Groups[3].Value,
-                        MostRecent = match.Groups[4].Value == "1"
-                    });
-                }
             }
             return accounts;
         }
         catch { return null; }
+    }
+
+    private static string GetVdfValue(string block, string key)
+    {
+        var match = Regex.Match(block, $"\\\"{Regex.Escape(key)}\\\"\\s+\\\"([^\\\"]*)\\\"");
+        return match.Success ? match.Groups[1].Value : string.Empty;
     }
 
     // ========== OpenSteamTool 内核管理 ==========
