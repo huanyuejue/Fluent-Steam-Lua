@@ -1,0 +1,352 @@
+﻿<UserControl x:Class="SteamLuaManager.Views.SettingsView"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.inkore.net/lib/ui/wpf/modern"
+        Background="Transparent"
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="ClearType"
+        RenderOptions.ClearTypeHint="Enabled"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True">
+
+    <Grid Margin="36,24,36,24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Text="设置" FontSize="28" FontWeight="SemiBold" Margin="0,0,0,16"
+                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+
+        <TabControl Grid.Row="1" SelectedIndex="{Binding SelectedTabIndex}"
+                    SelectionChanged="TabControl_SelectionChanged">
+            <TabControl.Resources>
+                <Style TargetType="TabItem">
+                    <Setter Property="FontSize" Value="15"/>
+                    <Setter Property="Padding" Value="20,10"/>
+                    <Setter Property="Margin" Value="0,0,6,0"/>
+                    <Setter Property="Background" Value="Transparent"/>
+                    <Setter Property="BorderBrush" Value="Transparent"/>
+                    <Setter Property="BorderThickness" Value="0"/>
+                    <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="TabItem">
+                                <Border x:Name="Border"
+                                        Background="{TemplateBinding Background}"
+                                        Padding="{TemplateBinding Padding}"
+                                        BorderThickness="0"
+                                        CornerRadius="6">
+                                    <ContentPresenter ContentSource="Header"
+                                                      HorizontalAlignment="Center"
+                                                      VerticalAlignment="Center"
+                                                      RecognizesAccessKey="False"
+                                                      TextElement.Foreground="{TemplateBinding Foreground}"
+                                                      TextElement.FontSize="{TemplateBinding FontSize}"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="Border" Property="Background" Value="{DynamicResource ControlAltFillColorSecondaryBrush}"/>
+                                    </Trigger>
+                                    <Trigger Property="IsSelected" Value="True">
+                                        <Setter TargetName="Border" Property="Background">
+                                            <Setter.Value>
+                                                <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </TabControl.Resources>
+            <TabControl.Template>
+                <ControlTemplate TargetType="TabControl">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <StackPanel Grid.Row="0" IsItemsHost="True"
+                                    Orientation="Horizontal"
+                                    Background="Transparent"/>
+                        <ContentPresenter x:Name="ContentArea" Grid.Row="1"
+                                          ContentSource="SelectedContent"/>
+                    </Grid>
+                </ControlTemplate>
+            </TabControl.Template>
+
+            <!-- 基本设置 -->
+            <TabItem Header="基本设置">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" BorderThickness="0"
+                              Background="Transparent">
+                    <StackPanel Margin="0,8,0,16">
+
+                        <ui:SettingsCard Header="Steam 路径" Margin="0,0,0,8"
+                                         Description="选择Steam安装路径，留空则自动检测"
+                                         ui:ControlHelper.CornerRadius="8">
+                            <ui:SettingsCard.Background>
+                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
+                            </ui:SettingsCard.Background>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBox Text="{Binding SteamPath, Mode=OneWay}"
+                                         IsReadOnly="True" Width="240" Padding="8,6" Margin="0,0,4,0">
+                                    <TextBox.Background>
+                                        <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                                    </TextBox.Background>
+                                </TextBox>
+                                <Button Content="浏览" Command="{Binding BrowseSteamPathCommand}"
+                                        Padding="12,6" Margin="4,0">
+                                    <Button.Background>
+                                        <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                                    </Button.Background>
+                                </Button>
+                                <Button Content="重置" Command="{Binding ResetSteamPathCommand}"
+                                        Padding="12,6" Margin="4,0">
+                                    <Button.Background>
+                                        <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                                    </Button.Background>
+                                </Button>
+                            </StackPanel>
+                        </ui:SettingsCard>
+
+                        <ui:SettingsCard Header="自动监控" Margin="0,0,0,8"
+                                         Description="文件变更时自动刷新游戏列表"
+                                         ui:ControlHelper.CornerRadius="8">
+                            <ui:SettingsCard.Background>
+                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
+                            </ui:SettingsCard.Background>
+                            <ui:ToggleSwitch IsOn="{Binding IsAutoRefreshEnabled}"
+                                             OnContent="开" OffContent="关"/>
+                        </ui:SettingsCard>
+
+                        <ui:SettingsCard Header="自动检查更新" Margin="0,0,0,8"
+                                         Description="启动软件时自动检查是否有新版本"
+                                         ui:ControlHelper.CornerRadius="8">
+                            <ui:SettingsCard.Background>
+                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
+                            </ui:SettingsCard.Background>
+                            <ui:ToggleSwitch IsOn="{Binding AutoCheckUpdateEnabled}"
+                                             OnContent="开" OffContent="关"/>
+                        </ui:SettingsCard>
+
+                        <ui:SettingsCard Header="Lua 文件夹" Margin="0,0,0,8"
+                                         Description="打开Steam Lua配置目录"
+                                         ui:ControlHelper.CornerRadius="8">
+                            <ui:SettingsCard.Background>
+                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
+                            </ui:SettingsCard.Background>
+                            <Button Content="打开目录" Command="{Binding OpenLuaFolderCommand}"
+                                    Padding="12,6" Margin="4,0">
+                                <Button.Background>
+                                    <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                                </Button.Background>
+                            </Button>
+                        </ui:SettingsCard>
+
+                        <ui:SettingsCard Header="Steam 文件夹" Margin="0,0,0,8"
+                                         Description="打开Steam安装目录"
+                                         ui:ControlHelper.CornerRadius="8">
+                            <ui:SettingsCard.Background>
+                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
+                            </ui:SettingsCard.Background>
+                            <Button Content="打开目录" Command="{Binding OpenSteamFolderCommand}"
+                                    Padding="12,6" Margin="4,0">
+                                <Button.Background>
+                                    <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                                </Button.Background>
+                            </Button>
+                        </ui:SettingsCard>
+
+                        <ui:SettingsCard Header="缓存管理" Margin="0,0,0,8"
+                                         Description="清理游戏名称和封面图片缓存"
+                                         ui:ControlHelper.CornerRadius="8">
+                            <ui:SettingsCard.Background>
+                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
+                            </ui:SettingsCard.Background>
+                            <StackPanel Orientation="Horizontal">
+                                <Button Content="清理缓存" Command="{Binding ClearCacheCommand}"
+                                        Padding="12,6" Margin="4,0">
+                                    <Button.Background>
+                                        <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                                    </Button.Background>
+                                </Button>
+                                <Button Content="打开缓存目录" Command="{Binding OpenCacheFolderCommand}"
+                                        Padding="12,6" Margin="4,0">
+                                    <Button.Background>
+                                        <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                                    </Button.Background>
+                                </Button>
+                            </StackPanel>
+                        </ui:SettingsCard>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- 接口设置 -->
+            <TabItem Header="接口设置">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" BorderThickness="0"
+                              Background="Transparent">
+                    <StackPanel Margin="0,8,0,16">
+
+                        <ui:SettingsCard Header="入库接口" Margin="0,0,0,8"
+                                         Description="选择游戏入库方式"
+                                         ui:ControlHelper.CornerRadius="8">
+                            <ui:SettingsCard.Background>
+                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
+                            </ui:SettingsCard.Background>
+                            <ComboBox SelectedValue="{Binding DownloadMode, Mode=TwoWay}"
+                                       SelectedValuePath="Tag" HorizontalAlignment="Left" Padding="8,4">
+                                <ComboBox.Background>
+                                    <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                                </ComboBox.Background>
+                                <ComboBoxItem Content="本地缓存仓库 V1" Tag="DepotKey"/>
+                                <ComboBoxItem Content="本地缓存仓库 V2" Tag="DepotKey2"/>
+                                <ComboBoxItem Content="远程清单仓库" Tag="Remote"/>
+                            </ComboBox>
+                        </ui:SettingsCard>
+
+                        <ui:SettingsCard Header="封面CDN节点" Margin="0,0,0,8"
+                                         Description="选择优先使用的封面下载节点"
+                                         ui:ControlHelper.CornerRadius="8">
+                            <ui:SettingsCard.Background>
+                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
+                            </ui:SettingsCard.Background>
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <ComboBox ItemsSource="{Binding CdnEndpoints}"
+                                              SelectedIndex="{Binding SelectedCdnIndex}"
+                                                HorizontalAlignment="Left" Padding="8,4" Margin="0,0,4,0">
+                                        <ComboBox.Background>
+                                            <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                                        </ComboBox.Background>
+                                    </ComboBox>
+                                    <Button Content="测速" Command="{Binding TestCdnSpeedCommand}"
+                                            IsEnabled="{Binding IsSpeedTesting, Converter={StaticResource BoolInvertConverter}}"
+                                            Padding="12,6" Margin="4,0">
+                                        <Button.Background>
+                                            <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                                        </Button.Background>
+                                    </Button>
+                                    <StackPanel Orientation="Horizontal" Margin="8,0,0,0"
+                                                VerticalAlignment="Center"
+                                                Visibility="{Binding IsSpeedTesting, Converter={StaticResource BoolToVisibilityConverter}}">
+                                        <ProgressBar Value="{Binding SpeedTestProgress}"
+                                                     Maximum="{Binding SpeedTestTotal}"
+                                                     Width="100" Height="3" VerticalAlignment="Center"/>
+                                        <TextBlock Text="{Binding SpeedTestProgressText}" FontSize="12"
+                                                   Margin="6,0,0,0" VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </StackPanel>
+                        </ui:SettingsCard>
+
+                        <Border CornerRadius="8" Background="{DynamicResource LayerFillColorDefaultBrush}"
+                                Margin="0,8,0,0" Padding="12,8"
+                                Visibility="{Binding SpeedTestResults.Count, Converter={StaticResource NonZeroToVisibilityConverter}}">
+                            <ItemsControl ItemsSource="{Binding SpeedTestResults}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,4,0,4">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Ellipse Grid.Column="0" Width="8" Height="8" Fill="{Binding ColorCode}"
+                                                     Margin="0,0,10,0" VerticalAlignment="Center" Opacity="0.9"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="13"
+                                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="2" Text="{Binding StatusText}" FontSize="13"
+                                                       FontWeight="Medium"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Border>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- 显示设置 -->
+            <TabItem Header="显示设置">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" BorderThickness="0"
+                              Background="Transparent">
+                    <StackPanel Margin="0,8,0,16">
+
+                        <ui:SettingsCard Header="主题模式" Margin="0,0,0,8"
+                                         Description="选择深色、浅色或跟随系统主题"
+                                         ui:ControlHelper.CornerRadius="8">
+                            <ui:SettingsCard.Background>
+                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
+                            </ui:SettingsCard.Background>
+                              <ComboBox ItemsSource="{Binding ThemeOptions}"
+                                       SelectedValue="{Binding SelectedTheme}"
+                                       SelectedValuePath="Value" DisplayMemberPath="Display"
+                                       HorizontalAlignment="Left" Padding="8,4">
+                                <ComboBox.Background>
+                                    <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                                </ComboBox.Background>
+                              </ComboBox>
+                        </ui:SettingsCard>
+
+                        <ui:SettingsCard Header="背景效果" Margin="0,0,0,8"
+                                         Description="选择窗口背景效果"
+                                         ui:ControlHelper.CornerRadius="8">
+                            <ui:SettingsCard.Background>
+                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
+                            </ui:SettingsCard.Background>
+                              <ComboBox ItemsSource="{Binding BackdropOptions}"
+                                       SelectedValue="{Binding SelectedBackdrop}"
+                                       SelectedValuePath="Value" DisplayMemberPath="Display"
+                                       HorizontalAlignment="Left" Padding="8,4">
+                                <ComboBox.Background>
+                                    <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                                </ComboBox.Background>
+                              </ComboBox>
+                        </ui:SettingsCard>
+
+                        <ui:SettingsCard Header="悬浮按钮" Margin="0,0,0,8"
+                                         Description="右下角悬浮功能按钮的显示开关"
+                                         ui:ControlHelper.CornerRadius="8">
+                            <ui:SettingsCard.Background>
+                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
+                            </ui:SettingsCard.Background>
+                            <ui:ToggleSwitch IsOn="{Binding IsFabVisible}"
+                                             OnContent="开" OffContent="关"/>
+                        </ui:SettingsCard>
+
+                        <ui:SettingsCard Header="卡片刷新按钮" Margin="0,0,0,8"
+                                         Description="每个游戏卡片上的刷新获取封面名字按钮"
+                                         ui:ControlHelper.CornerRadius="8">
+                            <ui:SettingsCard.Background>
+                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
+                            </ui:SettingsCard.Background>
+                            <ui:ToggleSwitch IsOn="{Binding IsCardRefreshVisible}"
+                                             OnContent="开" OffContent="关"/>
+                        </ui:SettingsCard>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+        </TabControl>
+
+        <ui:InfoBar Grid.Row="2"
+                    IsOpen="{Binding StatusMessage, Converter={StaticResource StringNotEmptyToBoolConverter}}"
+                    Message="{Binding StatusMessage}"
+                    Severity="Informational"
+                    IsClosable="False"
+                    HorizontalAlignment="Left"
+                    Margin="0,12,0,0"
+                    ui:ControlHelper.CornerRadius="8"/>
+
+    </Grid>
+</UserControl>

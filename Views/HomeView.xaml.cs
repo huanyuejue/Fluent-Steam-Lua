@@ -1,0 +1,352 @@
+﻿using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media.Animation;
+using System.Diagnostics;
+using System.Windows.Input;
+using System.Windows.Media;
+using iNKORE.UI.WPF.Modern.Controls;
+using iNKORE.UI.WPF.Modern;
+using SteamLuaManager.Models;
+using SteamLuaManager.ViewModels;
+
+namespace SteamLuaManager.Views;
+
+public partial class HomeView : UserControl
+{
+    private GameInfo? _activeMenuGame;
+    private MainViewModel? _activeMenuViewModel;
+    private Border? _cardSubmenuTrigger;
+    private Button? _activeMenuButton;
+
+    public HomeView()
+    {
+        InitializeComponent();
+        PreviewMouseLeftButtonDown += HomeView_PreviewMouseLeftButtonDown;
+    }
+
+    private void SearchBox_QuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs e)
+    {
+        if (DataContext is MainViewModel vm)
+        {
+            vm.SearchText = e.QueryText ?? string.Empty;
+        }
+    }
+
+    private void SearchBox_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs e)
+    {
+        if (DataContext is MainViewModel vm && e.Reason == AutoSuggestionBoxTextChangeReason.UserInput)
+        {
+            vm.SearchText = sender.Text ?? string.Empty;
+        }
+    }
+
+    private void ViewModeContainer_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement fe)
+        {
+            fe.IsVisibleChanged += (_, args) =>
+            {
+                if (args.NewValue is true)
+                {
+                    fe.Opacity = 0;
+                    var animation = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200));
+                    fe.BeginAnimation(OpacityProperty, animation);
+                }
+            };
+        }
+    }
+
+    private void MoreButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.Tag is GameInfo game && DataContext is MainViewModel vm)
+        {
+            if (CardMenuPanel.Visibility == Visibility.Visible && _activeMenuButton == btn)
+            {
+                _ = HideCardMenuAsync();
+                return;
+            }
+
+            _activeMenuGame = game;
+            _activeMenuViewModel = vm;
+            _activeMenuButton = btn;
+            CardSubmenuPanel.Visibility = Visibility.Collapsed;
+            CardMenuList.ItemsSource = new[]
+            {
+                new CardMenuItem("edit", "编辑 Lua"),
+                CardMenuItem.Separator(),
+                new CardMenuItem("delete", "删除 Lua"),
+                CardMenuItem.Separator(),
+                new CardMenuItem("pin", "版本固定", HasSubmenu: true),
+                CardMenuItem.Separator(),
+                new CardMenuItem("info", "游戏信息", HasSubmenu: true)
+            };
+
+            UpdateCardMenuBackground();
+            CardMenuPanel.Visibility = Visibility.Hidden;
+            PositionCardMenu(btn);
+            ShowPanel(CardMenuPanel);
+        }
+    }
+
+    private void HomeView_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (CardMenuPanel.Visibility != Visibility.Visible) return;
+
+        var source = e.OriginalSource as DependencyObject;
+        while (source != null)
+        {
+            if (source == CardMenuPanel || source == CardSubmenuPanel || source == _activeMenuButton)
+                return;
+            source = VisualTreeHelper.GetParent(source);
+        }
+        _ = HideCardMenuAsync();
+    }
+
+    private void PositionCardMenu(Button btn)
+    {
+        var point = btn.TranslatePoint(new Point(0, btn.ActualHeight + 4), CardMenuCanvas);
+        CardMenuPanel.UpdateLayout();
+        CardMenuPanel.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        var panelWidth = GetMeasuredWidth(CardMenuPanel, 172);
+        var panelHeight = GetMeasuredHeight(CardMenuPanel, 180);
+        var canvasWidth = CardMenuCanvas.ActualWidth;
+        var canvasHeight = CardMenuCanvas.ActualHeight;
+
+        // 默认左对齐到按钮，右侧不足时再向左收进窗口内。
+        var left = point.X;
+        left = Math.Clamp(left, 8, Math.Max(8, canvasWidth - panelWidth - 8));
+
+        var top = point.Y;
+        if (top + panelHeight > canvasHeight - 8)
+            top = Math.Max(8, point.Y - btn.ActualHeight - panelHeight - 4);
+        top = Math.Clamp(top, 8, Math.Max(8, canvasHeight - panelHeight - 8));
+
+        Canvas.SetLeft(CardMenuPanel, left);
+        Canvas.SetTop(CardMenuPanel, top);
+    }
+
+    private void PositionCardSubmenu(Border trigger)
+    {
+        CardSubmenuPanel.UpdateLayout();
+        CardSubmenuPanel.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        var point = trigger.TranslatePoint(new Point(trigger.ActualWidth + 4, 0), CardMenuCanvas);
+        var submenuWidth = GetMeasuredWidth(CardSubmenuPanel, 240);
+        var submenuHeight = GetMeasuredHeight(CardSubmenuPanel, 120);
+        var canvasWidth = CardMenuCanvas.ActualWidth;
+        var canvasHeight = CardMenuCanvas.ActualHeight;
+        var menuLeft = Canvas.GetLeft(CardMenuPanel);
+        var menuWidth = GetMeasuredWidth(CardMenuPanel, 172);
+
+        var rightLeft = menuLeft + menuWidth + 4;
+        var leftLeft = menuLeft - submenuWidth - 4;
+
+        double left;
+        if (rightLeft + submenuWidth <= canvasWidth - 8)
+            left = rightLeft;
+        else if (leftLeft >= 8)
+            left = leftLeft;
+        else
+            left = Math.Clamp(point.X, 8, Math.Max(8, canvasWidth - submenuWidth - 8));
+
+        var top = point.Y;
+        top = Math.Clamp(top, 8, Math.Max(8, canvasHeight - submenuHeight - 8));
+
+        Canvas.SetLeft(CardSubmenuPanel, left);
+        Canvas.SetTop(CardSubmenuPanel, top);
+    }
+
+    private async void CardMenuItem_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not Border { Tag: CardMenuItem item } || item.IsSeparator || item.HasSubmenu) return;
+        if (_activeMenuGame == null || _activeMenuViewModel == null) return;
+
+        await HideCardMenuAsync();
+        switch (item.Action)
+        {
+            case "edit":
+                _activeMenuViewModel.EditGameCommand.Execute(_activeMenuGame);
+                break;
+            case "delete":
+                await _activeMenuViewModel.DeleteGameCommand.ExecuteAsync(_activeMenuGame);
+                break;
+        }
+    }
+
+    private void CardMenuItem_MouseEnter(object sender, MouseEventArgs e)
+    {
+        if (sender is not Border border) return;
+        border.Background = (Brush)Application.Current.FindResource("SystemControlHighlightListMediumBrush");
+        if (border.Tag is not CardMenuItem item || !item.HasSubmenu || _activeMenuGame == null) return;
+
+        _cardSubmenuTrigger = border;
+        CardSubmenuList.ItemsSource = item.Action == "pin"
+            ? BuildPinSubmenu(_activeMenuGame)
+            : BuildInfoSubmenu();
+        CardSubmenuPanel.Visibility = Visibility.Hidden;
+        PositionCardSubmenu(border);
+        if (CardSubmenuPanel.Visibility != Visibility.Visible)
+            ShowPanel(CardSubmenuPanel);
+    }
+
+    private void CardMenuItem_MouseLeave(object sender, MouseEventArgs e)
+    {
+        if (sender is Border border)
+            border.Background = Brushes.Transparent;
+        if (_cardSubmenuTrigger != null)
+            _ = DelayedHideCardSubmenuAsync();
+    }
+
+    private void CardSubmenuPanel_MouseEnter(object sender, MouseEventArgs e) { }
+    private void CardSubmenuPanel_MouseLeave(object sender, MouseEventArgs e) => _ = DelayedHideCardSubmenuAsync();
+    private void CardMenuPanel_MouseLeave(object sender, MouseEventArgs e) => _ = DelayedHideCardMenuAsync();
+
+    private void CardSubmenuItem_MouseEnter(object sender, MouseEventArgs e)
+    {
+        if (sender is Border border)
+            border.Background = (Brush)Application.Current.FindResource("SystemControlHighlightListMediumBrush");
+    }
+
+    private void CardSubmenuItem_MouseLeave(object sender, MouseEventArgs e)
+    {
+        if (sender is Border border)
+            border.Background = Brushes.Transparent;
+    }
+
+    private async void CardSubmenuItem_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not Border { Tag: CardMenuItem item } || _activeMenuGame == null || _activeMenuViewModel == null) return;
+        await HideCardMenuAsync();
+
+        switch (item.Action)
+        {
+            case "unpin":
+                await _activeMenuViewModel.UnpinGameCommand.ExecuteAsync(_activeMenuGame);
+                break;
+            case "pin-latest":
+                await _activeMenuViewModel.PinToLatestCommand.ExecuteAsync(_activeMenuGame);
+                break;
+            case "pin-current":
+                await _activeMenuViewModel.PinToCurrentCommand.ExecuteAsync(_activeMenuGame);
+                break;
+            case "steamdb":
+                OpenUrl($"https://steamdb.info/app/{_activeMenuGame.AppId}/");
+                break;
+            case "store":
+                OpenUrl($"https://store.steampowered.com/app/{_activeMenuGame.AppId}/");
+                break;
+        }
+    }
+
+    private async Task DelayedHideCardSubmenuAsync()
+    {
+        await Task.Delay(200);
+        if (CardSubmenuPanel.IsMouseOver || (_cardSubmenuTrigger?.IsMouseOver ?? false)) return;
+        await HidePanelAsync(CardSubmenuPanel);
+    }
+
+    private async Task DelayedHideCardMenuAsync()
+    {
+        await Task.Delay(200);
+        if (CardMenuPanel.IsMouseOver || CardSubmenuPanel.IsMouseOver) return;
+        await HideCardMenuAsync();
+    }
+
+    private async Task HideCardMenuAsync()
+    {
+        await HidePanelAsync(CardSubmenuPanel);
+        await HidePanelAsync(CardMenuPanel);
+        _activeMenuButton = null;
+        _cardSubmenuTrigger = null;
+    }
+
+    private static void ShowPanel(Border panel)
+    {
+        panel.Visibility = Visibility.Visible;
+        panel.Opacity = 0;
+        if (panel.RenderTransform is ScaleTransform scale)
+            scale.ScaleY = 0.92;
+
+        var opacity = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(150))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+        };
+        var scaleAnim = new DoubleAnimation(0.92, 1, TimeSpan.FromMilliseconds(150))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+        };
+        panel.BeginAnimation(OpacityProperty, opacity);
+        (panel.RenderTransform as ScaleTransform)?.BeginAnimation(ScaleTransform.ScaleYProperty, scaleAnim);
+    }
+
+    private static double GetMeasuredWidth(FrameworkElement element, double fallback)
+    {
+        if (element.DesiredSize.Width > 0) return element.DesiredSize.Width;
+        if (element.ActualWidth > 0) return element.ActualWidth;
+        return fallback;
+    }
+
+    private static double GetMeasuredHeight(FrameworkElement element, double fallback)
+    {
+        if (element.DesiredSize.Height > 0) return element.DesiredSize.Height;
+        if (element.ActualHeight > 0) return element.ActualHeight;
+        return fallback;
+    }
+
+    private static async Task HidePanelAsync(Border panel)
+    {
+        if (panel.Visibility != Visibility.Visible) return;
+
+        var opacity = new DoubleAnimation(panel.Opacity, 0, TimeSpan.FromMilliseconds(100))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn }
+        };
+        var scaleAnim = new DoubleAnimation(1, 0.92, TimeSpan.FromMilliseconds(100))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn }
+        };
+        panel.BeginAnimation(OpacityProperty, opacity);
+        (panel.RenderTransform as ScaleTransform)?.BeginAnimation(ScaleTransform.ScaleYProperty, scaleAnim);
+        await Task.Delay(100);
+        panel.Visibility = Visibility.Collapsed;
+        panel.BeginAnimation(OpacityProperty, null);
+        if (panel.RenderTransform is ScaleTransform scale)
+        {
+            scale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
+            scale.ScaleY = 1;
+        }
+        panel.Opacity = 1;
+    }
+
+    private CardMenuItem[] BuildPinSubmenu(GameInfo game) => game.IsManifestPinned
+        ? [new CardMenuItem("unpin", "取消版本固定")]
+        : [new CardMenuItem("pin-latest", "固定到游戏最新版本"), CardMenuItem.Separator(), new CardMenuItem("pin-current", "固定到当前已安装版本")];
+
+    private static CardMenuItem[] BuildInfoSubmenu() =>
+        [new CardMenuItem("steamdb", "SteamDB页面"), CardMenuItem.Separator(), new CardMenuItem("store", "Steam商店页面")];
+
+    private void UpdateCardMenuBackground()
+    {
+        var brush = CreateFabPanelBrush();
+        CardMenuPanel.Background = brush;
+        CardSubmenuPanel.Background = brush;
+    }
+
+    private static SolidColorBrush CreateFabPanelBrush()
+    {
+        var isLight = ThemeManager.Current.ActualApplicationTheme == ApplicationTheme.Light;
+        var color = isLight
+            ? Color.FromArgb(0xFF, 0xF2, 0xF2, 0xF2)
+            : Color.FromArgb(0xFF, 0x2D, 0x2D, 0x2D);
+        return new SolidColorBrush(color) { Opacity = 0.85 };
+    }
+
+    private static void OpenUrl(string url)
+    {
+        Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+    }
+
+    private sealed record CardMenuItem(string Action, string Header, bool HasSubmenu = false, bool IsSeparator = false)
+    {
+        public static CardMenuItem Separator() => new("separator", string.Empty, IsSeparator: true);
+    }
+}

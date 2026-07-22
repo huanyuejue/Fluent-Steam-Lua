@@ -1,0 +1,15 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:converters="clr-namespace:SteamLuaManager.Converters">
+
+    <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+    <converters:InvertedBoolToVisibilityConverter x:Key="InvertedBoolToVisibilityConverter"/>
+    <converters:ZeroToVisibilityConverter x:Key="ZeroToVisibilityConverter"/>
+    <converters:NonZeroToVisibilityConverter x:Key="NonZeroToVisibilityConverter"/>
+    <converters:EqualityToVisibilityConverter x:Key="EqualityToVisibilityConverter"/>
+    <converters:FilePathToImageConverter x:Key="FilePathToImageConverter"/>
+    <converters:BoolInvertConverter x:Key="BoolInvertConverter"/>
+    <converters:BoolToRunStopConverter x:Key="BoolToRunStopConverter"/>
+    <converters:StringNotEmptyToBoolConverter x:Key="StringNotEmptyToBoolConverter"/>
+
+</ResourceDictionary>

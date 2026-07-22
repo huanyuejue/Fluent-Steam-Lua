@@ -1,0 +1,41 @@
+# Fluent Steam Lua 管理工具
+
+基于 WPF + Fluent Design 开发的现代化轻量级 Steam Lua 入库管理工具，目前仅适配OpenSteamTool
+
+## 预览
+
+| 主页 | 设置页 | 入库页 |
+|------|--------|--------|
+| ![主页](screenshots/home.png) | ![设置页](screenshots/setting.png) | ![入库页](screenshots/ruku.png) |
+
+## 功能特性
+
+- 📂 自动/手动扫描 Steam Lua 文件
+- 🖼️ 封面图片自动下载与缓存
+- 📥 一键搜索预览并入库新游戏 支持 AppId / 游戏名 模糊搜索
+- 🔧 从 Steam 直接提取游戏 Lua 清单（基于SteamAppDumper）
+- ⚙️ 快捷管理 OpenSteamTool 更新、安装与卸载
+- 📌 游戏版本锁定：支持固定游戏清单版本到最新版本或当前已安装版本
+- ⚡ 封面CDN 节点测速与自动切换
+- 👁️ 文件变更自动监控并刷新缓存（FileSystemWatcher）
+- 🎨 Fluent Design 现代化界面（Acrylic 亚克力 / NavigationView / 圆角过渡）
+
+
+## 系统要求
+
+- Windows 10 1809+ / Windows 11
+- [.NET 8 Runtime](https://dotnet.microsoft.com/download/dotnet/8.0)
+
+## 构建方法
+
+发布为单文件可执行程序：
+
+```bash
+dotnet publish -c Release -r win-x64 --no-self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none
+```
+
+发布为散文件可执行程序：
+
+```bash
+dotnet publish -c Release -r win-x64
+```

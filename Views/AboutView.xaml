@@ -1,0 +1,70 @@
+<UserControl x:Class="SteamLuaManager.Views.AboutView"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Background="Transparent"
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="ClearType"
+        RenderOptions.ClearTypeHint="Enabled"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True">
+
+    <Grid>
+        <ScrollViewer VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled"
+                      VerticalAlignment="Center" HorizontalAlignment="Center">
+            <StackPanel HorizontalAlignment="Center" Margin="48,32">
+
+                <!-- 大图标 -->
+                <Image Width="96" Height="96" Stretch="Uniform"
+                       Source="/Assets/app.png"
+                       HorizontalAlignment="Center" Margin="0,0,0,16"/>
+
+                <!-- 软件名 -->
+                <TextBlock Text="Fluent Steam Lua 管理工具" FontSize="24" FontWeight="Bold"
+                           HorizontalAlignment="Center" Margin="0,0,0,20"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+
+                <!-- 描述 -->
+                <Border CornerRadius="8" Padding="24,16"
+                        BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1" MaxWidth="480"
+                        HorizontalAlignment="Center" Margin="0,0,0,8">
+                    <Border.Background>
+                        <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
+                    </Border.Background>
+                    <StackPanel>
+                        <TextBlock Text="该项目是基于 WPF + Fluent 开发的现代化入库管理工具"
+                                   FontSize="14" TextWrapping="Wrap" TextAlignment="Center"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   LineHeight="22"/>
+                        <TextBlock Text="目前仅适配 OpenSteamTool"
+                                   FontSize="14" TextWrapping="Wrap" TextAlignment="Center"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   LineHeight="22"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- 版本号 -->
+                <TextBlock Text="{Binding VersionText}" FontSize="12"
+                           HorizontalAlignment="Center" Margin="0,16,0,0"
+                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+
+                <Button Content="检查更新"
+                        Click="CheckUpdate_Click"
+                        Padding="16,7"
+                        Margin="0,12,0,0"
+                        HorizontalAlignment="Center"/>
+
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- GitHub 图标 - 固定在底部 -->
+        <Button Click="GitHub_Click"
+                Background="Transparent" BorderThickness="0"
+                HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                Margin="0,0,0,24" Cursor="Hand"
+                Width="40" Height="40">
+            <Path Data="M12,0C5.373,0,0,5.373,0,12c0,5.302,3.438,9.8,8.207,11.387c0.599,0.111,0.793-0.261,0.793-0.577v-2.234c-3.338,0.726-4.033-1.416-4.033-1.416c-0.546-1.387-1.333-1.756-1.333-1.756c-1.089-0.745,0.083-0.729,0.083-0.729c1.205,0.084,1.839,1.237,1.839,1.237c1.07,1.834,2.807,1.304,3.492,0.997c0.107-0.775,0.418-1.305,0.762-1.604c-2.665-0.305-5.467-1.334-5.467-5.931c0-1.311,0.469-2.381,1.236-3.221c-0.124-0.303-0.535-1.524,0.117-3.176c0,0,1.008-0.322,3.301,1.23C9.573,7.056,10.599,6.923,11.619,6.918c1.02,0.005,2.047,0.138,3.006,0.404c2.291-1.552,3.297-1.23,3.297-1.23c0.653,1.653,0.242,2.874,0.118,3.176c0.77,0.84,1.235,1.911,1.235,3.221c0,4.609-2.807,5.624-5.479,5.921c0.43,0.372,0.823,1.102,0.823,2.222v3.293c0,0.319,0.192,0.694,0.801,0.576C20.565,21.795,24,17.298,24,12C24,5.373,18.627,0,12,0z"
+                  Fill="{DynamicResource TextFillColorSecondaryBrush}"
+                  Stretch="Uniform"/>
+        </Button>
+    </Grid>
+</UserControl>
