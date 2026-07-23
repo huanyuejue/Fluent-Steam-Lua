@@ -196,7 +196,8 @@ public partial class MainWindow : Window
                 await ShowModernDialogAsync(
                     "未安装 OpenSteamTool",
                     "未检测到 OpenSteamTool，本软件目前仅适配 OpenSteamTool。\n\n" +
-                    "请确保已在 Steam 目录中正确安装 OpenSteamTool 后再使用。");
+                    "请确保已在 Steam 目录中正确安装 OpenSteamTool 后再使用。\n\n" +
+                    "可在右下角悬浮按钮中的「OpenSteamTool 管理」中进行安装。");
                 break;
 
             case "检测到不适配的 SteamTools":
