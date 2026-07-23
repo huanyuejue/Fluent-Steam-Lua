@@ -454,10 +454,10 @@
                                                   Visibility="{Binding DataContext.IsSelectionMode, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibilityConverter}}"
                                                   Checked="CheckBox_Checked" Unchecked="CheckBox_Unchecked"/>
 
-                                        <Border Grid.Column="1" CornerRadius="6" ClipToBounds="True"
-                                                Margin="6,0,0,0"
-                                                Width="120" Height="52" Background="{DynamicResource ControlFillColorDefaultBrush}"
-                                                BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1">
+                                        <controls:ClippingBorder Grid.Column="1" CornerRadius="6" ClipToBounds="True"
+                                                 Margin="6,0,0,0"
+                                                 Width="120" Height="52" Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                                 BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1">
                                             <Grid>
                                                 <Image Source="{Binding CoverImagePath, Converter={StaticResource FilePathToImageConverter}}"
                                                        Stretch="UniformToFill"
@@ -485,7 +485,7 @@
                                                     </Rectangle.Style>
                                                 </Rectangle>
                                             </Grid>
-                                        </Border>
+                                        </controls:ClippingBorder>
 
                                         <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="14,0">
                                             <TextBlock Text="{Binding GameName}" FontWeight="SemiBold" FontSize="14"
