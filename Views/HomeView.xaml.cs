@@ -247,6 +247,9 @@ public partial class HomeView : UserControl
             case "store":
                 OpenUrl($"https://store.steampowered.com/app/{_activeMenuGame.AppId}/");
                 break;
+            case "dlc-query":
+                await _activeMenuViewModel.QueryDlcCommand.ExecuteAsync(_activeMenuGame);
+                break;
         }
     }
 
@@ -335,7 +338,7 @@ public partial class HomeView : UserControl
         : [new CardMenuItem("pin-latest", "固定到游戏最新版本"), CardMenuItem.Separator(), new CardMenuItem("pin-current", "固定到当前已安装版本")];
 
     private static CardMenuItem[] BuildInfoSubmenu() =>
-        [new CardMenuItem("steamdb", "SteamDB页面"), CardMenuItem.Separator(), new CardMenuItem("store", "Steam商店页面")];
+        [new CardMenuItem("steamdb", "SteamDB页面"), CardMenuItem.Separator(), new CardMenuItem("store", "Steam商店页面"), CardMenuItem.Separator(), new CardMenuItem("dlc-query", "清单DLC入库查询")];
 
     private void UpdateCardMenuBackground()
     {

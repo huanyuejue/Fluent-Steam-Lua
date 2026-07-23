@@ -30,6 +30,18 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        // 全局未处理异常日志
+        var logPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "crash.log");
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+            System.IO.File.WriteAllText(logPath, args.ExceptionObject.ToString());
+        DispatcherUnhandledException += (_, args) =>
+        {
+            System.IO.File.WriteAllText(logPath, args.Exception.ToString());
+            args.Handled = true;
+        };
+        TaskScheduler.UnobservedTaskException += (_, args) =>
+            System.IO.File.WriteAllText(logPath, args.Exception.ToString());
+
         var services = new ServiceCollection();
         ConfigureServices(services);
         ServiceProvider = services.BuildServiceProvider();

@@ -20,6 +20,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
 	private readonly ISteamApiService _steamApiService;
 	private readonly ISettingsService _settingsService;
 	private readonly ISteamManifestService _steamManifestService;
+	private readonly ISteamDepotService _steamDepotService;
+	private readonly IHttpClientProvider _httpClientProvider;
 	private List<GameInfo> _allGames = new();
 	private CancellationTokenSource? _refreshCts;
 	private DispatcherTimer? _progressTimer;
@@ -108,13 +110,17 @@ public partial class MainViewModel : ObservableObject, IDisposable
 		ILuaFileManager luaFileManager,
 		ISteamApiService steamApiService,
 		ISettingsService settingsService,
-		ISteamManifestService steamManifestService)
+		ISteamManifestService steamManifestService,
+		ISteamDepotService steamDepotService,
+		IHttpClientProvider httpClientProvider)
 	{
 		_steamPathService = steamPathService;
 		_luaFileManager = luaFileManager;
 		_steamApiService = steamApiService;
 		_settingsService = settingsService;
 		_steamManifestService = steamManifestService;
+		_steamDepotService = steamDepotService;
+		_httpClientProvider = httpClientProvider;
 
 		_luaFileManager.FilesChanged += OnFilesChanged;
 
@@ -678,6 +684,91 @@ public partial class MainViewModel : ObservableObject, IDisposable
 				game.Depots.Add(d);
 			game.IsManifestPinned = refreshed.IsManifestPinned;
 			game.Token = refreshed.Token;
+		}
+	}
+
+	[RelayCommand]
+	private async Task QueryDlcAsync(GameInfo? game)
+	{
+		if (game == null) return;
+
+		var luaFolder = _steamPathService.GetLuaFolder();
+		if (string.IsNullOrEmpty(luaFolder)) return;
+
+		try
+		{
+			RefreshProgressText = $"正在查询 {game.GameName} 的 DLC 信息...";
+			var result = await _steamDepotService.QueryAppAsync(game.AppId);
+			if (result == null || result.DlcAppIds.Count == 0)
+			{
+				await ShowModernDialogAsync("DLC 查询", $"{game.GameName} 没有找到关联的 DLC。");
+				RefreshProgressText = $"DLC 查询完成：{game.GameName} 无 DLC";
+				return;
+			}
+
+			// 读取父游戏 Lua 文件内容，判断 DLC 是否已入库
+			var gameLuaPath = game.IsDisabled
+				? Path.Combine(luaFolder, "Disable", $"{game.AppId}.lua")
+				: Path.Combine(luaFolder, $"{game.AppId}.lua");
+			var gameLuaContent = File.Exists(gameLuaPath) ? await File.ReadAllTextAsync(gameLuaPath) : string.Empty;
+
+			var totalDlcs = result.DlcAppIds.Count;
+			var dlcList = new List<DlcInfo>();
+			for (int i = 0; i < totalDlcs; i++)
+			{
+				var dlcId = result.DlcAppIds[i];
+				RefreshProgressText = $"正在分析 DLC 信息... ({i + 1}/{totalDlcs})";
+
+				var isImported = !string.IsNullOrEmpty(gameLuaContent) &&
+					System.Text.RegularExpressions.Regex.IsMatch(gameLuaContent,
+						$@"\badd(?:app|token)id\(\s*{dlcId}\s*[,\)]");
+
+				dlcList.Add(new DlcInfo
+				{
+					AppId = dlcId,
+					IsImported = isImported
+				});
+			}
+
+			// 并行获取 DLC 名称
+			RefreshProgressText = $"正在获取 DLC 名称...";
+			await Parallel.ForEachAsync(dlcList, async (dlc, ct) =>
+			{
+				try
+				{
+					var client = _httpClientProvider.GetClient("dlc-name", TimeSpan.FromSeconds(10));
+					var json = await client.GetStringAsync($"https://store.steampowered.com/api/appdetails?appids={dlc.AppId}&l=schinese", ct);
+					var doc = System.Text.Json.JsonDocument.Parse(json);
+					if (doc.RootElement.TryGetProperty(dlc.AppId.ToString(), out var appData) &&
+						appData.TryGetProperty("success", out var success) && success.GetBoolean() &&
+						appData.TryGetProperty("data", out var data) &&
+						data.TryGetProperty("name", out var name))
+					{
+						dlc.Name = name.GetString() ?? $"DLC {dlc.AppId}";
+					}
+					else
+					{
+						dlc.Name = $"DLC {dlc.AppId}";
+					}
+				}
+				catch
+				{
+					dlc.Name = $"DLC {dlc.AppId}";
+				}
+			});
+
+			var imported = dlcList.Count(d => d.IsImported);
+			RefreshProgressText = $"正在打开 DLC 结果窗口...";
+
+			var view = new Views.DlcQueryResultView(game.GameName, new ObservableCollection<DlcInfo>(dlcList), _settingsService.Load().SelectedBackdrop);
+			view.ShowDialog();
+
+			RefreshProgressText = $"DLC 查询完成：{game.GameName} ({imported}/{dlcList.Count} 已入库)";
+		}
+		catch (Exception ex)
+		{
+			await ShowModernDialogAsync("查询失败", $"查询 DLC 信息时出错：{ex.Message}");
+			RefreshProgressText = "DLC 查询失败";
 		}
 	}
 
