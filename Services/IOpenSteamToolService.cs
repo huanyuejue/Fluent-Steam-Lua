@@ -13,7 +13,7 @@ public interface IOpenSteamToolService
     bool IsInstalled { get; }
     string? GetSteamPath();
     Task<string?> GetLocalVersionAsync();
-    Task<(string version, string downloadUrl)> GetRemoteInfoAsync();
+    Task<(string version, string downloadUrl, string releaseUrl)> GetRemoteInfoAsync();
     Task InstallAsync(string downloadUrl, IProgress<string>? status = null, IProgress<int>? downloadProgress = null);
     Task UninstallAsync();
 }
@@ -103,7 +103,7 @@ public class OpenSteamToolService : IOpenSteamToolService
         return Task.FromResult<string?>(null);
     }
 
-    public async Task<(string version, string downloadUrl)> GetRemoteInfoAsync()
+    public async Task<(string version, string downloadUrl, string releaseUrl)> GetRemoteInfoAsync()
     {
         var json = await _httpClientProvider.SendWithProxyRetryAsync(
             "open-steam-tool",
@@ -112,6 +112,9 @@ public class OpenSteamToolService : IOpenSteamToolService
             ConfigureHeaders);
         using var doc = JsonDocument.Parse(json);
         var tag = doc.RootElement.GetProperty("tag_name").GetString() ?? "0.0.0";
+        var releaseUrl = doc.RootElement.TryGetProperty("html_url", out var htmlUrl)
+            ? htmlUrl.GetString() ?? ""
+            : $"https://github.com/OpenSteam001/OpenSteamTool/releases/tag/{tag}";
         var downloadUrl = "";
         if (doc.RootElement.TryGetProperty("assets", out var assets))
         {
@@ -125,7 +128,7 @@ public class OpenSteamToolService : IOpenSteamToolService
                 }
             }
         }
-        return (tag, downloadUrl);
+        return (tag, downloadUrl, releaseUrl);
     }
 
     public async Task InstallAsync(string downloadUrl, IProgress<string>? status = null, IProgress<int>? downloadProgress = null)

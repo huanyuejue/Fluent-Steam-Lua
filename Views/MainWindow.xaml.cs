@@ -846,7 +846,7 @@ public partial class MainWindow : Window
 
         try
         {
-            var (version, downloadUrl) = await _openSteamToolService.GetRemoteInfoAsync();
+            var (version, downloadUrl, _) = await _openSteamToolService.GetRemoteInfoAsync();
             if (string.IsNullOrEmpty(downloadUrl))
             {
                 await ShowModernDialogAsync("错误", "无法获取最新版本下载链接");
@@ -889,7 +889,7 @@ public partial class MainWindow : Window
 
         try
         {
-            var (remoteVersion, downloadUrl) = await _openSteamToolService.GetRemoteInfoAsync();
+            var (remoteVersion, downloadUrl, releaseUrl) = await _openSteamToolService.GetRemoteInfoAsync();
             if (string.IsNullOrEmpty(downloadUrl))
             {
                 await ShowModernDialogAsync("错误", "无法获取最新版本信息");
@@ -907,11 +907,27 @@ public partial class MainWindow : Window
                 }
             }
 
-            var confirmed = await ShowModernConfirmAsync(
-                "更新可用",
-                $"发现新版本！\n\n当前版本：{localDisplay}\n最新版本：{remoteVersion}\n\n是否更新？",
-                "更新");
-            if (!confirmed) return;
+            var updateDialog = new ContentDialog
+            {
+                Title = "更新可用",
+                Content = new TextBlock
+                {
+                    Text = $"发现新版本！\n\n当前版本：{localDisplay}\n最新版本：{remoteVersion}\n\n是否更新？",
+                    TextWrapping = TextWrapping.Wrap,
+                    MaxWidth = 420
+                },
+                PrimaryButtonText = "更新",
+                SecondaryButtonText = "跳转发布页",
+                CloseButtonText = "取消",
+                DefaultButton = ContentDialogButton.Primary
+            };
+            var dialogResult = await updateDialog.ShowAsync();
+            if (dialogResult == ContentDialogResult.Secondary)
+            {
+                Process.Start(new ProcessStartInfo(releaseUrl) { UseShellExecute = true });
+                return;
+            }
+            if (dialogResult != ContentDialogResult.Primary) return;
 
             var dialog = new Controls.ProgressDialog("更新 OpenSteamTool", this);
             dialog.Show();
