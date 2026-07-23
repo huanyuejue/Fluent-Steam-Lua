@@ -10,15 +10,14 @@
 
 ## 功能特性
 
-- 📂 自动/手动扫描 Steam Lua 文件
-- 🖼️ 封面图片自动下载与缓存
-- 📥 一键搜索预览并入库新游戏 支持 AppId / 游戏名 模糊搜索
-- 🔧 从 Steam 直接提取游戏 Lua 清单（基于SteamAppDumper）
-- ⚙️ 快捷管理 OpenSteamTool 更新、安装与卸载
-- 📌 游戏版本锁定：支持固定游戏清单版本到最新版本或当前已安装版本
-- ⚡ 封面CDN 节点测速与自动切换
-- 👁️ 文件变更自动监控并刷新缓存（FileSystemWatcher）
-- 🎨 Fluent Design 现代化界面（Acrylic 亚克力 / NavigationView / 圆角过渡）
+- 自动/手动扫描 Steam Lua 文件并匹配显示对应游戏名和封面
+- 一键搜索预览并入库新游戏 支持 AppId / 游戏名 模糊搜索
+- 从 Steam 直接提取游戏 Lua 清单（基于SteamAppDumper）
+- 快捷管理 OpenSteamTool 更新、安装与卸载
+- 游戏版本锁定：支持固定游戏清单版本到最新版本或当前已安装版本
+- Steam账号快速切换登录
+- 文件变更自动监控并刷新缓存（FileSystemWatcher）
+- Fluent Design 现代化界面（Acrylic 亚克力 / NavigationView / 圆角过渡）
 
 
 ## 系统要求

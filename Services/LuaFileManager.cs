@@ -43,10 +43,35 @@ public class LuaFileManager : ILuaFileManager, IDisposable
                     {
                         AppId = appId,
                         LuaFilePath = file,
-                        LuaFileTime = File.GetLastWriteTime(file)
+                        LuaFileTime = File.GetLastWriteTime(file),
+                        IsDisabled = false
                     };
                     ParseLuaContent(game);
                     result.Add(game);
+                }
+            }
+
+            var disableFolder = Path.Combine(luaFolder, "Disable");
+            if (Directory.Exists(disableFolder))
+            {
+                var disabledFiles = Directory.GetFiles(disableFolder, "*.lua");
+                foreach (var file in disabledFiles)
+                {
+                    var fileName = Path.GetFileNameWithoutExtension(file);
+                    if (int.TryParse(fileName, out var appId))
+                    {
+                        if (result.Any(g => g.AppId == appId)) continue;
+
+                        var game = new GameInfo
+                        {
+                            AppId = appId,
+                            LuaFilePath = file,
+                            LuaFileTime = File.GetLastWriteTime(file),
+                            IsDisabled = true
+                        };
+                        ParseLuaContent(game);
+                        result.Add(game);
+                    }
                 }
             }
 
@@ -241,6 +266,43 @@ public class LuaFileManager : ILuaFileManager, IDisposable
         {
             await Task.Run(() => File.Delete(filePath));
         }
+    }
+
+    public async Task DisableGameAsync(int appId)
+    {
+        var luaFolder = _steamPathService.GetLuaFolder();
+        if (string.IsNullOrEmpty(luaFolder)) return;
+
+        var srcPath = Path.Combine(luaFolder, $"{appId}.lua");
+        if (!File.Exists(srcPath)) return;
+
+        var disableFolder = Path.Combine(luaFolder, "Disable");
+        Directory.CreateDirectory(disableFolder);
+        var destPath = Path.Combine(disableFolder, $"{appId}.lua");
+
+        await Task.Run(() =>
+        {
+            if (File.Exists(destPath)) File.Delete(destPath);
+            File.Move(srcPath, destPath);
+        });
+    }
+
+    public async Task EnableGameAsync(int appId)
+    {
+        var luaFolder = _steamPathService.GetLuaFolder();
+        if (string.IsNullOrEmpty(luaFolder)) return;
+
+        var disableFolder = Path.Combine(luaFolder, "Disable");
+        var srcPath = Path.Combine(disableFolder, $"{appId}.lua");
+        if (!File.Exists(srcPath)) return;
+
+        var destPath = Path.Combine(luaFolder, $"{appId}.lua");
+
+        await Task.Run(() =>
+        {
+            if (File.Exists(destPath)) File.Delete(destPath);
+            File.Move(srcPath, destPath);
+        });
     }
 
     public void StartWatching()

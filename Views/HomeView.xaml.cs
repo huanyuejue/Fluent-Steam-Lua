@@ -72,6 +72,8 @@ public partial class HomeView : UserControl
             CardSubmenuPanel.Visibility = Visibility.Collapsed;
             CardMenuList.ItemsSource = new[]
             {
+                new CardMenuItem(game.IsDisabled ? "enable" : "disable", game.IsDisabled ? "启用入库" : "禁用入库"),
+                CardMenuItem.Separator(),
                 new CardMenuItem("edit", "编辑 Lua"),
                 CardMenuItem.Separator(),
                 new CardMenuItem("delete", "删除 Lua"),
@@ -163,6 +165,10 @@ public partial class HomeView : UserControl
         await HideCardMenuAsync();
         switch (item.Action)
         {
+            case "disable":
+            case "enable":
+                await _activeMenuViewModel.ToggleGameDisableCommand.ExecuteAsync(_activeMenuGame);
+                break;
             case "edit":
                 _activeMenuViewModel.EditGameCommand.Execute(_activeMenuGame);
                 break;

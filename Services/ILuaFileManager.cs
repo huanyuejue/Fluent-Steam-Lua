@@ -12,4 +12,6 @@ public interface ILuaFileManager
     event EventHandler? FilesChanged;
     Task<GameInfo?> ParseLuaFileAsync(int appId);
     Task SetManifestPinAsync(int appId, bool pin, Dictionary<int, string>? manifestIds = null);
+    Task DisableGameAsync(int appId);
+    Task EnableGameAsync(int appId);
 }

@@ -70,6 +70,7 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
 
             <ui:AutoSuggestBox Grid.Column="0" x:Name="SearchBox"
@@ -83,6 +84,23 @@
             </ui:AutoSuggestBox>
 
             <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="0,0,12,0">
+                <TextBlock Text="筛选:" VerticalAlignment="Center" Margin="0,0,8,0"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                <ComboBox x:Name="DisableFilterComboBox"
+                          SelectedValuePath="Content"
+                          SelectedValue="{Binding SelectedDisableFilter, Mode=TwoWay}"
+                          Width="140" Padding="12,6"
+                          HorizontalContentAlignment="Center">
+                    <ComboBox.Background>
+                        <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                    </ComboBox.Background>
+                    <ComboBoxItem Content="全部"/>
+                    <ComboBoxItem Content="已启用入库"/>
+                    <ComboBoxItem Content="已禁用入库"/>
+                </ComboBox>
+            </StackPanel>
+
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="0,0,12,0">
                 <TextBlock Text="视图:" VerticalAlignment="Center" Margin="0,0,8,0"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                 <ComboBox x:Name="ViewModeComboBox"
@@ -99,7 +117,7 @@
                 </ComboBox>
             </StackPanel>
 
-            <StackPanel Grid.Column="2" Orientation="Horizontal">
+            <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="0,0,12,0">
                 <TextBlock Text="排序:" VerticalAlignment="Center" Margin="0,0,8,0"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                 <ComboBox x:Name="SortComboBox"
@@ -169,7 +187,18 @@
                                                Stretch="UniformToFill"
                                                HorizontalAlignment="Center"
                                                VerticalAlignment="Center"
-                                               RenderOptions.BitmapScalingMode="HighQuality"/>
+                                               RenderOptions.BitmapScalingMode="HighQuality"
+                                               x:Name="CoverImage">
+                                            <Image.Style>
+                                                <Style TargetType="Image">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsDisabled}" Value="True">
+                                                            <Setter Property="Opacity" Value="0.35"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Image.Style>
+                                        </Image>
                                         <Button Grid.Row="0"
                                                 Visibility="{Binding DataContext.IsCardRefreshVisible, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibilityConverter}}"
                                                 Command="{Binding DataContext.RefreshSingleGameCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
@@ -202,15 +231,50 @@
                                                        TextOptions.TextRenderingMode="ClearType"
                                                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                         </Button>
+                                        <Rectangle Grid.Row="0" Fill="#60000000"
+                                                   x:Name="DisabledCoverOverlay">
+                                            <Rectangle.Style>
+                                                <Style TargetType="Rectangle">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsDisabled}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Rectangle.Style>
+                                        </Rectangle>
                                         <TextBlock Grid.Row="1" Text="{Binding GameName}"
                                                    FontWeight="SemiBold" FontSize="14"
                                                    Margin="12,10,12,2" TextTrimming="CharacterEllipsis"
-                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsDisabled}" Value="True">
+                                                            <Setter Property="TextDecorations" Value="Strikethrough"/>
+                                                            <Setter Property="Opacity" Value="0.5"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
 
                                         <TextBlock Grid.Row="2" FontSize="12" Margin="12,0,12,8"
-                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                   x:Name="AppIdText">
                                             <Run Text="AppID: "/>
                                             <Run Text="{Binding AppId, Mode=OneWay}"/>
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsDisabled}" Value="True">
+                                                            <Setter Property="TextDecorations" Value="Strikethrough"/>
+                                                            <Setter Property="Opacity" Value="0.5"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
                                         </TextBlock>
 
                                         <Grid Grid.Row="3" Margin="12,0,8,8">
@@ -271,20 +335,65 @@
                                         <Border Grid.Column="0" CornerRadius="6" ClipToBounds="True"
                                                 Width="120" Height="52" Background="{DynamicResource ControlFillColorDefaultBrush}"
                                                 BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1">
-                                            <Image Source="{Binding CoverImagePath, Converter={StaticResource FilePathToImageConverter}}"
-                                                   Stretch="UniformToFill"
-                                                   RenderOptions.BitmapScalingMode="HighQuality"/>
+                                            <Grid>
+                                                <Image Source="{Binding CoverImagePath, Converter={StaticResource FilePathToImageConverter}}"
+                                                       Stretch="UniformToFill"
+                                                       RenderOptions.BitmapScalingMode="HighQuality">
+                                                    <Image.Style>
+                                                        <Style TargetType="Image">
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsDisabled}" Value="True">
+                                                                    <Setter Property="Opacity" Value="0.35"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Image.Style>
+                                                </Image>
+                                                <Rectangle Fill="#60000000">
+                                                    <Rectangle.Style>
+                                                        <Style TargetType="Rectangle">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsDisabled}" Value="True">
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Rectangle.Style>
+                                                </Rectangle>
+                                            </Grid>
                                         </Border>
 
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="14,0">
                                             <TextBlock Text="{Binding GameName}" FontWeight="SemiBold" FontSize="14"
                                                        TextTrimming="CharacterEllipsis"
-                                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsDisabled}" Value="True">
+                                                                <Setter Property="TextDecorations" Value="Strikethrough"/>
+                                                                <Setter Property="Opacity" Value="0.5"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
                                             <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
                                                 <TextBlock FontSize="12"
                                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}">
                                                     <Run Text="AppID: "/>
                                                     <Run Text="{Binding AppId, Mode=OneWay}"/>
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsDisabled}" Value="True">
+                                                                    <Setter Property="TextDecorations" Value="Strikethrough"/>
+                                                                    <Setter Property="Opacity" Value="0.5"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
                                                 </TextBlock>
                                                 <TextBlock FontSize="10" Margin="10,0,0,0"
                                                            Foreground="{DynamicResource SystemAccentColorBrush}"
@@ -337,25 +446,29 @@
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
 
-                    <Border Grid.Row="0" CornerRadius="8,8,0,0">
+                     <Border Grid.Row="0" CornerRadius="8,8,0,0">
                         <Border.Background>
                             <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
                         </Border.Background>
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="90"/>
+                                <ColumnDefinition Width="80"/>
+                                <ColumnDefinition Width="80"/>
+                                <ColumnDefinition Width="80"/>
                                 <ColumnDefinition Width="100"/>
-                                <ColumnDefinition Width="70"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="游戏名称" FontWeight="SemiBold" FontSize="13" Padding="14,10"
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                             <TextBlock Grid.Column="1" Text="版本状态" FontWeight="SemiBold" FontSize="13" Padding="10,9"
                                        VerticalAlignment="Center"
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                            <TextBlock Grid.Column="2" Text="AppID" FontWeight="SemiBold" FontSize="13" Padding="14,10"
+                            <TextBlock Grid.Column="2" Text="入库状态" FontWeight="SemiBold" FontSize="13" Padding="10,9"
+                                       VerticalAlignment="Center"
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                            <TextBlock Grid.Column="3" FontWeight="SemiBold" FontSize="13" Padding="12,10"/>
+                            <TextBlock Grid.Column="3" Text="AppID" FontWeight="SemiBold" FontSize="13" Padding="14,10"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            <TextBlock Grid.Column="4" FontWeight="SemiBold" FontSize="13" Padding="12,10"/>
                         </Grid>
                     </Border>
 
@@ -369,13 +482,25 @@
                                     <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="90"/>
+                                        <ColumnDefinition Width="80"/>
+                                        <ColumnDefinition Width="80"/>
+                                        <ColumnDefinition Width="80"/>
                                         <ColumnDefinition Width="100"/>
-                                        <ColumnDefinition Width="70"/>
                                     </Grid.ColumnDefinitions>
                                         <TextBlock Text="{Binding GameName}" FontSize="13" Padding="14,9"
                                                    TextTrimming="CharacterEllipsis"
-                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsDisabled}" Value="True">
+                                                            <Setter Property="TextDecorations" Value="Strikethrough"/>
+                                                            <Setter Property="Opacity" Value="0.5"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
                                         <TextBlock Grid.Column="1" FontSize="13" Padding="10,9"
                                                    VerticalAlignment="Center"
                                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}">
@@ -390,9 +515,35 @@
                                                 </Style>
                                             </TextBlock.Style>
                                         </TextBlock>
-                                        <TextBlock Grid.Column="2" Text="{Binding AppId}" FontSize="13" Padding="14,9"
-                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                        <StackPanel Grid.Column="3" Orientation="Horizontal" HorizontalAlignment="Center">
+                                        <TextBlock Grid.Column="2" FontSize="13" Padding="10,9"
+                                                   VerticalAlignment="Center">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Text" Value="已启用"/>
+                                                    <Setter Property="Foreground" Value="{DynamicResource SystemAccentColorBrush}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsDisabled}" Value="True">
+                                                            <Setter Property="Text" Value="已禁用"/>
+                                                            <Setter Property="Foreground" Value="#FF888888"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                        <TextBlock Grid.Column="3" Text="{Binding AppId}" FontSize="13" Padding="14,9"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsDisabled}" Value="True">
+                                                            <Setter Property="TextDecorations" Value="Strikethrough"/>
+                                                            <Setter Property="Opacity" Value="0.5"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                        <StackPanel Grid.Column="4" Orientation="Horizontal" HorizontalAlignment="Center">
                                             <Button Visibility="{Binding DataContext.IsCardRefreshVisible, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibilityConverter}}"
                                                     Command="{Binding DataContext.RefreshSingleGameCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                     CommandParameter="{Binding}"

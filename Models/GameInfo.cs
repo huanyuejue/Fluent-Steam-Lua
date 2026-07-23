@@ -30,6 +30,9 @@ public partial class GameInfo : ObservableObject
     private bool _isManifestPinned;
 
     [ObservableProperty]
+    private bool _isDisabled;
+
+    [ObservableProperty]
     private int _manifestSourceIndex;
 
     public ObservableCollection<DepotInfo> Depots { get; set; } = new();

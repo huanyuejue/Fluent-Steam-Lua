@@ -53,6 +53,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
 	private string _selectedSortOption = "名称 A-Z";
 
 	[ObservableProperty]
+	private string _selectedDisableFilter = "全部";
+
+	[ObservableProperty]
 	private string _selectedViewMode = "卡片";
 
 	[ObservableProperty]
@@ -290,6 +293,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 	}
 
 	partial void OnSelectedSortOptionChanged(string value) { ApplyFilter(); }
+	partial void OnSelectedDisableFilterChanged(string value) { ApplyFilter(); }
 	partial void OnSelectedViewModeChanged(string value)
 	{
 		var settings = _settingsService.Load();
@@ -308,6 +312,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
 				var idMatch = g.AppId.ToString().Contains(query, StringComparison.OrdinalIgnoreCase);
 				return nameMatch || idMatch;
 			});
+
+		filtered = SelectedDisableFilter switch
+		{
+			"已启用入库" => filtered.Where(g => !g.IsDisabled),
+			"已禁用入库" => filtered.Where(g => g.IsDisabled),
+			_ => filtered
+		};
 
 		filtered = SelectedSortOption switch
 		{
@@ -389,6 +400,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
 	private async Task DeleteGameAsync(GameInfo? game)
 	{
 		if (game == null) return;
+
+		if (game.IsDisabled)
+		{
+			await ShowModernDialogAsync("操作被阻止", $"该游戏已被禁用入库，请先启用后再删除。");
+			return;
+		}
+
 		var confirmed = await ShowModernConfirmAsync(
 			"确认删除",
 			$"确定要删除 {game.GameName} ({game.AppId}) 的Lua文件吗？",
@@ -402,9 +420,29 @@ public partial class MainViewModel : ObservableObject, IDisposable
 	}
 
 	[RelayCommand]
-	private void EditGame(GameInfo? game)
+	private async Task ToggleGameDisableAsync(GameInfo? game)
 	{
 		if (game == null) return;
+
+		if (game.IsDisabled)
+			await _luaFileManager.EnableGameAsync(game.AppId);
+		else
+			await _luaFileManager.DisableGameAsync(game.AppId);
+
+		await QuickRefreshAsync();
+	}
+
+	[RelayCommand]
+	private async Task EditGame(GameInfo? game)
+	{
+		if (game == null) return;
+
+		if (game.IsDisabled)
+		{
+			await ShowModernDialogAsync("操作被阻止", $"该游戏已被禁用入库，请先启用后再编辑。");
+			return;
+		}
+
 		var luaFolder = _steamPathService.GetLuaFolder();
 		if (string.IsNullOrEmpty(luaFolder)) return;
 		var filePath = Path.Combine(luaFolder, $"{game.AppId}.lua");
@@ -437,6 +475,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
 	{
 		if (game == null) return;
 
+		if (game.IsDisabled)
+		{
+			await ShowModernDialogAsync("操作被阻止", $"该游戏已被禁用入库，请先启用后再固定版本。");
+			return;
+		}
+
 		if (game.IsManifestPinned && game.ManifestSourceIndex == 1)
 		{
 			await PinUnpinAsync(game);
@@ -451,6 +495,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
 	private async Task PinToCurrentAsync(GameInfo? game)
 	{
 		if (game == null) return;
+
+		if (game.IsDisabled)
+		{
+			await ShowModernDialogAsync("操作被阻止", $"该游戏已被禁用入库，请先启用后再固定版本。");
+			return;
+		}
 
 		if (game.IsManifestPinned && game.ManifestSourceIndex == 0)
 		{
