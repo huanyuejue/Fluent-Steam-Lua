@@ -53,7 +53,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 	private string _selectedSortOption = "名称 A-Z";
 
 	[ObservableProperty]
-	private string _selectedDisableFilter = "全部";
+	private string _selectedDisableFilter = "全部游戏";
 
 	[ObservableProperty]
 	private string _selectedViewMode = "卡片";
@@ -66,6 +66,33 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
 	[ObservableProperty]
 	private string _refreshProgressText = string.Empty;
+
+	[ObservableProperty]
+	private int _selectedCount;
+
+	[ObservableProperty]
+	private bool _isSelectionMode;
+
+	partial void OnIsSelectionModeChanged(bool value)
+	{
+		if (!value)
+		{
+			foreach (var game in Games)
+				game.IsSelected = false;
+			NotifySelectionChanged();
+		}
+	}
+
+	public void NotifySelectionChanged()
+	{
+		SelectedCount = Games.Count(g => g.IsSelected);
+	}
+
+	[RelayCommand]
+	private void ToggleSelectionMode()
+	{
+		IsSelectionMode = !IsSelectionMode;
+	}
 
 	private string GetCurrentCdnName()
 	{
@@ -331,6 +358,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 		};
 
 		Games = new ObservableCollection<GameInfo>(filtered);
+		NotifySelectionChanged();
 	}
 
 	private void UpdateStatus() => StatusText = $"共 {Games.Count} 个游戏";
@@ -430,6 +458,77 @@ public partial class MainViewModel : ObservableObject, IDisposable
 			await _luaFileManager.DisableGameAsync(game.AppId);
 
 		await QuickRefreshAsync();
+	}
+
+	[RelayCommand]
+	private void SelectAll()
+	{
+		foreach (var game in Games)
+			game.IsSelected = true;
+		NotifySelectionChanged();
+	}
+
+	[RelayCommand]
+	private void ClearSelection()
+	{
+		foreach (var game in Games)
+			game.IsSelected = false;
+		NotifySelectionChanged();
+	}
+
+	[RelayCommand]
+	private async Task BatchEnableAsync()
+	{
+		var selected = Games.Where(g => g.IsSelected && g.IsDisabled).ToList();
+		if (selected.Count == 0)
+		{
+			await ShowModernDialogAsync("批量启用", "没有选中的已禁用游戏。");
+			return;
+		}
+		foreach (var game in selected)
+			await _luaFileManager.EnableGameAsync(game.AppId);
+		StatusText = $"已启用 {selected.Count} 个游戏";
+		await QuickRefreshAsync();
+		ClearSelection();
+	}
+
+	[RelayCommand]
+	private async Task BatchDisableAsync()
+	{
+		var selected = Games.Where(g => g.IsSelected && !g.IsDisabled).ToList();
+		if (selected.Count == 0)
+		{
+			await ShowModernDialogAsync("批量禁用", "没有选中的已启用游戏。");
+			return;
+		}
+		foreach (var game in selected)
+			await _luaFileManager.DisableGameAsync(game.AppId);
+		StatusText = $"已禁用 {selected.Count} 个游戏";
+		await QuickRefreshAsync();
+		ClearSelection();
+	}
+
+	[RelayCommand]
+	private async Task BatchDeleteAsync()
+	{
+		var selected = Games.Where(g => g.IsSelected && !g.IsDisabled).ToList();
+		if (selected.Count == 0)
+		{
+			await ShowModernDialogAsync("批量删除", "没有选中的已启用游戏。\n已禁用的游戏需先启用后再删除。");
+			return;
+		}
+		var confirmed = await ShowModernConfirmAsync(
+			"批量删除",
+			$"确定要删除选中的 {selected.Count} 个游戏吗？\n此操作不可恢复！",
+			"删除");
+		if (confirmed)
+		{
+			foreach (var game in selected)
+				await _luaFileManager.DeleteLuaFileAsync(game.AppId);
+			StatusText = $"已删除 {selected.Count} 个游戏";
+			await QuickRefreshAsync();
+			ClearSelection();
+		}
 	}
 
 	[RelayCommand]

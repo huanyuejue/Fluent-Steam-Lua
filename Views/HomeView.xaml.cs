@@ -78,6 +78,8 @@ public partial class HomeView : UserControl
                 CardMenuItem.Separator(),
                 new CardMenuItem("delete", "删除 Lua"),
                 CardMenuItem.Separator(),
+                new CardMenuItem("batchmanage", "批量管理"),
+                CardMenuItem.Separator(),
                 new CardMenuItem("pin", "版本固定", HasSubmenu: true),
                 CardMenuItem.Separator(),
                 new CardMenuItem("info", "游戏信息", HasSubmenu: true)
@@ -165,6 +167,11 @@ public partial class HomeView : UserControl
         await HideCardMenuAsync();
         switch (item.Action)
         {
+            case "batchmanage":
+                _activeMenuViewModel.IsSelectionMode = true;
+                _activeMenuGame.IsSelected = true;
+                _activeMenuViewModel.NotifySelectionChanged();
+                break;
             case "disable":
             case "enable":
                 await _activeMenuViewModel.ToggleGameDisableCommand.ExecuteAsync(_activeMenuGame);
@@ -354,5 +361,17 @@ public partial class HomeView : UserControl
     private sealed record CardMenuItem(string Action, string Header, bool HasSubmenu = false, bool IsSeparator = false)
     {
         public static CardMenuItem Separator() => new("separator", string.Empty, IsSeparator: true);
+    }
+
+    private void CheckBox_Checked(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainViewModel vm)
+            vm.NotifySelectionChanged();
+    }
+
+    private void CheckBox_Unchecked(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainViewModel vm)
+            vm.NotifySelectionChanged();
     }
 }

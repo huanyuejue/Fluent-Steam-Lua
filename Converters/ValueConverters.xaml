@@ -11,5 +11,6 @@
     <converters:BoolInvertConverter x:Key="BoolInvertConverter"/>
     <converters:BoolToRunStopConverter x:Key="BoolToRunStopConverter"/>
     <converters:StringNotEmptyToBoolConverter x:Key="StringNotEmptyToBoolConverter"/>
+    <converters:ThemeToSelectionBrushConverter x:Key="ThemeToSelectionBrushConverter"/>
 
 </ResourceDictionary>

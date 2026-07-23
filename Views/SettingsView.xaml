@@ -187,94 +187,6 @@
                 </ScrollViewer>
             </TabItem>
 
-            <!-- 接口设置 -->
-            <TabItem Header="接口设置">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" BorderThickness="0"
-                              Background="Transparent">
-                    <StackPanel Margin="0,8,0,16">
-
-                        <ui:SettingsCard Header="入库接口" Margin="0,0,0,8"
-                                         Description="选择游戏入库方式"
-                                         ui:ControlHelper.CornerRadius="8">
-                            <ui:SettingsCard.Background>
-                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
-                            </ui:SettingsCard.Background>
-                            <ComboBox SelectedValue="{Binding DownloadMode, Mode=TwoWay}"
-                                       SelectedValuePath="Tag" HorizontalAlignment="Left" Padding="8,4">
-                                <ComboBox.Background>
-                                    <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
-                                </ComboBox.Background>
-                                <ComboBoxItem Content="本地缓存仓库 V1" Tag="DepotKey"/>
-                                <ComboBoxItem Content="本地缓存仓库 V2" Tag="DepotKey2"/>
-                                <ComboBoxItem Content="远程清单仓库" Tag="Remote"/>
-                            </ComboBox>
-                        </ui:SettingsCard>
-
-                        <ui:SettingsCard Header="封面CDN节点" Margin="0,0,0,8"
-                                         Description="选择优先使用的封面下载节点"
-                                         ui:ControlHelper.CornerRadius="8">
-                            <ui:SettingsCard.Background>
-                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
-                            </ui:SettingsCard.Background>
-                            <StackPanel>
-                                <StackPanel Orientation="Horizontal">
-                                    <ComboBox ItemsSource="{Binding CdnEndpoints}"
-                                              SelectedIndex="{Binding SelectedCdnIndex}"
-                                                HorizontalAlignment="Left" Padding="8,4" Margin="0,0,4,0">
-                                        <ComboBox.Background>
-                                            <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
-                                        </ComboBox.Background>
-                                    </ComboBox>
-                                    <Button Content="测速" Command="{Binding TestCdnSpeedCommand}"
-                                            IsEnabled="{Binding IsSpeedTesting, Converter={StaticResource BoolInvertConverter}}"
-                                            Padding="12,6" Margin="4,0">
-                                        <Button.Background>
-                                            <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
-                                        </Button.Background>
-                                    </Button>
-                                    <StackPanel Orientation="Horizontal" Margin="8,0,0,0"
-                                                VerticalAlignment="Center"
-                                                Visibility="{Binding IsSpeedTesting, Converter={StaticResource BoolToVisibilityConverter}}">
-                                        <ProgressBar Value="{Binding SpeedTestProgress}"
-                                                     Maximum="{Binding SpeedTestTotal}"
-                                                     Width="100" Height="3" VerticalAlignment="Center"/>
-                                        <TextBlock Text="{Binding SpeedTestProgressText}" FontSize="12"
-                                                   Margin="6,0,0,0" VerticalAlignment="Center"
-                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                    </StackPanel>
-                                </StackPanel>
-                            </StackPanel>
-                        </ui:SettingsCard>
-
-                        <Border CornerRadius="8" Background="{DynamicResource LayerFillColorDefaultBrush}"
-                                Margin="0,8,0,0" Padding="12,8"
-                                Visibility="{Binding SpeedTestResults.Count, Converter={StaticResource NonZeroToVisibilityConverter}}">
-                            <ItemsControl ItemsSource="{Binding SpeedTestResults}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Grid Margin="0,4,0,4">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto"/>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                            </Grid.ColumnDefinitions>
-                                            <Ellipse Grid.Column="0" Width="8" Height="8" Fill="{Binding ColorCode}"
-                                                     Margin="0,0,10,0" VerticalAlignment="Center" Opacity="0.9"/>
-                                            <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="13"
-                                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" VerticalAlignment="Center"/>
-                                            <TextBlock Grid.Column="2" Text="{Binding StatusText}" FontSize="13"
-                                                       FontWeight="Medium"
-                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
-                                        </Grid>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </Border>
-
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
-
             <!-- 显示设置 -->
             <TabItem Header="显示设置">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" BorderThickness="0"
@@ -332,6 +244,94 @@
                             <ui:ToggleSwitch IsOn="{Binding IsCardRefreshVisible}"
                                              OnContent="开" OffContent="关"/>
                         </ui:SettingsCard>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- 接口设置 -->
+            <TabItem Header="接口设置">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" BorderThickness="0"
+                              Background="Transparent">
+                    <StackPanel Margin="0,8,0,16">
+
+                        <ui:SettingsCard Header="入库接口" Margin="0,0,0,8"
+                                         Description="选择游戏入库方式"
+                                         ui:ControlHelper.CornerRadius="8">
+                            <ui:SettingsCard.Background>
+                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
+                            </ui:SettingsCard.Background>
+                            <ComboBox SelectedValue="{Binding DownloadMode, Mode=TwoWay}"
+                                       SelectedValuePath="Tag" HorizontalAlignment="Left" Padding="8,4">
+                                <ComboBox.Background>
+                                    <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                                </ComboBox.Background>
+                                <ComboBoxItem Content="本地缓存仓库 V1" Tag="DepotKey"/>
+                                <ComboBoxItem Content="本地缓存仓库 V2" Tag="DepotKey2"/>
+                                <ComboBoxItem Content="远程清单仓库" Tag="Remote"/>
+                            </ComboBox>
+                        </ui:SettingsCard>
+
+                        <ui:SettingsCard Header="封面CDN节点" Margin="0,0,0,8"
+                                         Description="选择优先使用的封面下载节点"
+                                         ui:ControlHelper.CornerRadius="8">
+                            <ui:SettingsCard.Background>
+                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
+                            </ui:SettingsCard.Background>
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <Button Content="测速" Command="{Binding TestCdnSpeedCommand}"
+                                            IsEnabled="{Binding IsSpeedTesting, Converter={StaticResource BoolInvertConverter}}"
+                                            Padding="12,6" Margin="0,0,4,0">
+                                        <Button.Background>
+                                            <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                                        </Button.Background>
+                                    </Button>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,8,0"
+                                                VerticalAlignment="Center"
+                                                Visibility="{Binding IsSpeedTesting, Converter={StaticResource BoolToVisibilityConverter}}">
+                                        <ProgressBar Value="{Binding SpeedTestProgress}"
+                                                     Maximum="{Binding SpeedTestTotal}"
+                                                     Width="100" Height="3" VerticalAlignment="Center"/>
+                                        <TextBlock Text="{Binding SpeedTestProgressText}" FontSize="12"
+                                                   Margin="6,0,0,0" VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                    </StackPanel>
+                                    <ComboBox ItemsSource="{Binding CdnEndpoints}"
+                                              SelectedIndex="{Binding SelectedCdnIndex}"
+                                                HorizontalAlignment="Left" Padding="8,4">
+                                        <ComboBox.Background>
+                                            <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                                        </ComboBox.Background>
+                                    </ComboBox>
+                                </StackPanel>
+                            </StackPanel>
+                        </ui:SettingsCard>
+
+                        <Border CornerRadius="8" Background="{DynamicResource LayerFillColorDefaultBrush}"
+                                Margin="0,8,0,0" Padding="12,8"
+                                Visibility="{Binding SpeedTestResults.Count, Converter={StaticResource NonZeroToVisibilityConverter}}">
+                            <ItemsControl ItemsSource="{Binding SpeedTestResults}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,4,0,4">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Ellipse Grid.Column="0" Width="8" Height="8" Fill="{Binding ColorCode}"
+                                                     Margin="0,0,10,0" VerticalAlignment="Center" Opacity="0.9"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="13"
+                                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="2" Text="{Binding StatusText}" FontSize="13"
+                                                       FontWeight="Medium"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Border>
 
                     </StackPanel>
                 </ScrollViewer>

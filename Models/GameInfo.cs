@@ -35,6 +35,9 @@ public partial class GameInfo : ObservableObject
     [ObservableProperty]
     private int _manifestSourceIndex;
 
+    [ObservableProperty]
+    private bool _isSelected;
+
     public ObservableCollection<DepotInfo> Depots { get; set; } = new();
 }
 
