@@ -55,12 +55,13 @@
     <Grid>
 
         <Grid Margin="24,16,24,16">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
 
         <!-- 顶部标题区域 -->
         <Grid Grid.Row="0" Margin="0,0,0,16">
@@ -249,8 +250,23 @@
             </StackPanel>
         </Grid>
 
+        <ui:InfoBar Grid.Row="3"
+                    IsOpen="{Binding StatusMessage, Converter={StaticResource StringNotEmptyToBoolConverter}}"
+                    Message="{Binding StatusMessage}"
+                    Severity="Success"
+                    IsClosable="True"
+                    HorizontalAlignment="Stretch"
+                    Margin="0,0,0,4"
+                    ui:ControlHelper.CornerRadius="8">
+            <ui:InfoBar.Resources>
+                <Style TargetType="TextBlock">
+                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                </Style>
+            </ui:InfoBar.Resources>
+        </ui:InfoBar>
+
         <!-- Loading提示 -->
-        <StackPanel Grid.Row="3" HorizontalAlignment="Center" Margin="0,40,0,0"
+        <StackPanel Grid.Row="4" HorizontalAlignment="Center" Margin="0,40,0,0"
                     Visibility="{Binding IsRefreshing, Converter={StaticResource BoolToVisibilityConverter}}">
             <ui:ProgressRing IsActive="True" Width="32" Height="32" Margin="0,0,0,12"/>
             <TextBlock Text="正在加载游戏信息..." HorizontalAlignment="Center" FontSize="15"
@@ -260,7 +276,7 @@
         </StackPanel>
 
         <!-- 游戏内容区域（非加载 且 有游戏时显示） -->
-        <Grid Grid.Row="3" Visibility="{Binding IsRefreshing, Converter={StaticResource InvertedBoolToVisibilityConverter}}">
+        <Grid Grid.Row="4" Visibility="{Binding IsRefreshing, Converter={StaticResource InvertedBoolToVisibilityConverter}}">
 
             <!-- 卡片模式 -->
             <ScrollViewer x:Name="CardScrollViewer"
@@ -700,13 +716,13 @@
         </Grid>
 
         <!-- 空状态提示 -->
-        <StackPanel Grid.Row="3" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,60,0,0"
+        <StackPanel Grid.Row="4" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,60,0,0"
                     Visibility="{Binding Games.Count, Converter={StaticResource ZeroToVisibilityConverter}}">
             <ui:FontIcon Glyph="&#xE7F0;" FontSize="48" HorizontalAlignment="Center"
                          Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
             <TextBlock Text="还没有入库的游戏" FontSize="18" HorizontalAlignment="Center" Margin="0,16,0,8"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-            <TextBlock Text="将 .lua 文件拖拽到此处，或点击上方添加游戏按钮" FontSize="13"
+            <TextBlock Text="将 .lua 或 .bin 文件拖拽到此处，或点击上方添加游戏按钮" FontSize="13"
                        HorizontalAlignment="Center"
                        Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
         </StackPanel>

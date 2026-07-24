@@ -82,6 +82,21 @@ public partial class MainViewModel : ObservableObject, IDisposable
 	[ObservableProperty]
 	private string _dlcQueryOverlayText = string.Empty;
 
+	[ObservableProperty]
+	private string _statusMessage = string.Empty;
+
+	private Timer? _statusMessageTimer;
+
+	partial void OnStatusMessageChanged(string value)
+	{
+		_statusMessageTimer?.Dispose();
+		if (!string.IsNullOrEmpty(value))
+		{
+			_statusMessageTimer = new Timer(_ => Application.Current.Dispatcher.Invoke(() => StatusMessage = string.Empty),
+				null, 3000, Timeout.Infinite);
+		}
+	}
+
 	[RelayCommand]
 	private void CancelDlcQuery()
 	{
@@ -427,18 +442,36 @@ public partial class MainViewModel : ObservableObject, IDisposable
 	{
 		var dialog = new Microsoft.Win32.OpenFileDialog
 		{
-			Filter = "Lua文件 (*.lua)|*.lua",
+			Filter = "游戏文件 (*.lua;*.bin)|*.lua;*.bin",
 			Multiselect = true,
-			Title = "选择Lua文件"
+			Title = "选择游戏文件"
 		};
 
 		if (dialog.ShowDialog() == true)
 		{
+			var luaCount = 0;
+			var binCount = 0;
 			foreach (var file in dialog.FileNames)
 			{
-				try { await _luaFileManager.AddLuaFileAsync(file); }
+				try
+				{
+					if (file.EndsWith(".lua", StringComparison.OrdinalIgnoreCase))
+					{
+						await _luaFileManager.AddLuaFileAsync(file);
+						luaCount++;
+					}
+					else if (file.EndsWith(".bin", StringComparison.OrdinalIgnoreCase))
+					{
+						await _luaFileManager.AddBinFileAsync(file);
+						binCount++;
+					}
+				}
 				catch (Exception ex) { StatusText = $"添加失败: {ex.Message}"; }
 			}
+			var msgs = new List<string>();
+			if (luaCount > 0) msgs.Add($"导入游戏成功 ({luaCount})");
+			if (binCount > 0) msgs.Add($"导入成就成功 ({binCount})");
+			if (msgs.Count > 0) StatusMessage = string.Join("，", msgs);
 			await QuickRefreshAsync();
 		}
 	}
@@ -819,13 +852,27 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
 	public async Task HandleDropAsync(string[] files)
 	{
+		var luaCount = 0;
+		var binCount = 0;
 		foreach (var file in files)
 		{
 			if (file.EndsWith(".lua", StringComparison.OrdinalIgnoreCase))
 			{
-				try { await _luaFileManager.AddLuaFileAsync(file); }
-				catch (Exception ex) { StatusText = $"拖拽添加失败: {ex.Message}"; }
+				try { await _luaFileManager.AddLuaFileAsync(file); luaCount++; }
+				catch (Exception ex) { StatusText = $"拖拽添加 lua 失败: {ex.Message}"; }
 			}
+			else if (file.EndsWith(".bin", StringComparison.OrdinalIgnoreCase))
+			{
+				try { await _luaFileManager.AddBinFileAsync(file); binCount++; }
+				catch (Exception ex) { StatusText = $"拖拽添加 bin 失败: {ex.Message}"; }
+			}
+		}
+		if (luaCount > 0 || binCount > 0)
+		{
+			var msgs = new List<string>();
+			if (luaCount > 0) msgs.Add($"导入游戏成功 ({luaCount})");
+			if (binCount > 0) msgs.Add($"导入成就成功 ({binCount})");
+			StatusMessage = string.Join("，", msgs);
 		}
 		await QuickRefreshAsync();
 	}
