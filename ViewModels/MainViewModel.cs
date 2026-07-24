@@ -75,6 +75,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
 	[ObservableProperty]
 	private bool _isSelectionMode;
 
+	[ObservableProperty]
+	private bool _isDlcQueryOverlayVisible;
+
+	[ObservableProperty]
+	private string _dlcQueryOverlayText = string.Empty;
+
 	partial void OnIsSelectionModeChanged(bool value)
 	{
 		if (!value)
@@ -695,14 +701,16 @@ public partial class MainViewModel : ObservableObject, IDisposable
 		var luaFolder = _steamPathService.GetLuaFolder();
 		if (string.IsNullOrEmpty(luaFolder)) return;
 
+		IsDlcQueryOverlayVisible = true;
+
 		try
 		{
-			RefreshProgressText = $"正在查询 {game.GameName} 的 DLC 信息...";
+			DlcQueryOverlayText = $"正在查询 {game.GameName} 的 DLC 信息...";
 			var result = await _steamDepotService.QueryAppAsync(game.AppId);
 			if (result == null || result.DlcAppIds.Count == 0)
 			{
+				IsDlcQueryOverlayVisible = false;
 				await ShowModernDialogAsync("DLC 查询", $"{game.GameName} 没有找到关联的 DLC。");
-				RefreshProgressText = $"DLC 查询完成：{game.GameName} 无 DLC";
 				return;
 			}
 
@@ -717,7 +725,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 			for (int i = 0; i < totalDlcs; i++)
 			{
 				var dlcId = result.DlcAppIds[i];
-				RefreshProgressText = $"正在分析 DLC 信息... ({i + 1}/{totalDlcs})";
+				DlcQueryOverlayText = $"正在分析 DLC 信息... ({i + 1}/{totalDlcs})";
 
 				var isImported = !string.IsNullOrEmpty(gameLuaContent) &&
 					System.Text.RegularExpressions.Regex.IsMatch(gameLuaContent,
@@ -731,44 +739,60 @@ public partial class MainViewModel : ObservableObject, IDisposable
 			}
 
 			// 并行获取 DLC 名称
-			RefreshProgressText = $"正在获取 DLC 名称...";
-			await Parallel.ForEachAsync(dlcList, async (dlc, ct) =>
+			DlcQueryOverlayText = "正在获取 DLC 名称...";
+			var slowCts = new CancellationTokenSource();
+			_ = Task.Run(async () =>
 			{
 				try
 				{
-					var client = _httpClientProvider.GetClient("dlc-name", TimeSpan.FromSeconds(10));
-					var json = await client.GetStringAsync($"https://store.steampowered.com/api/appdetails?appids={dlc.AppId}&l=schinese", ct);
-					var doc = System.Text.Json.JsonDocument.Parse(json);
-					if (doc.RootElement.TryGetProperty(dlc.AppId.ToString(), out var appData) &&
-						appData.TryGetProperty("success", out var success) && success.GetBoolean() &&
-						appData.TryGetProperty("data", out var data) &&
-						data.TryGetProperty("name", out var name))
+					await Task.Delay(5000, slowCts.Token);
+					DlcQueryOverlayText += "\n如获取缓慢可尝试开启代理或梯子";
+				}
+				catch (OperationCanceledException) { }
+			});
+			try
+			{
+				await Parallel.ForEachAsync(dlcList, async (dlc, ct) =>
+				{
+					try
 					{
-						dlc.Name = name.GetString() ?? $"DLC {dlc.AppId}";
+						var client = _httpClientProvider.GetClient("dlc-name", TimeSpan.FromSeconds(10));
+						var json = await client.GetStringAsync($"https://store.steampowered.com/api/appdetails?appids={dlc.AppId}&l=schinese", ct);
+						var doc = System.Text.Json.JsonDocument.Parse(json);
+						if (doc.RootElement.TryGetProperty(dlc.AppId.ToString(), out var appData) &&
+							appData.TryGetProperty("success", out var success) && success.GetBoolean() &&
+							appData.TryGetProperty("data", out var data) &&
+							data.TryGetProperty("name", out var name))
+						{
+							dlc.Name = name.GetString() ?? $"DLC {dlc.AppId}";
+						}
+						else
+						{
+							dlc.Name = $"DLC {dlc.AppId}";
+						}
 					}
-					else
+					catch
 					{
 						dlc.Name = $"DLC {dlc.AppId}";
 					}
-				}
-				catch
-				{
-					dlc.Name = $"DLC {dlc.AppId}";
-				}
-			});
+				});
+			}
+			finally
+			{
+				slowCts.Cancel();
+				slowCts.Dispose();
+			}
 
 			var imported = dlcList.Count(d => d.IsImported);
-			RefreshProgressText = $"正在打开 DLC 结果窗口...";
+			IsDlcQueryOverlayVisible = false;
 
 			var view = new Views.DlcQueryResultView(game.GameName, new ObservableCollection<DlcInfo>(dlcList), _settingsService.Load().SelectedBackdrop);
 			view.ShowDialog();
-
-			RefreshProgressText = $"DLC 查询完成：{game.GameName} ({imported}/{dlcList.Count} 已入库)";
 		}
 		catch (Exception ex)
 		{
+			IsDlcQueryOverlayVisible = false;
 			await ShowModernDialogAsync("查询失败", $"查询 DLC 信息时出错：{ex.Message}");
-			RefreshProgressText = "DLC 查询失败";
 		}
 	}
 

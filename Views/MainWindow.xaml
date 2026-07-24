@@ -339,5 +339,25 @@
                      HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
         </Canvas>
+
+        <!-- DLC 查询遮罩层 -->
+        <Grid Panel.ZIndex="200"
+              Visibility="{Binding IsDlcQueryOverlayVisible, Converter={StaticResource BoolToVisibilityConverter}}"
+              Background="#80000000" IsHitTestVisible="True">
+            <Border HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Width="320" MinHeight="120" CornerRadius="12"
+                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24,16">
+                    <ui:ProgressRing IsActive="True" Width="32" Height="32"
+                                     HorizontalAlignment="Center"/>
+                    <TextBlock Text="{Binding DlcQueryOverlayText}"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                               Margin="0,12,0,0"
+                               FontSize="14" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
+                               TextAlignment="Center"/>
+                </StackPanel>
+            </Border>
+        </Grid>
     </Grid>
 </Window>
