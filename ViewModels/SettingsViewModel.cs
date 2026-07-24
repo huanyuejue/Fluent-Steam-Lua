@@ -337,6 +337,20 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
+    private void OpenBinStatsFolder()
+    {
+        var steamDir = SteamPath;
+        if (string.IsNullOrEmpty(steamDir) || !Directory.Exists(steamDir))
+        {
+            StatusMessage = "Steam路径不存在或未设置";
+            return;
+        }
+        var statsDir = Path.Combine(steamDir, "appcache", "stats");
+        Directory.CreateDirectory(statsDir);
+        Process.Start(new ProcessStartInfo { FileName = statsDir, UseShellExecute = true });
+    }
+
+    [RelayCommand]
     private void OpenCacheFolder()
     {
         var cacheDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "cache");

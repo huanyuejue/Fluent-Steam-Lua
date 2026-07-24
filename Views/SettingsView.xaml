@@ -133,13 +133,27 @@
                                              OnContent="开" OffContent="关"/>
                         </ui:SettingsCard>
 
-                        <ui:SettingsCard Header="Lua 文件夹" Margin="0,0,0,8"
+                        <ui:SettingsCard Header="Lua 清单文件夹" Margin="0,0,0,8"
                                          Description="打开Steam Lua配置目录"
                                          ui:ControlHelper.CornerRadius="8">
                             <ui:SettingsCard.Background>
                                 <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
                             </ui:SettingsCard.Background>
                             <Button Content="打开目录" Command="{Binding OpenLuaFolderCommand}"
+                                    Padding="12,6" Margin="4,0">
+                                <Button.Background>
+                                    <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                                </Button.Background>
+                            </Button>
+                        </ui:SettingsCard>
+
+                        <ui:SettingsCard Header="Bin 成就文件夹" Margin="0,0,0,8"
+                                         Description="打开Steam成就数据目录"
+                                         ui:ControlHelper.CornerRadius="8">
+                            <ui:SettingsCard.Background>
+                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
+                            </ui:SettingsCard.Background>
+                            <Button Content="打开目录" Command="{Binding OpenBinStatsFolderCommand}"
                                     Padding="12,6" Margin="4,0">
                                 <Button.Background>
                                     <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
