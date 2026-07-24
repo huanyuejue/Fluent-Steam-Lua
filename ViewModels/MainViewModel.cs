@@ -24,6 +24,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 	private readonly IHttpClientProvider _httpClientProvider;
 	private List<GameInfo> _allGames = new();
 	private CancellationTokenSource? _refreshCts;
+	private CancellationTokenSource? _dlcQueryCts;
 	private DispatcherTimer? _progressTimer;
 	private DispatcherTimer? _searchDebounceTimer;
 
@@ -80,6 +81,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
 	[ObservableProperty]
 	private string _dlcQueryOverlayText = string.Empty;
+
+	[RelayCommand]
+	private void CancelDlcQuery()
+	{
+		_dlcQueryCts?.Cancel();
+	}
 
 	partial void OnIsSelectionModeChanged(bool value)
 	{
@@ -705,8 +712,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
 		try
 		{
+			_dlcQueryCts = new CancellationTokenSource();
+			var ct = _dlcQueryCts.Token;
+
 			DlcQueryOverlayText = $"正在查询 {game.GameName} 的 DLC 信息...";
-			var result = await _steamDepotService.QueryAppAsync(game.AppId);
+			var result = await _steamDepotService.QueryAppAsync(game.AppId, ct);
 			if (result == null || result.DlcAppIds.Count == 0)
 			{
 				IsDlcQueryOverlayVisible = false;
@@ -724,6 +734,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 			var dlcList = new List<DlcInfo>();
 			for (int i = 0; i < totalDlcs; i++)
 			{
+				ct.ThrowIfCancellationRequested();
 				var dlcId = result.DlcAppIds[i];
 				DlcQueryOverlayText = $"正在分析 DLC 信息... ({i + 1}/{totalDlcs})";
 
@@ -740,7 +751,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
 			// 并行获取 DLC 名称
 			DlcQueryOverlayText = "正在获取 DLC 名称...";
-			var slowCts = new CancellationTokenSource();
+			var slowCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
 			_ = Task.Run(async () =>
 			{
 				try
@@ -752,12 +763,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
 			});
 			try
 			{
-				await Parallel.ForEachAsync(dlcList, async (dlc, ct) =>
+				await Parallel.ForEachAsync(dlcList, new ParallelOptions { CancellationToken = ct }, async (dlc, innerCt) =>
 				{
 					try
 					{
 						var client = _httpClientProvider.GetClient("dlc-name", TimeSpan.FromSeconds(10));
-						var json = await client.GetStringAsync($"https://store.steampowered.com/api/appdetails?appids={dlc.AppId}&l=schinese", ct);
+						var json = await client.GetStringAsync($"https://store.steampowered.com/api/appdetails?appids={dlc.AppId}&l=schinese", innerCt);
 						var doc = System.Text.Json.JsonDocument.Parse(json);
 						if (doc.RootElement.TryGetProperty(dlc.AppId.ToString(), out var appData) &&
 							appData.TryGetProperty("success", out var success) && success.GetBoolean() &&
@@ -789,10 +800,20 @@ public partial class MainViewModel : ObservableObject, IDisposable
 			var view = new Views.DlcQueryResultView(game.GameName, new ObservableCollection<DlcInfo>(dlcList), _settingsService.Load().SelectedBackdrop);
 			view.ShowDialog();
 		}
+		catch (OperationCanceledException)
+		{
+			IsDlcQueryOverlayVisible = false;
+		}
 		catch (Exception ex)
 		{
 			IsDlcQueryOverlayVisible = false;
 			await ShowModernDialogAsync("查询失败", $"查询 DLC 信息时出错：{ex.Message}");
+		}
+		finally
+		{
+			_dlcQueryCts?.Cancel();
+			_dlcQueryCts?.Dispose();
+			_dlcQueryCts = null;
 		}
 	}
 

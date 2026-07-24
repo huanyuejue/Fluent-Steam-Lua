@@ -15,7 +15,6 @@ using iNKORE.UI.WPF.Modern.Controls.Helpers;
 using iNKORE.UI.WPF.Modern.Helpers.Styles;
 using SteamLuaManager.Services;
 using SteamLuaManager.ViewModels;
-using SteamLuaManager.Controls;
 
 namespace SteamLuaManager.Views;
 
@@ -36,6 +35,7 @@ public partial class MainWindow : Window
     private readonly ExtractionView _extractionView;
     private readonly AboutView _aboutView;
     private readonly IOpenSteamToolService _openSteamToolService;
+    private CancellationTokenSource? _kernelCts;
 
     // 拖拽状态
     private bool _isDragging;
@@ -274,6 +274,42 @@ public partial class MainWindow : Window
             DefaultButton = ContentDialogButton.Primary
         };
         return await dialog.ShowAsync() == ContentDialogResult.Primary;
+    }
+
+    private void ShowKernelOverlay(string status)
+    {
+        KernelOverlayGrid.Visibility = Visibility.Visible;
+        KernelOverlayStatus.Text = status;
+        KernelOverlayHint.Visibility = Visibility.Collapsed;
+        KernelOverlayProgressBar.Visibility = Visibility.Collapsed;
+        KernelOverlayPercent.Visibility = Visibility.Collapsed;
+        KernelOverlayRing.IsActive = true;
+    }
+
+    private void UpdateKernelOverlayProgress(int percent)
+    {
+        KernelOverlayRing.IsActive = false;
+        KernelOverlayRing.Visibility = Visibility.Collapsed;
+        KernelOverlayProgressBar.Visibility = Visibility.Visible;
+        KernelOverlayPercent.Visibility = Visibility.Visible;
+        KernelOverlayProgressBar.Value = percent;
+        KernelOverlayPercent.Text = $"{percent}%";
+    }
+
+    private void ShowKernelDownloadHint()
+    {
+        KernelOverlayHint.Visibility = Visibility.Visible;
+    }
+
+    private void HideKernelOverlay()
+    {
+        KernelOverlayRing.IsActive = false;
+        KernelOverlayGrid.Visibility = Visibility.Collapsed;
+    }
+
+    private void KernelCancelButton_Click(object sender, RoutedEventArgs e)
+    {
+        _kernelCts?.Cancel();
     }
 
     private void UpdateBackdrop(string backdropTypeName)
@@ -853,23 +889,31 @@ public partial class MainWindow : Window
                 return;
             }
 
-            var dialog = new Controls.ProgressDialog("安装 OpenSteamTool", this);
-            dialog.Show();
+            ShowKernelOverlay("正在下载 OpenSteamTool...");
+            _kernelCts = new CancellationTokenSource();
             try
             {
-                var status = new Progress<string>(msg => dialog.SetStatus(msg));
-                var progress = new Progress<int>(pct => dialog.SetProgress(pct));
-                dialog.ShowDownloadHint();
-                await _openSteamToolService.InstallAsync(downloadUrl, status, progress);
+                var status = new Progress<string>(msg => KernelOverlayStatus.Text = msg);
+                var progress = new Progress<int>(pct => UpdateKernelOverlayProgress(pct));
+                ShowKernelDownloadHint();
+                await _openSteamToolService.InstallAsync(downloadUrl, status, progress, _kernelCts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
             }
             finally
             {
-                dialog.Close();
+                _kernelCts?.Cancel();
+                _kernelCts?.Dispose();
+                _kernelCts = null;
+                HideKernelOverlay();
             }
 
             await ShowModernDialogAsync("安装完成", $"OpenSteamTool {version} 安装成功！\n请重启 Steam 后生效。");
             RefreshTitle();
         }
+        catch (OperationCanceledException) { }
         catch (Exception ex)
         {
             await ShowModernDialogAsync("错误", $"安装失败：{ex.Message}");
@@ -929,23 +973,31 @@ public partial class MainWindow : Window
             }
             if (dialogResult != ContentDialogResult.Primary) return;
 
-            var dialog = new Controls.ProgressDialog("更新 OpenSteamTool", this);
-            dialog.Show();
+            ShowKernelOverlay("正在下载 OpenSteamTool...");
+            _kernelCts = new CancellationTokenSource();
             try
             {
-                var status = new Progress<string>(msg => dialog.SetStatus(msg));
-                var progress = new Progress<int>(pct => dialog.SetProgress(pct));
-                dialog.ShowDownloadHint();
-                await _openSteamToolService.InstallAsync(downloadUrl, status, progress);
+                var status = new Progress<string>(msg => KernelOverlayStatus.Text = msg);
+                var progress = new Progress<int>(pct => UpdateKernelOverlayProgress(pct));
+                ShowKernelDownloadHint();
+                await _openSteamToolService.InstallAsync(downloadUrl, status, progress, _kernelCts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
             }
             finally
             {
-                dialog.Close();
+                _kernelCts?.Cancel();
+                _kernelCts?.Dispose();
+                _kernelCts = null;
+                HideKernelOverlay();
             }
 
             await ShowModernDialogAsync("更新完成", $"已更新至 {remoteVersion}！\n请重启 Steam 后生效。");
             RefreshTitle();
         }
+        catch (OperationCanceledException) { }
         catch (Exception ex)
         {
             await ShowModernDialogAsync("错误", $"检查更新失败：{ex.Message}");

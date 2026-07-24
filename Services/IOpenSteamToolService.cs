@@ -14,7 +14,7 @@ public interface IOpenSteamToolService
     string? GetSteamPath();
     Task<string?> GetLocalVersionAsync();
     Task<(string version, string downloadUrl, string releaseUrl)> GetRemoteInfoAsync();
-    Task InstallAsync(string downloadUrl, IProgress<string>? status = null, IProgress<int>? downloadProgress = null);
+    Task InstallAsync(string downloadUrl, IProgress<string>? status = null, IProgress<int>? downloadProgress = null, CancellationToken ct = default);
     Task UninstallAsync();
 }
 
@@ -131,8 +131,9 @@ public class OpenSteamToolService : IOpenSteamToolService
         return (tag, downloadUrl, releaseUrl);
     }
 
-    public async Task InstallAsync(string downloadUrl, IProgress<string>? status = null, IProgress<int>? downloadProgress = null)
+    public async Task InstallAsync(string downloadUrl, IProgress<string>? status = null, IProgress<int>? downloadProgress = null, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         var steamPath = GetSteamPath() ?? throw new InvalidOperationException("无法检测 Steam 路径");
         status?.Report("正在下载 OpenSteamTool...");
 
@@ -154,9 +155,10 @@ public class OpenSteamToolService : IOpenSteamToolService
                 var buffer = new byte[81920];
                 long readBytes = 0;
                 int bytesRead;
-                while ((bytesRead = await httpStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                while ((bytesRead = await httpStream.ReadAsync(buffer, 0, buffer.Length, ct)) > 0)
                 {
-                    await fileStream.WriteAsync(buffer, 0, bytesRead);
+                    ct.ThrowIfCancellationRequested();
+                    await fileStream.WriteAsync(buffer, 0, bytesRead, ct);
                     readBytes += bytesRead;
                     if (totalBytes > 0 && downloadProgress != null)
                     {
@@ -166,11 +168,13 @@ public class OpenSteamToolService : IOpenSteamToolService
                 }
             }
 
+            ct.ThrowIfCancellationRequested();
             status?.Report("正在解压并安装 DLL...");
             using var archive = ZipFile.OpenRead(tempZip);
             var extracted = 0;
             foreach (var entry in archive.Entries)
             {
+                ct.ThrowIfCancellationRequested();
                 var fileName = Path.GetFileName(entry.Name);
                 if (string.IsNullOrEmpty(fileName)) continue;
                 if (!RequiredDlls.Contains(fileName, StringComparer.OrdinalIgnoreCase)) continue;

@@ -340,6 +340,41 @@
             </Border>
         </Canvas>
 
+        <!-- OpenSteamTool 安装/更新遮罩层 -->
+        <Grid x:Name="KernelOverlayGrid" Panel.ZIndex="210"
+              Visibility="Collapsed" Background="#80000000" IsHitTestVisible="True">
+            <Border HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Width="400" MinHeight="150" CornerRadius="12"
+                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                <StackPanel Margin="24,20">
+                    <TextBlock x:Name="KernelOverlayStatus" FontSize="14" TextAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                               TextWrapping="Wrap"/>
+                    <TextBlock x:Name="KernelOverlayHint" FontSize="11" TextAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Margin="0,4,0,0" Visibility="Collapsed"
+                               Text="若下载过慢可尝试开启代理或 VPN"/>
+                    <Grid Margin="0,12,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <ProgressBar x:Name="KernelOverlayProgressBar" Minimum="0" Maximum="100" Value="0"
+                                     Height="6" Visibility="Collapsed"/>
+                        <TextBlock x:Name="KernelOverlayPercent" Grid.Column="1" FontSize="12"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   Margin="10,0,0,0" Visibility="Collapsed" Text="0%"/>
+                    </Grid>
+                    <ui:ProgressRing x:Name="KernelOverlayRing" IsActive="True" Width="28" Height="28"
+                                     Margin="0,12,0,0" HorizontalAlignment="Left"/>
+                    <Button x:Name="KernelCancelButton" Content="取消" Margin="0,14,0,0"
+                            Padding="12,6" FontSize="13" HorizontalAlignment="Center"
+                            Click="KernelCancelButton_Click"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+
         <!-- DLC 查询遮罩层 -->
         <Grid Panel.ZIndex="200"
               Visibility="{Binding IsDlcQueryOverlayVisible, Converter={StaticResource BoolToVisibilityConverter}}"
@@ -356,6 +391,9 @@
                                Margin="0,12,0,0"
                                FontSize="14" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
                                TextAlignment="Center"/>
+                    <Button Content="取消" Margin="0,14,0,0"
+                            Padding="12,6" FontSize="13" HorizontalAlignment="Center"
+                            Command="{Binding CancelDlcQueryCommand}"/>
                 </StackPanel>
             </Border>
         </Grid>
