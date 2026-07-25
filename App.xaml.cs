@@ -126,11 +126,14 @@ public partial class App : Application
         services.AddSingleton<ISteamDepotService, SteamDepotService>();
         services.AddSingleton<IOpenSteamToolService, OpenSteamToolService>();
         services.AddSingleton<IUpdateService, UpdateService>();
+        services.AddSingleton<ITrainerService, TrainerService>();
+        services.AddSingleton<IGameNameService, GameNameService>();
 
         services.AddTransient<MainViewModel>();
         services.AddTransient<SettingsViewModel>();
         services.AddTransient<ScriptDownloadViewModel>();
         services.AddTransient<ExtractionViewModel>();
+        services.AddTransient<TrainerViewModel>();
         services.AddTransient<MainWindow>();
     }
 }

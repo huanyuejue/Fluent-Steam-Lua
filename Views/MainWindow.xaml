@@ -4,7 +4,7 @@
         xmlns:ui="http://schemas.inkore.net/lib/ui/wpf/modern"
         Title="Fluent Steam Lua 管理工具"
         Icon="pack://application:,,,/Assets/app.ico"
-        Height="700" Width="1050"
+        Height="780" Width="1050"
         MinHeight="500" MinWidth="800"
         WindowStartupLocation="CenterScreen"
         ui:WindowHelper.UseModernWindowStyle="True"
@@ -29,7 +29,7 @@
         <ui:NavigationView x:Name="NavView"
                            PaneDisplayMode="Left"
                            IsPaneOpen="False"
-                            OpenPaneLength="110"
+                            OpenPaneLength="115"
                             CompactPaneLength="48"
                            IsSettingsVisible="False"
                            IsBackEnabled="False"
@@ -59,6 +59,11 @@
                 <ui:NavigationViewItem x:Name="ExtractionItem" Content="提取" Tag="Extraction" Padding="12,0">
                     <ui:NavigationViewItem.Icon>
                         <ui:FontIcon Glyph="&#xE8B7;" FontSize="16"/>
+                    </ui:NavigationViewItem.Icon>
+                </ui:NavigationViewItem>
+                <ui:NavigationViewItem x:Name="TrainerItem" Content="修改器" Tag="Trainer" Padding="12,0">
+                    <ui:NavigationViewItem.Icon>
+                        <ui:FontIcon Glyph="&#xE7FC;" FontSize="16"/>
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
             </ui:NavigationView.MenuItems>

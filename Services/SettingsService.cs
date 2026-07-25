@@ -16,12 +16,14 @@ public class AppSettings
     public bool IsCardRefreshVisible { get; set; } = true;
     public string SelectedTheme { get; set; } = "System";
     public bool AutoCheckUpdateEnabled { get; set; } = true;
+    public bool ShowTrainerSections { get; set; } = true;
 }
 
 public interface ISettingsService
 {
     AppSettings Load();
     void Save(AppSettings settings);
+    event Action<AppSettings>? SettingsChanged;
 }
 
 public class SettingsService : ISettingsService
@@ -51,12 +53,15 @@ public class SettingsService : ISettingsService
         return new AppSettings();
     }
 
+    public event Action<AppSettings>? SettingsChanged;
+
     public void Save(AppSettings settings)
     {
         try
         {
             var json = JsonSerializer.Serialize(settings, JsonOptions);
             File.WriteAllText(_settingsFilePath, json);
+            SettingsChanged?.Invoke(settings);
         }
         catch { }
     }

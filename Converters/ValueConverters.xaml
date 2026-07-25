@@ -10,6 +10,8 @@
     <converters:FilePathToImageConverter x:Key="FilePathToImageConverter"/>
     <converters:BoolInvertConverter x:Key="BoolInvertConverter"/>
     <converters:BoolToRunStopConverter x:Key="BoolToRunStopConverter"/>
+    <converters:BoolToDownloadTextConverter x:Key="BoolToDownloadTextConverter"/>
+    <converters:BoolToDownloadIconConverter x:Key="BoolToDownloadIconConverter"/>
     <converters:StringNotEmptyToBoolConverter x:Key="StringNotEmptyToBoolConverter"/>
     <converters:ThemeToSelectionBrushConverter x:Key="ThemeToSelectionBrushConverter"/>
 

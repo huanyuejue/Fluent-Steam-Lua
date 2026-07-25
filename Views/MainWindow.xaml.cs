@@ -20,7 +20,7 @@ namespace SteamLuaManager.Views;
 
 public partial class MainWindow : Window
 {
-    private readonly string[] _navOrder = ["Home", "ScriptDownload", "Extraction", "Settings", "About"];
+    private readonly string[] _navOrder = ["Home", "ScriptDownload", "Extraction", "Trainer", "Settings", "About"];
     private string _prevTag = "Home";
 
     private readonly MainViewModel _viewModel;
@@ -29,10 +29,12 @@ public partial class MainWindow : Window
     private readonly SettingsViewModel _settingsViewModel;
     private readonly ScriptDownloadViewModel _scriptDownloadViewModel;
     private readonly ExtractionViewModel _extractionViewModel;
+    private readonly TrainerViewModel _trainerViewModel;
     private readonly HomeView _homeView;
     private readonly SettingsView _settingsView;
     private readonly ScriptDownloadView _scriptDownloadView;
     private readonly ExtractionView _extractionView;
+    private readonly TrainerView _trainerView;
     private readonly AboutView _aboutView;
     private readonly IOpenSteamToolService _openSteamToolService;
     private CancellationTokenSource? _kernelCts;
@@ -49,7 +51,7 @@ public partial class MainWindow : Window
     private const double FabSize = 44;
     private const double FabPanelGap = 8;
 
-    public MainWindow(MainViewModel viewModel, SettingsViewModel settingsViewModel, ScriptDownloadViewModel scriptDownloadViewModel, ExtractionViewModel extractionViewModel, ISettingsService settingsService, ISteamPathService steamPathService, IOpenSteamToolService openSteamToolService)
+    public MainWindow(MainViewModel viewModel, SettingsViewModel settingsViewModel, ScriptDownloadViewModel scriptDownloadViewModel, ExtractionViewModel extractionViewModel, TrainerViewModel trainerViewModel, ISettingsService settingsService, ISteamPathService steamPathService, IOpenSteamToolService openSteamToolService)
     {
         InitializeComponent();
         _openSteamToolService = openSteamToolService;
@@ -57,6 +59,7 @@ public partial class MainWindow : Window
         _settingsViewModel = settingsViewModel;
         _scriptDownloadViewModel = scriptDownloadViewModel;
         _extractionViewModel = extractionViewModel;
+        _trainerViewModel = trainerViewModel;
         _settingsService = settingsService;
         _steamPathService = steamPathService;
         DataContext = _viewModel;
@@ -70,6 +73,7 @@ public partial class MainWindow : Window
         _settingsView = new SettingsView { DataContext = settingsViewModel };
         _scriptDownloadView = new ScriptDownloadView { DataContext = scriptDownloadViewModel };
         _extractionView = new ExtractionView { DataContext = extractionViewModel };
+        _trainerView = new TrainerView { DataContext = trainerViewModel };
         _aboutView = new AboutView();
         ContentTransition.Content = _homeView;
         SteamMenuList.ItemsSource = new[]
@@ -430,12 +434,19 @@ public partial class MainWindow : Window
             "Settings" => _settingsView,
             "ScriptDownload" => _scriptDownloadView,
             "Extraction" => _extractionView,
+            "Trainer" => _trainerView,
             "About" => _aboutView,
             _ => null
         };
 
         if (newView is null || newView == ContentTransition.Content) return;
         ContentTransition.Content = newView;
+
+        if (tag == "Trainer")
+        {
+            _ = _trainerViewModel.LoadSectionsCommand.ExecuteAsync(null);
+            _trainerViewModel.LoadDownloadedTrainersCommand.Execute(null);
+        }
     }
 
     private void Window_DragEnter(object sender, DragEventArgs e)

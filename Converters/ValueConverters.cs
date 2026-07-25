@@ -145,6 +145,36 @@ public class BoolToRunStopConverter : IValueConverter
     }
 }
 
+public class BoolToDownloadTextConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is bool downloaded && downloaded)
+            return "打开";
+        return "下载";
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        return Binding.DoNothing;
+    }
+}
+
+public class BoolToDownloadIconConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is bool downloaded && downloaded)
+            return "\uE8A7";
+        return "\uE896";
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        return Binding.DoNothing;
+    }
+}
+
 public class FilePathToImageConverter : IValueConverter
 {
     private static readonly Dictionary<string, (DateTime LastWriteTimeUtc, BitmapImage Image)> ImageCache = new();

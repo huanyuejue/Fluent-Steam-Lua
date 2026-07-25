@@ -84,6 +84,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         IsFabVisible = _settings.IsFabVisible;
         IsCardRefreshVisible = _settings.IsCardRefreshVisible;
         AutoCheckUpdateEnabled = _settings.AutoCheckUpdateEnabled;
+        IsShowTrainerSections = _settings.ShowTrainerSections;
         SelectedTheme = _settings.SelectedTheme;
         SelectedCdnIndex = Math.Clamp(_settings.SelectedCdnIndex, 0, CdnEndpoints.Count - 1);
         _selectedBackdrop = _settings.SelectedBackdrop;
@@ -417,6 +418,16 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private string _downloadMode = "DepotKey";
+
+    [ObservableProperty]
+    private bool _isShowTrainerSections = true;
+
+    partial void OnIsShowTrainerSectionsChanged(bool value)
+    {
+        _settings.ShowTrainerSections = value;
+        _settingsService.Save(_settings);
+        StatusMessage = value ? "修改器推荐栏目已显示" : "修改器推荐栏目已隐藏";
+    }
 
     [ObservableProperty]
     private string _keyFolderPath = string.Empty;

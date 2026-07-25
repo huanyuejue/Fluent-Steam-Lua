@@ -259,6 +259,16 @@
                                              OnContent="开" OffContent="关"/>
                         </ui:SettingsCard>
 
+                        <ui:SettingsCard Header="修改器推荐栏目" Margin="0,0,0,8"
+                                         Description="修改器界面的热门推荐和最新发布栏目"
+                                         ui:ControlHelper.CornerRadius="8">
+                            <ui:SettingsCard.Background>
+                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
+                            </ui:SettingsCard.Background>
+                            <ui:ToggleSwitch IsOn="{Binding IsShowTrainerSections}"
+                                             OnContent="开" OffContent="关"/>
+                        </ui:SettingsCard>
+
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
