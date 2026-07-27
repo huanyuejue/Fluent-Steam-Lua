@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -16,14 +17,12 @@ namespace SteamLuaManager.ViewModels;
 
 public partial class ExtractionViewModel : ObservableObject
 {
-    private readonly ISteamDumperService _dumperService;
+    private readonly ISteamDepotService _depotService;
+    private readonly ISteamPathService _steamPathService;
     private CancellationTokenSource? _cts;
 
     [ObservableProperty]
     private string _appId = "";
-
-    [ObservableProperty]
-    private bool _pinManifest;
 
     [ObservableProperty]
     private bool _isRunning;
@@ -31,11 +30,18 @@ public partial class ExtractionViewModel : ObservableObject
     [ObservableProperty]
     private string _statusMessage = "就绪";
 
+    [ObservableProperty]
+    private bool _pinManifest;
+
+    [ObservableProperty]
+    private bool _extractAchievements;
+
     public ObservableCollection<string> LogLines { get; } = [];
 
-    public ExtractionViewModel(ISteamDumperService dumperService)
+    public ExtractionViewModel(ISteamDepotService depotService, ISteamPathService steamPathService)
     {
-        _dumperService = dumperService;
+        _depotService = depotService;
+        _steamPathService = steamPathService;
     }
 
     [RelayCommand]
@@ -54,7 +60,7 @@ public partial class ExtractionViewModel : ObservableObject
             return;
         }
 
-        if (!int.TryParse(id, out _))
+        if (!int.TryParse(id, out var appId))
         {
             StatusMessage = "AppID 必须为数字";
             return;
@@ -67,41 +73,194 @@ public partial class ExtractionViewModel : ObservableObject
         }
 
         IsRunning = true;
-        StatusMessage = "正在提取...";
+        StatusMessage = "正在查询游戏仓库信息...";
         LogLines.Clear();
         _cts = new CancellationTokenSource();
-
-        _dumperService.LogLineReceived += OnLogLine;
-        PostLog($"开始提取AppID:{id}");
+        var ct = _cts.Token;
 
         try
         {
-            var result = await Task.Run(() =>
-                _dumperService.RunAsync(id, PinManifest, _cts.Token));
+            PostLog($"开始查询 AppID:{id}");
 
-            if (result.Success && result.ExtractedFiles.Count > 0)
+            // 1. Query depot info from api.steamcmd.net
+            var queryResult = await Task.Run(() => _depotService.QueryAppAsync(appId, ct), ct);
+            if (queryResult == null || queryResult.GameDepots.Count == 0)
             {
-                await Task.Run(() => MoveFiles(result.OutputDirectory, GetAppCacheDir(id), result));
-                StatusMessage = $"提取完成，{result.ExtractedFiles.Count} 个文件";
-                PostLog($"提取成功！文件已保存到：{result.OutputDirectory}");
-                ShowOpenDirectoryPrompt(result.OutputDirectory);
+                StatusMessage = "查询失败，未找到该游戏的仓库信息";
+                PostLog("❌ 查询失败，未找到该游戏的仓库信息");
+                return;
             }
-            else if (result.Success)
+
+            PostLog($"✔ 已获取仓库信息，游戏名称：{queryResult.AppName}");
+            PostLog($"找到 {queryResult.GameDepots.Count} 个仓库（已排除共享仓库），{queryResult.DlcAppIds.Count} 个 DLC");
+            StatusMessage = "正在读取 Steam 配置...";
+
+            // 2. Read config.vdf and parse depot keys
+            var steamPath = _steamPathService.DetectSteamPath();
+            if (string.IsNullOrEmpty(steamPath))
             {
-                StatusMessage = "提取完成，未产生文件";
-                PostLog("✅ 提取成功，但未找到输出文件");
+                StatusMessage = "未检测到 Steam 安装路径";
+                PostLog("❌ 未检测到 Steam 安装路径");
+                return;
+            }
+
+            var vdfPath = Path.Combine(steamPath, "config", "config.vdf");
+            if (!File.Exists(vdfPath))
+            {
+                StatusMessage = "未找到 config.vdf";
+                PostLog($"❌ 未找到 config.vdf：{vdfPath}");
+                return;
+            }
+
+            var vdfContent = await File.ReadAllTextAsync(vdfPath, ct);
+            var depotKeys = VdfHelper.ParseDepotKeys(vdfContent);
+            PostLog($"✔ 已读取 Steam 配置，找到 {depotKeys.Count} 个仓库密钥");
+
+            // 3. Generate lua content
+            var sb = new StringBuilder();
+            sb.AppendLine("-- lua by Fluent-Steam-Lua (https://github.com/huanyuejue/Fluent-Steam-Lua)");
+            sb.AppendLine();
+
+            var matchedCount = 0;
+
+            if (depotKeys.TryGetValue(id, out var mainKey))
+            {
+                sb.AppendLine($"addappid({id}, 1, \"{mainKey}\")");
+                matchedCount++;
+                PostLog($"✔ 主仓库 {id} 密钥匹配成功");
             }
             else
             {
-                StatusMessage = "提取失败";
-                PostLog("提取失败");
-                PostLog("提示：提取的游戏需 Steam 账号本身拥有正版游戏，如依旧失败请尝试取消版本固定");
+                sb.AppendLine($"addappid({id})");
+                PostLog($"⚠ 主仓库 {id} 未找到密钥，跳过加密");
             }
+
+            foreach (var depot in queryResult.GameDepots)
+            {
+                var depotIdStr = depot.DepotId.ToString();
+                if (depotKeys.TryGetValue(depotIdStr, out var key))
+                {
+                    sb.AppendLine($"addappid({depot.DepotId}, 1, \"{key}\")");
+                    if (PinManifest && !string.IsNullOrEmpty(depot.ManifestId))
+                        sb.AppendLine($"setManifestid({depot.DepotId},\"{depot.ManifestId}\",0)");
+                    depot.Key = key;
+                    depot.IsMatched = true;
+                    matchedCount++;
+                    PostLog($"✔ 仓库 {depot.DepotId} 密钥匹配成功");
+                }
+                else
+                {
+                    PostLog($"⚠ 仓库 {depot.DepotId} 未找到密钥，跳过");
+                }
+            }
+
+            // 5. Process DLCs — query each DLC's depots for key matching
+            var mainDepotIds = new HashSet<int>(queryResult.GameDepots.Select(d => d.DepotId));
+            foreach (var dlcAppId in queryResult.DlcAppIds)
+            {
+                var dlcIdStr = dlcAppId.ToString();
+                var isMainDepot = mainDepotIds.Contains(dlcAppId);
+
+                // If DLC app ID is also a main game depot, skip addappid (already handled above)
+                if (!isMainDepot)
+                {
+                    if (depotKeys.TryGetValue(dlcIdStr, out var dlcKey))
+                    {
+                        sb.AppendLine($"addappid({dlcAppId}, 1, \"{dlcKey}\")");
+                        matchedCount++;
+                        PostLog($"✔ DLC {dlcAppId} 密钥匹配成功");
+                    }
+                    else
+                    {
+                        sb.AppendLine($"addappid({dlcAppId})");
+                    }
+                }
+
+                // Query DLC's own sub-depots for additional key matching
+                var dlcResult = await Task.Run(() => _depotService.QueryAppAsync(dlcAppId, ct), ct);
+                if (dlcResult != null)
+                {
+                    int subMatched = 0;
+                    foreach (var depot in dlcResult.GameDepots)
+                    {
+                        if (depotKeys.TryGetValue(depot.DepotId.ToString(), out var depotKey))
+                        {
+                            sb.AppendLine($"addappid({depot.DepotId}, 1, \"{depotKey}\")");
+                            if (PinManifest && !string.IsNullOrEmpty(depot.ManifestId))
+                                sb.AppendLine($"setManifestid({depot.DepotId},\"{depot.ManifestId}\",0)");
+                            matchedCount++;
+                            subMatched++;
+                        }
+                    }
+                    if (dlcResult.GameDepots.Count > 0)
+                        PostLog(isMainDepot
+                            ? $"✔ DLC {dlcAppId}（跳过，已是主仓库）{subMatched}/{dlcResult.GameDepots.Count} 子仓库匹配密钥"
+                            : $"✔ DLC {dlcAppId} {subMatched}/{dlcResult.GameDepots.Count} 子仓库匹配密钥");
+                    else
+                        PostLog(isMainDepot
+                            ? $"ℹ DLC {dlcAppId}（跳过，已是主仓库），无额外子仓库"
+                            : $"ℹ DLC {dlcAppId} 无子仓库");
+                }
+                else
+                {
+                    PostLog(isMainDepot
+                        ? $"ℹ DLC {dlcAppId}（跳过，已是主仓库），无额外子仓库信息"
+                        : $"ℹ DLC {dlcAppId} 无子仓库信息");
+                }
+            }
+
+            if (matchedCount == 0)
+            {
+                StatusMessage = "未找到任何可用密钥";
+                PostLog("❌ 本地 config.vdf 中未找到该游戏及其仓库的任何密钥");
+                PostLog("提示：请确保 Steam 已登录正版账号并启动过该游戏");
+                return;
+            }
+
+            // 4. Save to Cache\dump\{appid}\
+            StatusMessage = "正在保存 Lua 清单...";
+            var dumpDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Cache", "dump", id);
+            if (!Directory.Exists(dumpDir))
+                Directory.CreateDirectory(dumpDir);
+
+            var luaPath = Path.Combine(dumpDir, $"{id}.lua");
+            await File.WriteAllTextAsync(luaPath, sb.ToString(), ct);
+
+            StatusMessage = $"提取完成，匹配到 {matchedCount} 个密钥";
+            PostLog($"✔ 提取成功！文件已保存到：{luaPath}");
+
+            if (ExtractAchievements)
+            {
+                var statsDir = Path.Combine(steamPath, "appcache", "stats");
+                if (Directory.Exists(statsDir))
+                {
+                    var achFiles = Directory.GetFiles(statsDir, $"*{id}*")
+                        .Where(f => f.EndsWith(".bin", StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+                    if (achFiles.Count > 0)
+                    {
+                        var largest = achFiles.OrderByDescending(f => new FileInfo(f).Length).First();
+                        var dest = Path.Combine(dumpDir, Path.GetFileName(largest));
+                        File.Copy(largest, dest, true);
+                        PostLog($"✔ 已提取成就文件：{Path.GetFileName(largest)}");
+                    }
+                    else
+                    {
+                        PostLog("ℹ 未找到该游戏的成就缓存文件");
+                    }
+                }
+                else
+                {
+                    PostLog($"ℹ 成就缓存目录不存在：{statsDir}");
+                }
+            }
+
+            ShowOpenDirectoryPrompt(dumpDir);
         }
         catch (OperationCanceledException)
         {
             StatusMessage = "已取消";
-            PostLog("⏹️ 操作已取消");
+            PostLog("⏹ 操作已取消");
         }
         catch (Exception ex)
         {
@@ -110,7 +269,6 @@ public partial class ExtractionViewModel : ObservableObject
         }
         finally
         {
-            _dumperService.LogLineReceived -= OnLogLine;
             IsRunning = false;
             _cts?.Dispose();
             _cts = null;
@@ -138,57 +296,6 @@ public partial class ExtractionViewModel : ObservableObject
                 Process.Start("explorer.exe", directory);
         }));
     }
-
-    private void MoveFiles(string srcDir, string cacheDir, DumperResult result)
-    {
-        Directory.CreateDirectory(cacheDir);
-
-        var luaFiles = result.ExtractedFiles
-            .Where(f => f.EndsWith(".lua", StringComparison.OrdinalIgnoreCase))
-            .ToList();
-
-        var moved = new List<string>();
-
-        foreach (var src in luaFiles)
-        {
-            var dest = Path.Combine(cacheDir, Path.GetFileName(src));
-            try
-            {
-                var content = File.ReadAllText(src);
-                var cleaned = content.Replace("-- Generated by SteamAppDumper (Author:pjy612)", "").TrimStart('\r', '\n');
-                File.WriteAllText(dest, cleaned);
-                File.Delete(src);
-                moved.Add(dest);
-            }
-            catch (Exception ex)
-            {
-                PostLog($"⚠️ 移动失败 {Path.GetFileName(src)}: {ex.Message}");
-            }
-        }
-
-        // Delete non-.lua temp files
-        foreach (var src in result.ExtractedFiles)
-        {
-            if (!src.EndsWith(".lua", StringComparison.OrdinalIgnoreCase))
-            {
-                try { File.Delete(src); } catch { }
-            }
-        }
-
-        try { Directory.Delete(srcDir, recursive: true); } catch { }
-
-        result.OutputDirectory = cacheDir;
-        result.ExtractedFiles = moved;
-    }
-
-    private static string GetAppCacheDir(string appId)
-    {
-        var baseDir = Path.Combine(
-            AppDomain.CurrentDomain.BaseDirectory, "Cache", "Extracted");
-        return Path.Combine(baseDir, appId);
-    }
-
-    private void OnLogLine(string message) => PostLog(message);
 
     private void PostLog(string message)
     {

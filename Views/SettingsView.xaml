@@ -269,6 +269,16 @@
                                              OnContent="开" OffContent="关"/>
                         </ui:SettingsCard>
 
+                        <ui:SettingsCard Header="日志复制按钮" Margin="0,0,0,8"
+                                         Description="在提取和入库页的日志输出框右上角显示复制按钮"
+                                         ui:ControlHelper.CornerRadius="8">
+                            <ui:SettingsCard.Background>
+                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
+                            </ui:SettingsCard.Background>
+                            <ui:ToggleSwitch IsOn="{Binding IsShowCopyLogButton}"
+                                             OnContent="开" OffContent="关"/>
+                        </ui:SettingsCard>
+
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

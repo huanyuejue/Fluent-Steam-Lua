@@ -1,9 +1,11 @@
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Diagnostics;
 using iNKORE.UI.WPF.Modern.Controls;
+using SteamLuaManager.Services;
 using SteamLuaManager.ViewModels;
 
 namespace SteamLuaManager.Views;
@@ -13,6 +15,37 @@ public partial class ScriptDownloadView : UserControl
     public ScriptDownloadView()
     {
         InitializeComponent();
+        Loaded += (_, _) =>
+        {
+            try
+            {
+                var settings = App.ServiceProvider?.GetService(typeof(ISettingsService)) is ISettingsService s
+                    ? s.Load() : null;
+                var showInSetting = settings is { ShowCopyLogButton: true };
+                if (showInSetting && DataContext is ScriptDownloadViewModel vm)
+                {
+                    vm.LogLines.CollectionChanged += (_, _) =>
+                        CopyLogButton.Visibility = vm.LogLines.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+                    CopyLogButton.Visibility = vm.LogLines.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+                }
+                else
+                    CopyLogButton.Visibility = Visibility.Collapsed;
+            }
+            catch { CopyLogButton.Visibility = Visibility.Collapsed; }
+        };
+    }
+
+    private void CopyLogButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is ScriptDownloadViewModel vm && vm.LogLines.Count > 0)
+        {
+            try
+            {
+                var text = string.Join(Environment.NewLine, vm.LogLines);
+                Clipboard.SetText(text);
+            }
+            catch { }
+        }
     }
 
     private void SearchBox_QuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs e)

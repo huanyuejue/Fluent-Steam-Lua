@@ -122,7 +122,6 @@ public partial class App : Application
         services.AddSingleton<ISteamManifestService, SteamManifestService>();
         services.AddSingleton<ISettingsService, SettingsService>();
         services.AddSingleton<IHttpClientProvider, HttpClientProvider>();
-        services.AddSingleton<ISteamDumperService, SteamDumperService>();
         services.AddSingleton<ISteamDepotService, SteamDepotService>();
         services.AddSingleton<IOpenSteamToolService, OpenSteamToolService>();
         services.AddSingleton<IUpdateService, UpdateService>();

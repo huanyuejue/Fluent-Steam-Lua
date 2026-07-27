@@ -249,7 +249,16 @@ public class SteamDepotService : ISteamDepotService
                     var depot = depotProp.Value;
                     if (depot.TryGetProperty("depotfromapp", out _)) continue;
 
-                    result.GameDepots.Add(new DepotKeyInfo { DepotId = depotId });
+                    var dki = new DepotKeyInfo { DepotId = depotId };
+
+                    if (depot.TryGetProperty("manifests", out var manifests) &&
+                        manifests.TryGetProperty("public", out var pub) &&
+                        pub.TryGetProperty("gid", out var gid))
+                    {
+                        dki.ManifestId = gid.GetString() ?? "";
+                    }
+
+                    result.GameDepots.Add(dki);
                 }
             }
 
@@ -413,30 +422,39 @@ public class SteamDepotService : ISteamDepotService
                 matchedItems++;
             }
 
+            var mainDepotIds = new HashSet<int>(queryResult.GameDepots.Select(d => d.DepotId));
             var matchedDlc = 0;
             foreach (var dlcAppId in queryResult.DlcAppIds)
             {
-                var dlcResult = await QueryAppAsync(dlcAppId, ct);
-                if (dlcResult == null) continue;
-
-                sb.AppendLine($"addappid({dlcAppId})");
-                foreach (var depot in dlcResult.GameDepots)
+                // Skip DLC that is already a main game depot (already handled above)
+                if (!mainDepotIds.Contains(dlcAppId))
                 {
-                    if (depotKeys.TryGetValue(depot.DepotId.ToString(), out var key))
+                    sb.AppendLine($"addappid({dlcAppId})");
+
+                    if (depotKeys.TryGetValue(dlcAppId.ToString(), out var dlcMainKey))
                     {
-                        sb.AppendLine($"addappid({depot.DepotId}, 1, \"{key}\")");
+                        sb.AppendLine($"addappid({dlcAppId}, 1, \"{dlcMainKey}\")");
+                        matchedItems++;
+                    }
+                    if (appTokens.TryGetValue(dlcAppId.ToString(), out var dlcToken))
+                    {
+                        sb.AppendLine($"addtoken({dlcAppId}, \"{dlcToken}\")");
                         matchedItems++;
                     }
                 }
-                if (depotKeys.TryGetValue(dlcAppId.ToString(), out var dlcMainKey))
+
+                // Query DLC's own sub-depots for additional keys
+                var dlcResult = await QueryAppAsync(dlcAppId, ct);
+                if (dlcResult != null)
                 {
-                    sb.AppendLine($"addappid({dlcAppId}, 1, \"{dlcMainKey}\")");
-                    matchedItems++;
-                }
-                if (appTokens.TryGetValue(dlcAppId.ToString(), out var dlcToken))
-                {
-                    sb.AppendLine($"addtoken({dlcAppId}, \"{dlcToken}\")");
-                    matchedItems++;
+                    foreach (var depot in dlcResult.GameDepots)
+                    {
+                        if (depotKeys.TryGetValue(depot.DepotId.ToString(), out var key))
+                        {
+                            sb.AppendLine($"addappid({depot.DepotId}, 1, \"{key}\")");
+                            matchedItems++;
+                        }
+                    }
                 }
                 matchedDlc++;
             }

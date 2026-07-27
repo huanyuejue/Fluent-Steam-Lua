@@ -17,6 +17,7 @@ public class AppSettings
     public string SelectedTheme { get; set; } = "System";
     public bool AutoCheckUpdateEnabled { get; set; } = true;
     public bool ShowTrainerSections { get; set; } = true;
+    public bool ShowCopyLogButton { get; set; }
 }
 
 public interface ISettingsService

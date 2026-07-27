@@ -14,9 +14,14 @@
 
             <TextBlock Text="Lua 提取" FontSize="28" FontWeight="SemiBold" Margin="0,0,0,4"
                        Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-            <TextBlock Text="输入游戏 Steam ID 以指定提取该游戏的 Lua 清单（仅限登录的 Steam 账号已拥有的正版游戏）"
-                       FontSize="12" Margin="0,0,0,24"
-                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+            <StackPanel Margin="0,0,0,24">
+                <TextBlock Text="输入游戏 AppID，从 Steam 配置中获取仓库密钥并生成 Lua 入库清单"
+                           FontSize="12"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                <TextBlock Text="需账号拥有正版游戏且下载后启动过游戏"
+                           FontSize="12"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+            </StackPanel>
 
             <!-- AppID 输入 + 选项 -->
             <Border CornerRadius="8" Padding="16" Margin="0,0,0,8"
@@ -90,37 +95,51 @@
                         </Button>
                     </Grid>
 
-                    <CheckBox Content="固定清单的游戏版本"
-                              IsChecked="{Binding PinManifest}"
-                              IsEnabled="{Binding IsRunning, Converter={StaticResource BoolInvertConverter}}"
-                              Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                              Margin="56,12,0,0" FontSize="13"/>
-
-                    <TextBlock FontSize="12" Margin="56,4,0,0"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}">
-                        <Run Text='勾选时将写入"ManifestID"版本信息并固定'/>
-                    </TextBlock>
+                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                        <StackPanel Margin="0,0,32,0">
+                            <CheckBox Content="固定游戏版本" IsChecked="{Binding PinManifest}"
+                                      Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                      FontSize="13"/>
+                            <TextBlock Text="获取游戏Depots的最新清单ID并写入Lua"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       FontSize="11" Margin="24,0,0,0"/>
+                        </StackPanel>
+                        <StackPanel>
+                            <CheckBox Content="提取游戏成就文件" IsChecked="{Binding ExtractAchievements}"
+                                      Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                      FontSize="13"/>
+                            <TextBlock Text="从Steam缓存提取游戏的成就文件"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       FontSize="11" Margin="24,0,0,0"/>
+                        </StackPanel>
+                    </StackPanel>
                 </StackPanel>
             </Border>
 
             <!-- 日志区域 -->
-            <Border CornerRadius="8" Padding="16"
+            <Border CornerRadius="8" Padding="0"
                     BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1" MinHeight="200">
                 <Border.Background>
                     <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
                 </Border.Background>
-                <ScrollViewer x:Name="LogScrollViewer" VerticalScrollBarVisibility="Auto"
-                              PreviewMouseWheel="LogScrollViewer_PreviewMouseWheel">
-                    <ItemsControl ItemsSource="{Binding LogLines}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding}" FontFamily="Consolas" FontSize="13"
-                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                           Margin="0,1,0,1"/>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </ScrollViewer>
+                <Grid>
+                    <ScrollViewer x:Name="LogScrollViewer" VerticalScrollBarVisibility="Auto" Margin="16,16,16,16"
+                                  PreviewMouseWheel="LogScrollViewer_PreviewMouseWheel">
+                        <ItemsControl ItemsSource="{Binding LogLines}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding}" FontFamily="Consolas" FontSize="13"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                               Margin="0,1,0,1"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                    <Button x:Name="CopyLogButton" Content="复制日志"
+                            HorizontalAlignment="Right" VerticalAlignment="Top"
+                            Margin="0,8,8,0" Padding="8,4" FontSize="12"
+                            Click="CopyLogButton_Click" Visibility="Collapsed"/>
+                </Grid>
             </Border>
 
         </StackPanel>

@@ -94,22 +94,29 @@
             </Border>
 
             <!-- 日志区域 -->
-            <Border CornerRadius="8" Padding="16"
+            <Border CornerRadius="8" Padding="0"
                     BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1" Margin="0,0,0,8" MinHeight="80">
                 <Border.Background>
                     <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
                 </Border.Background>
-                <ScrollViewer x:Name="LogScrollViewer" VerticalScrollBarVisibility="Auto" PreviewMouseWheel="LogScrollViewer_PreviewMouseWheel">
-                    <ItemsControl ItemsSource="{Binding LogLines}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding}" FontFamily="Consolas" FontSize="13"
-                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                           Margin="0,1,0,1"/>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </ScrollViewer>
+                <Grid>
+                    <ScrollViewer x:Name="LogScrollViewer" VerticalScrollBarVisibility="Auto" Margin="16,16,16,16"
+                                  PreviewMouseWheel="LogScrollViewer_PreviewMouseWheel">
+                        <ItemsControl ItemsSource="{Binding LogLines}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding}" FontFamily="Consolas" FontSize="13"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                               Margin="0,1,0,1"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                    <Button x:Name="CopyLogButton" Content="复制日志"
+                            HorizontalAlignment="Right" VerticalAlignment="Top"
+                            Margin="0,8,8,0" Padding="8,4" FontSize="12"
+                            Click="CopyLogButton_Click" Visibility="Collapsed"/>
+                </Grid>
             </Border>
 
             <!-- 搜索结果列表 -->

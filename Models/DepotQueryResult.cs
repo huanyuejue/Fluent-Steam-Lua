@@ -5,6 +5,7 @@ public class DepotKeyInfo
     public int DepotId { get; set; }
     public string Key { get; set; } = string.Empty;
     public bool IsMatched { get; set; }
+    public string ManifestId { get; set; } = string.Empty;
 }
 
 public class DepotQueryResult
