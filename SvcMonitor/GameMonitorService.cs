@@ -113,8 +113,7 @@ public class GameMonitorService : BackgroundService
     private DateTime _lastRead = DateTime.MinValue;
 
     private static string ConfigPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-        "SteamLuaManager", "bindings.json");
+        AppContext.BaseDirectory, "bindings.json");
 
     public GameMonitorService(ILogger<GameMonitorService> logger)
     {

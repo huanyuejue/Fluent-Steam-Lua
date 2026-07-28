@@ -330,8 +330,7 @@ public partial class TrainerViewModel : ObservableObject
     }
 
     private static string SharedBindingsPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-        "SteamLuaManager", "bindings.json");
+        MonitorDir, "bindings.json");
 
     [RelayCommand]
     private void SaveBindings()
