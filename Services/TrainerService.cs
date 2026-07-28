@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.RegularExpressions;
 using HtmlAgilityPack;
 using SteamLuaManager.Models;
 
@@ -139,32 +140,6 @@ public class TrainerService : ITrainerService
         catch
         {
             return null;
-        }
-    }
-
-    public async Task<int> GetCheatCountAsync(string pageUrl)
-    {
-        if (string.IsNullOrWhiteSpace(pageUrl)) return 0;
-
-        try
-        {
-            var html = await _httpClientProvider.SendWithProxyRetryAsync(
-                "trainer-page",
-                TimeSpan.FromSeconds(15),
-                client => client.GetStringAsync(pageUrl));
-
-            var doc = new HtmlDocument();
-            doc.LoadHtml(html);
-
-            var textNode = doc.DocumentNode.SelectSingleNode("//text()[contains(.,'Options') and contains(.,'Game Version')]");
-            if (textNode == null) return 0;
-
-            var match = System.Text.RegularExpressions.Regex.Match(textNode.InnerText, @"(\d+)\s*Options");
-            return match.Success && int.TryParse(match.Groups[1].Value, out var count) ? count : 0;
-        }
-        catch
-        {
-            return 0;
         }
     }
 

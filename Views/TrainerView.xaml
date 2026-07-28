@@ -387,18 +387,10 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="已下载的修改器" FontSize="18" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextFillColorPrimaryBrush}" VerticalAlignment="Center"/>
-                        <Button Grid.Column="1" Command="{Binding RefreshChineseNamesCommand}"
-                                Padding="14,6" FontSize="13" Height="34" Margin="0,0,8,0">
-                            <Button.Background>
-                                <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
-                            </Button.Background>
-                            <TextBlock Text="获取中文名" VerticalAlignment="Center"/>
-                        </Button>
-                        <Button Grid.Column="2" Command="{Binding OpenCacheDirCommand}"
+                        <Button Grid.Column="1" Command="{Binding OpenCacheDirCommand}"
                                 Padding="14,6" FontSize="13" Height="34">
                             <Button.Background>
                                 <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
@@ -538,6 +530,10 @@
                                         <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
                                     </Border.Background>
                                     <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto"/>
                                             <ColumnDefinition Width="*"/>
@@ -547,12 +543,12 @@
                                         </Grid.ColumnDefinitions>
 
                                         <!-- Toggle enable/disable -->
-                                        <CheckBox Grid.Column="0" IsChecked="{Binding IsEnabled}"
+                                        <CheckBox Grid.Row="0" Grid.Column="0" IsChecked="{Binding IsEnabled}"
                                                   VerticalAlignment="Center" Width="20" MinWidth="0" Margin="4,0,14,0"
                                                   Click="BindingCheckBox_Click"/>
 
                                         <!-- Info -->
-                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,8,0">
+                                        <StackPanel Grid.Row="0" Grid.Column="1" VerticalAlignment="Center" Margin="0,0,8,0">
                                         <TextBlock FontSize="13" FontWeight="SemiBold"
                                                    TextTrimming="CharacterEllipsis"
                                                    Text="{Binding GameName}">
@@ -585,8 +581,28 @@
                                         </TextBlock>
                                         </StackPanel>
 
+                                        <!-- 激活功能显示 -->
+                                        <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="5"
+                                                    Margin="0,4,0,0"
+                                                    Visibility="{Binding HasAutoKeys, Converter={StaticResource BoolToVisibilityConverter}}">
+                                            <TextBlock FontSize="10" TextTrimming="CharacterEllipsis"
+                                                       Text="{Binding AutoKeysSummary}">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsEnabled}" Value="False">
+                                                                <Setter Property="Foreground" Value="{DynamicResource TextFillColorDisabledBrush}"/>
+                                                                <Setter Property="TextDecorations" Value="Strikethrough"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </StackPanel>
+
                                         <!-- Edit -->
-                                        <Button Grid.Column="3"
+                                        <Button Grid.Row="0" Grid.Column="3"
                                                 Command="{Binding DataContext.EditBindingCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                 CommandParameter="{Binding}"
                                                 Padding="10,6" FontSize="12" Height="32" Margin="0,0,4,0">
@@ -600,7 +616,7 @@
                                         </Button>
 
                                         <!-- Delete -->
-                                        <Button Grid.Column="4"
+                                        <Button Grid.Row="0" Grid.Column="4"
                                                 Command="{Binding DataContext.RemoveBindingCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                 CommandParameter="{Binding}"
                                                 Padding="10,6" FontSize="12" Height="32">

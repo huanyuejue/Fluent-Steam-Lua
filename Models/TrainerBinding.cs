@@ -17,12 +17,33 @@ public class TrainerBinding
     [JsonIgnore]
     public string TrainerFileName => Path.GetFileName(TrainerFilePath);
 
+    [JsonIgnore]
+    public bool HasAutoKeys => AutoKeys.Count > 0;
+
+    [JsonIgnore]
+    public string AutoKeysSummary
+    {
+        get
+        {
+            if (AutoKeys.Count == 0) return string.Empty;
+            var descs = AutoKeys.Select(k =>
+            {
+                var idx = k.LastIndexOf(" - ", StringComparison.Ordinal);
+                return idx > 0 ? k[(idx + 3)..] : k;
+            });
+            return "已自动激活的功能：" + string.Join("、", descs);
+        }
+    }
+
+    public List<string> AutoKeys { get; set; } = new();
+
     public TrainerBinding Clone() => new()
     {
         GameName = GameName,
         GameExePath = GameExePath,
         TrainerFilePath = TrainerFilePath,
         TrainerDisplayName = TrainerDisplayName,
-        IsEnabled = IsEnabled
+        IsEnabled = IsEnabled,
+        AutoKeys = new List<string>(AutoKeys)
     };
 }

@@ -130,7 +130,6 @@ public partial class App : Application
         services.AddSingleton<IOpenSteamToolService, OpenSteamToolService>();
         services.AddSingleton<IUpdateService, UpdateService>();
         services.AddSingleton<ITrainerService, TrainerService>();
-        services.AddSingleton<IGameNameService, GameNameService>();
         services.AddSingleton<ITrainerAutoLaunchService, TrainerAutoLaunchService>();
 
         services.AddTransient<MainViewModel>();

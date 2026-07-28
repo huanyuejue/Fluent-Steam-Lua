@@ -23,7 +23,6 @@ public partial class TrainerViewModel : ObservableObject
     private readonly ITrainerService _trainerService;
     private readonly IHttpClientProvider _httpClientProvider;
     private readonly ISettingsService _settingsService;
-    private readonly IGameNameService _gameNameService;
     private readonly ITrainerAutoLaunchService _autoLaunchService;
 
     [ObservableProperty]
@@ -100,13 +99,14 @@ public partial class TrainerViewModel : ObservableObject
     private static string CacheDir => Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Cache", "trainers");
 
     public TrainerViewModel(ITrainerService trainerService, IHttpClientProvider httpClientProvider,
-        ISettingsService settingsService, IGameNameService gameNameService,
+        ISettingsService settingsService,
         ITrainerAutoLaunchService autoLaunchService)
     {
         _trainerService = trainerService;
         _httpClientProvider = httpClientProvider;
         _settingsService = settingsService;
-        _gameNameService = gameNameService;
+
+
         _autoLaunchService = autoLaunchService;
         _isShowTrainerSections = _settingsService.Load().ShowTrainerSections;
         _autoLaunchService.StatusChanged += msg => StatusMessage = msg;
@@ -197,14 +197,16 @@ public partial class TrainerViewModel : ObservableObject
             }
 
             foreach (var item in items)
-                item.DisplayName = ExtractGameName(item.FileName);
+            {
+                // 优先使用缓存的中文名，否则从文件名提取英文名
+                item.DisplayName = LoadCachedGameName(item.FilePath) ?? ExtractGameName(item.FileName);
+            }
 
             foreach (var item in items)
                 DownloadedTrainers.Add(item);
 
             SyncDownloadedStates(downloadedNames);
 
-            _ = RefreshChineseNamesCoreAsync(items, forceRefresh: false);
         }
         catch { }
 
@@ -237,6 +239,86 @@ public partial class TrainerViewModel : ObservableObject
         IsShowingDownloaded = false;
         IsShowingBinding = true;
         RefreshMonitorStatus();
+    }
+
+    // ── 修改器选项缓存 ──
+    public static string CheatOptionsCacheDir => Path.Combine(CacheDir, "options");
+
+    private async Task<string?> CacheCheatOptionsAsync(TrainerInfo trainer)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(trainer.DownloadUrl) || !File.Exists(trainer.DownloadUrl))
+                return $"{trainer.GameName}：下载文件不存在";
+
+            var (gameName, options) = TrainerExeParser.Parse(trainer.DownloadUrl);
+            if (options.Count == 0)
+                return $"{trainer.GameName}：解析未提取到功能项（修改器可能不含中文字符串）";
+
+            Directory.CreateDirectory(CheatOptionsCacheDir);
+            var key = SanitizeFileName(Path.GetFileNameWithoutExtension(trainer.DownloadUrl));
+            var file = Path.Combine(CheatOptionsCacheDir, $"{key}.json");
+            var json = JsonSerializer.Serialize(options, new JsonSerializerOptions { WriteIndented = true });
+            await File.WriteAllTextAsync(file, json);
+
+            // 缓存中文名（供列表加载时读取）
+            if (!string.IsNullOrWhiteSpace(gameName))
+            {
+                var nameFile = Path.Combine(CheatOptionsCacheDir, $"{key}.name.txt");
+                await File.WriteAllTextAsync(nameFile, gameName);
+
+                // 更新列表中已有项的 DisplayName
+                var item = DownloadedTrainers.FirstOrDefault(d =>
+                    d.FilePath?.Equals(trainer.DownloadUrl, StringComparison.OrdinalIgnoreCase) == true);
+                if (item != null)
+                    item.DisplayName = gameName;
+            }
+
+            return $"{trainer.GameName}：提取到 {options.Count} 项功能" +
+                   (string.IsNullOrWhiteSpace(gameName) ? "" : $"，中文名「{gameName}」");
+        }
+        catch (Exception ex)
+        {
+            return $"解析 {trainer.GameName} 失败：{ex.Message}";
+        }
+    }
+
+    public static List<CheatOption>? LoadCachedOptions(string trainerFilePath)
+    {
+        try
+        {
+            var key = SanitizeFileName(Path.GetFileNameWithoutExtension(trainerFilePath));
+            var file = Path.Combine(CheatOptionsCacheDir, $"{key}.json");
+            if (!File.Exists(file)) return null;
+            var json = File.ReadAllText(file);
+            return JsonSerializer.Deserialize<List<CheatOption>>(json);
+        }
+        catch { return null; }
+    }
+
+    private static void DeleteCachedOptions(string trainerFilePath)
+    {
+        try
+        {
+            var key = SanitizeFileName(Path.GetFileNameWithoutExtension(trainerFilePath));
+            foreach (var ext in new[] { ".json", ".name.txt" })
+            {
+                var file = Path.Combine(CheatOptionsCacheDir, $"{key}{ext}");
+                if (File.Exists(file)) File.Delete(file);
+            }
+        }
+        catch { }
+    }
+
+    public static string? LoadCachedGameName(string trainerFilePath)
+    {
+        try
+        {
+            var key = SanitizeFileName(Path.GetFileNameWithoutExtension(trainerFilePath));
+            var file = Path.Combine(CheatOptionsCacheDir, $"{key}.name.txt");
+            return File.Exists(file) ? File.ReadAllText(file).Trim() : null;
+        }
+        catch { return null; }
     }
 
     private void LoadBindings()
@@ -547,16 +629,6 @@ public partial class TrainerViewModel : ObservableObject
             foreach (var r in results)
                 SearchResults.Add(r);
 
-            // 并行获取每个结果的修改项数量
-            if (results.Count > 0)
-            {
-                await Parallel.ForEachAsync(results, async (r, ct) =>
-                {
-                    var count = await _trainerService.GetCheatCountAsync(r.PageUrl);
-                    r.CheatCount = count;
-                });
-            }
-
             HasSearched = true;
             OnPropertyChanged(nameof(HasNoResults));
             IsShowingHot = results.Count == 0;
@@ -616,23 +688,29 @@ public partial class TrainerViewModel : ObservableObject
 
             var totalBytes = response.Content.Headers.ContentLength ?? -1;
             await using var contentStream = await response.Content.ReadAsStreamAsync(cts.Token);
-            await using var fileStream = new FileStream(savePath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true);
 
-            var buffer = new byte[8192];
             long bytesReadTotal = 0;
-            int bytesRead;
-            while ((bytesRead = await contentStream.ReadAsync(buffer, cts.Token)) > 0)
             {
-                await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead), cts.Token);
-                bytesReadTotal += bytesRead;
-                if (totalBytes > 0)
-                    trainer.DownloadProgress = Math.Round((double)bytesReadTotal / totalBytes * 100, 1);
+                // 单独作用域确保 FileStream 在解析前释放
+                await using var fileStream = new FileStream(savePath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true);
+                var buffer = new byte[8192];
+                int bytesRead;
+                while ((bytesRead = await contentStream.ReadAsync(buffer, cts.Token)) > 0)
+                {
+                    await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead), cts.Token);
+                    bytesReadTotal += bytesRead;
+                    if (totalBytes > 0)
+                        trainer.DownloadProgress = Math.Round((double)bytesReadTotal / totalBytes * 100, 1);
+                }
             }
 
             trainer.DownloadUrl = savePath;
             trainer.IsDownloaded = true;
-            StatusMessage = $"{trainer.GameName} 下载完成";
-            _ = LoadDownloadedTrainersAsync();
+            await LoadDownloadedTrainersAsync();
+
+            StatusMessage = $"{trainer.GameName} 下载完成，正在解析修改器功能...";
+            var parseResult = await CacheCheatOptionsAsync(trainer);
+            StatusMessage = parseResult ?? $"{trainer.GameName} 下载完成";
         }
         catch (OperationCanceledException)
         {
@@ -699,36 +777,15 @@ public partial class TrainerViewModel : ObservableObject
             },
             PrimaryButtonText = "删除",
             CloseButtonText = "取消",
-            DefaultButton = ContentDialogButton.Close
+            DefaultButton = ContentDialogButton.Primary
         };
 
         if (await dialog.ShowAsync() == ContentDialogResult.Primary)
         {
             File.Delete(item.FilePath);
+            // 同时删除对应的缓存文件
+            DeleteCachedOptions(item.FilePath);
             _ = LoadDownloadedTrainersAsync();
-        }
-    }
-
-    [RelayCommand]
-    private async Task RefreshChineseNamesAsync()
-    {
-        var items = DownloadedTrainers.ToArray();
-        await RefreshChineseNamesCoreAsync(items, forceRefresh: true);
-    }
-
-    private async Task RefreshChineseNamesCoreAsync(IEnumerable<DownloadedTrainerItem> items, bool forceRefresh)
-    {
-        foreach (var item in items)
-        {
-            try
-            {
-                var gameName = ExtractGameName(item.FileName);
-                if (string.IsNullOrWhiteSpace(gameName)) continue;
-                var chineseName = await _gameNameService.GetChineseNameAsync(gameName, forceRefresh);
-                if (!string.IsNullOrWhiteSpace(chineseName) && chineseName != item.DisplayName)
-                    item.DisplayName = chineseName;
-            }
-            catch { }
         }
     }
 

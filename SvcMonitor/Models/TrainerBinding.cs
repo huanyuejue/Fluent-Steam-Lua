@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace SvcMonitor.Models;
 
 public class TrainerBinding
@@ -7,4 +9,5 @@ public class TrainerBinding
     public string TrainerFilePath { get; set; } = string.Empty;
     public string TrainerDisplayName { get; set; } = string.Empty;
     public bool IsEnabled { get; set; } = true;
+    public List<string> AutoKeys { get; set; } = new();
 }

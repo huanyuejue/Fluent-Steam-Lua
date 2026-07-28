@@ -9,14 +9,25 @@ using iNKORE.UI.WPF.Modern.Controls.Helpers;
 using iNKORE.UI.WPF.Modern.Helpers.Styles;
 using Microsoft.Win32;
 using SteamLuaManager.Models;
+using SteamLuaManager.ViewModels;
 
 namespace SteamLuaManager.Views;
+
+public class CheatOptionItem
+{
+    public CheatOption Option { get; set; } = null!;
+    public bool IsSelected { get; set; }
+}
 
 public class TrainerBindingDialog : Window
 {
     private ComboBox _trainerCombo = null!;
     private TextBox _gameExePathBox = null!;
     private TextBox _gameNameBox = null!;
+    private ListBox _cheatOptionsList = null!;
+    private StackPanel _cheatOptionsPanel = null!;
+    private readonly ObservableCollection<string> _autoKeys = new();
+    private readonly ObservableCollection<CheatOptionItem> _cheatOptions = new();
     private readonly ObservableCollection<DownloadedTrainerItem> _trainers;
 
     public TrainerBinding? Result { get; private set; }
@@ -28,10 +39,11 @@ public class TrainerBindingDialog : Window
         EditingBinding = existing;
 
         Title = existing != null ? "编辑游戏绑定" : "添加游戏绑定";
-        Width = 520;
-        Height = 380;
+        Width = 860;
+        Height = 740;
+        MinWidth = 640;
+        MinHeight = 520;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
-        ResizeMode = ResizeMode.NoResize;
 
         SetupWindowStyle();
 
@@ -64,6 +76,77 @@ public class TrainerBindingDialog : Window
             BackdropHelper.ApplyDarkMode(this);
         }
         Background = null;
+    }
+
+    private DataTemplate CreateCheatOptionTemplate()
+    {
+        var factory = new FrameworkElementFactory(typeof(CheckBox));
+        factory.SetValue(FrameworkElement.MarginProperty, new Thickness(4, 3, 4, 3));
+        factory.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Stretch);
+        factory.SetBinding(CheckBox.IsCheckedProperty, new System.Windows.Data.Binding("IsSelected"));
+        factory.AddHandler(CheckBox.ClickEvent, new RoutedEventHandler(CheatOptionCheckBox_Click));
+        // Bind Content to self so ContentTemplate renders the inner layout
+        factory.SetBinding(CheckBox.ContentProperty, new System.Windows.Data.Binding());
+
+        // Inner layout template
+        var contentTemplate = new DataTemplate();
+        var stack = new FrameworkElementFactory(typeof(StackPanel));
+        stack.SetValue(StackPanel.MarginProperty, new Thickness(2, 0, 0, 0));
+
+        var desc = new FrameworkElementFactory(typeof(TextBlock));
+        desc.SetValue(TextBlock.TextWrappingProperty, TextWrapping.Wrap);
+        desc.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding("Option.Description"));
+
+        var key = new FrameworkElementFactory(typeof(TextBlock));
+        key.SetValue(TextBlock.FontSizeProperty, 11.0);
+        key.SetValue(TextBlock.MarginProperty, new Thickness(0, 1, 0, 0));
+        key.SetResourceReference(TextBlock.ForegroundProperty, "TextFillColorSecondaryBrush");
+        key.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding("Option.FullKey"));
+
+        stack.AppendChild(desc);
+        stack.AppendChild(key);
+        contentTemplate.VisualTree = stack;
+        factory.SetValue(CheckBox.ContentTemplateProperty, contentTemplate);
+
+        return new DataTemplate { VisualTree = factory };
+    }
+
+    private void LoadCheatOptionsForSelectedTrainer()
+    {
+        _cheatOptions.Clear();
+        _cheatOptionsPanel.Visibility = Visibility.Collapsed;
+
+        if (_trainerCombo.SelectedItem is not DownloadedTrainerItem item) return;
+        if (string.IsNullOrWhiteSpace(item.FilePath)) return;
+
+        var options = TrainerViewModel.LoadCachedOptions(item.FilePath);
+        if (options == null || options.Count == 0) return;
+
+        foreach (var opt in options)
+        {
+            _cheatOptions.Add(new CheatOptionItem
+            {
+                Option = opt,
+                IsSelected = _autoKeys.Contains(opt.FullKey) || _autoKeys.Contains(opt.DisplayText)
+            });
+        }
+        _cheatOptionsPanel.Visibility = Visibility.Visible;
+    }
+
+    private void CheatOptionCheckBox_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is CheckBox cb && cb.DataContext is CheatOptionItem item)
+        {
+            item.IsSelected = cb.IsChecked == true;
+            if (item.IsSelected && !_autoKeys.Contains(item.Option.DisplayText))
+            {
+                _autoKeys.Add(item.Option.DisplayText);
+            }
+            else if (!item.IsSelected)
+            {
+                _autoKeys.Remove(item.Option.DisplayText);
+            }
+        }
     }
 
     private Grid BuildLayout()
@@ -158,7 +241,52 @@ public class TrainerBindingDialog : Window
         {
             if (_trainerCombo.SelectedItem is DownloadedTrainerItem item && string.IsNullOrWhiteSpace(_gameNameBox.Text))
                 _gameNameBox.Text = item.DisplayName;
+            LoadCheatOptionsForSelectedTrainer();
         };
+
+        // --- Cheat options panel ---
+        _cheatOptionsPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
+        _cheatOptionsPanel.Children.Add(MakeLabel("修改器功能选项 (勾选后启动修改器时自动激活对应功能)"));
+        var hintText = new TextBlock
+        {
+            Text = "该功能需要安装后台服务才能实现",
+            FontSize = 11,
+            Margin = new Thickness(4, 0, 0, 6)
+        };
+        hintText.SetResourceReference(TextBlock.ForegroundProperty, "TextFillColorSecondaryBrush");
+        _cheatOptionsPanel.Children.Add(hintText);
+
+        _cheatOptionsList = new ListBox
+        {
+            ItemsSource = _cheatOptions,
+            Height = 300,
+            Margin = new Thickness(0, 0, 0, 14),
+            FontSize = 13,
+            BorderThickness = new Thickness(1)
+        };
+        ScrollViewer.SetHorizontalScrollBarVisibility(_cheatOptionsList, ScrollBarVisibility.Disabled);
+        _cheatOptionsList.SetResourceReference(Control.BackgroundProperty, "ControlFillColorDefaultBrush");
+        _cheatOptionsList.SetResourceReference(Control.BorderBrushProperty, "ControlElevationBorderBrush");
+
+        // ListBoxItem 容器 Stretch 填充 WrapPanel.ItemWidth 格子，实现等宽排列
+        var itemContainerStyle = new Style(typeof(ListBoxItem));
+        itemContainerStyle.Setters.Add(new Setter(HorizontalContentAlignmentProperty, HorizontalAlignment.Stretch));
+        _cheatOptionsList.ItemContainerStyle = itemContainerStyle;
+
+        // ItemsPanel: WrapPanel for multi-column layout
+        var itemsPanelTemplate = new ItemsPanelTemplate();
+        var wrapPanelFactory = new FrameworkElementFactory(typeof(WrapPanel));
+        wrapPanelFactory.SetValue(WrapPanel.OrientationProperty, Orientation.Horizontal);
+        wrapPanelFactory.SetValue(WrapPanel.ItemWidthProperty, 260.0);
+        itemsPanelTemplate.VisualTree = wrapPanelFactory;
+        _cheatOptionsList.ItemsPanel = itemsPanelTemplate;
+
+        // Item template for cheat options (CheckBox + Description + Key)
+        _cheatOptionsList.ItemTemplate = CreateCheatOptionTemplate();
+        _cheatOptionsPanel.Children.Add(_cheatOptionsList);
+        formPanel.Children.Add(_cheatOptionsPanel);
+
+        // AutoKeys section removed - no longer needed
 
         formScroll.Content = formPanel;
         Grid.SetRow(formScroll, 1);
@@ -233,6 +361,10 @@ public class TrainerBindingDialog : Window
 
     private void LoadExistingData(TrainerBinding binding)
     {
+        // 先填充 AutoKeys，这样后续 LoadCheatOptionsForSelectedTrainer 才能检查已激活的键
+        foreach (var k in binding.AutoKeys)
+            _autoKeys.Add(k);
+
         for (int i = 0; i < _trainerCombo.Items.Count; i++)
         {
             var item = _trainerCombo.Items[i] as DownloadedTrainerItem;
@@ -244,6 +376,7 @@ public class TrainerBindingDialog : Window
         }
         _gameExePathBox.Text = binding.GameExePath;
         _gameNameBox.Text = binding.GameName;
+        // Cheat options will be loaded by the SelectionChanged handler above (now with correct AutoKeys state)
     }
 
     private void Ok_Click(object sender, RoutedEventArgs e)
@@ -270,7 +403,8 @@ public class TrainerBindingDialog : Window
             TrainerDisplayName = trainerItem.DisplayName,
             GameExePath = _gameExePathBox.Text.Trim(),
             GameName = _gameNameBox.Text.Trim(),
-            IsEnabled = true
+            IsEnabled = true,
+            AutoKeys = _autoKeys.ToList()
         };
 
         if (string.IsNullOrWhiteSpace(Result.GameName))
