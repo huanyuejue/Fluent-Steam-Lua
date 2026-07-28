@@ -12,7 +12,7 @@
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <Title>Fluent Steam Lua 管理工具</Title>
     <Product>Fluent Steam Lua 管理工具</Product>
-    <Version>1.2.0</Version>
+    <Version>1.2.1</Version>
   </PropertyGroup>
 
   <ItemGroup>
