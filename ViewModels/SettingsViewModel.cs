@@ -86,6 +86,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         AutoCheckUpdateEnabled = _settings.AutoCheckUpdateEnabled;
         IsShowTrainerSections = _settings.ShowTrainerSections;
         IsShowCopyLogButton = _settings.ShowCopyLogButton;
+
         SelectedTheme = _settings.SelectedTheme;
         SelectedCdnIndex = Math.Clamp(_settings.SelectedCdnIndex, 0, CdnEndpoints.Count - 1);
         _selectedBackdrop = _settings.SelectedBackdrop;
@@ -99,6 +100,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             var detectedPath = steamPathService.DetectSteamPath();
             SteamPath = detectedPath ?? "未检测到Steam";
         }
+
     }
 
     private void OnCdnAutoSwitched(int newIndex)
@@ -439,6 +441,9 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         _settingsService.Save(_settings);
         StatusMessage = value ? "修改器推荐栏目已显示" : "修改器推荐栏目已隐藏";
     }
+
+    [ObservableProperty]
+    private bool _isServiceInstalled;
 
     [ObservableProperty]
     private string _keyFolderPath = string.Empty;

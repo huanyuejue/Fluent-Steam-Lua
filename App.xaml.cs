@@ -65,6 +65,10 @@ public partial class App : Application
 
         mainWindow.Show();
 
+        var autoLaunch = ServiceProvider.GetRequiredService<ITrainerAutoLaunchService>();
+        autoLaunch.Start();
+        mainWindow.Closed += (_, _) => autoLaunch.Dispose();
+
         if (settings.AutoCheckUpdateEnabled)
             _ = CheckUpdateOnStartupAsync(mainWindow);
 
@@ -127,6 +131,7 @@ public partial class App : Application
         services.AddSingleton<IUpdateService, UpdateService>();
         services.AddSingleton<ITrainerService, TrainerService>();
         services.AddSingleton<IGameNameService, GameNameService>();
+        services.AddSingleton<ITrainerAutoLaunchService, TrainerAutoLaunchService>();
 
         services.AddTransient<MainViewModel>();
         services.AddTransient<SettingsViewModel>();

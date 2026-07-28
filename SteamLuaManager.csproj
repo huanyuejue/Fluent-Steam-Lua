@@ -28,4 +28,22 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Remove="SvcMonitor\**\*" />
+    <EmbeddedResource Remove="SvcMonitor\**\*" />
+    <None Remove="SvcMonitor\**\*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\SvcMonitor.zip" />
+  </ItemGroup>
+
+  <Target Name="BuildSvcMonitorForEmbed" BeforeTargets="BeforeBuild">
+    <Exec Command="dotnet publish $(ProjectDir)SvcMonitor\SvcMonitor.csproj -c $(Configuration) -o $(ProjectDir)Resources\SvcMonitorPublish" />
+    <ZipDirectory SourceDirectory="$(ProjectDir)Resources\SvcMonitorPublish"
+                  DestinationFile="$(ProjectDir)Resources\SvcMonitor.zip"
+                  Overwrite="true" />
+    <RemoveDir Directories="$(ProjectDir)Resources\SvcMonitorPublish" />
+  </Target>
+
 </Project>

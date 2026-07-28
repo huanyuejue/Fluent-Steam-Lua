@@ -1,14 +1,20 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Net.Http;
+using System.Reflection;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using iNKORE.UI.WPF.Modern.Controls;
 using SteamLuaManager.Models;
 using SteamLuaManager.Services;
+using SteamLuaManager.Views;
 
 namespace SteamLuaManager.ViewModels;
 
@@ -18,6 +24,7 @@ public partial class TrainerViewModel : ObservableObject
     private readonly IHttpClientProvider _httpClientProvider;
     private readonly ISettingsService _settingsService;
     private readonly IGameNameService _gameNameService;
+    private readonly ITrainerAutoLaunchService _autoLaunchService;
 
     [ObservableProperty]
     private string _searchQuery = string.Empty;
@@ -30,13 +37,45 @@ public partial class TrainerViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsHotSectionVisible))]
+    private bool _isShowingSearch = true;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsHotSectionVisible))]
     private bool _isShowingHot = true;
 
     [ObservableProperty]
     private bool _isShowingDownloaded;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MonitorStatusVisible))]
+    private bool _isShowingBinding;
+
+    [ObservableProperty]
     private string _statusMessage = string.Empty;
+
+    private DispatcherTimer? _statusTimer;
+    private DispatcherTimer? _monitorPollTimer;
+
+    partial void OnStatusMessageChanged(string value)
+    {
+        _statusTimer?.Stop();
+        if (string.IsNullOrEmpty(value)) return;
+        _statusTimer ??= new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+        _statusTimer.Tick -= StatusTimer_Tick;
+        _statusTimer.Tick += StatusTimer_Tick;
+        _statusTimer.Start();
+    }
+
+    private void StatusTimer_Tick(object? sender, EventArgs e)
+    {
+        _statusTimer?.Stop();
+        StatusMessage = string.Empty;
+    }
+
+    private void MonitorPollTimer_Tick(object? sender, EventArgs e)
+    {
+        RefreshMonitorStatus();
+    }
 
     [ObservableProperty]
     private bool _hasSearched;
@@ -47,7 +86,7 @@ public partial class TrainerViewModel : ObservableObject
 
     public bool HasNoResults => HasSearched && SearchResults.Count == 0;
 
-    public bool IsHotSectionVisible => IsShowingHot && IsShowTrainerSections;
+    public bool IsHotSectionVisible => IsShowingSearch && IsShowingHot && IsShowTrainerSections;
 
     private bool _hotLoaded;
     private bool _newReleasesLoaded;
@@ -56,18 +95,28 @@ public partial class TrainerViewModel : ObservableObject
     public ObservableCollection<TrainerInfo> NewReleases { get; } = new();
     public ObservableCollection<TrainerInfo> SearchResults { get; } = new();
     public ObservableCollection<DownloadedTrainerItem> DownloadedTrainers { get; } = new();
+    public ObservableCollection<TrainerBinding> TrainerBindings { get; } = new();
 
     private static string CacheDir => Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Cache", "trainers");
 
     public TrainerViewModel(ITrainerService trainerService, IHttpClientProvider httpClientProvider,
-        ISettingsService settingsService, IGameNameService gameNameService)
+        ISettingsService settingsService, IGameNameService gameNameService,
+        ITrainerAutoLaunchService autoLaunchService)
     {
         _trainerService = trainerService;
         _httpClientProvider = httpClientProvider;
         _settingsService = settingsService;
         _gameNameService = gameNameService;
+        _autoLaunchService = autoLaunchService;
         _isShowTrainerSections = _settingsService.Load().ShowTrainerSections;
+        _autoLaunchService.StatusChanged += msg => StatusMessage = msg;
         _settingsService.SettingsChanged += OnSettingsChanged;
+        LoadBindings();
+        IsServiceInstalled = IsMonitorInstalled();
+        RefreshMonitorStatus();
+        _monitorPollTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+        _monitorPollTimer.Tick += MonitorPollTimer_Tick;
+        _monitorPollTimer.Start();
     }
 
     private void OnSettingsChanged(AppSettings settings)
@@ -78,6 +127,7 @@ public partial class TrainerViewModel : ObservableObject
     [RelayCommand]
     private async Task LoadSectionsAsync()
     {
+        if (!IsShowTrainerSections) return;
         var tasks = new List<Task>();
         if (!_hotLoaded)
             tasks.Add(LoadHotAsync());
@@ -164,14 +214,313 @@ public partial class TrainerViewModel : ObservableObject
     [RelayCommand]
     private void ShowSearchView()
     {
+        IsShowingSearch = true;
         IsShowingDownloaded = false;
+        IsShowingBinding = false;
+        RefreshMonitorStatus();
     }
 
     [RelayCommand]
     private void ShowDownloadedView()
     {
+        IsShowingSearch = false;
         IsShowingDownloaded = true;
+        IsShowingBinding = false;
+        RefreshMonitorStatus();
         _ = LoadDownloadedTrainersAsync();
+    }
+
+    [RelayCommand]
+    private void ShowBindingView()
+    {
+        IsShowingSearch = false;
+        IsShowingDownloaded = false;
+        IsShowingBinding = true;
+        RefreshMonitorStatus();
+    }
+
+    private void LoadBindings()
+    {
+        var bindings = _settingsService.Load().TrainerBindings;
+        TrainerBindings.Clear();
+        foreach (var b in bindings)
+            TrainerBindings.Add(b);
+    }
+
+    private static string SharedBindingsPath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+        "SteamLuaManager", "bindings.json");
+
+    [RelayCommand]
+    private void SaveBindings()
+    {
+        var settings = _settingsService.Load();
+        settings.TrainerBindings = TrainerBindings.ToList();
+        _settingsService.Save(settings);
+        _autoLaunchService.ReloadBindings();
+        WriteSharedBindings();
+        TryStartMonitorIfNeeded();
+        RefreshMonitorStatus();
+    }
+
+    private void WriteSharedBindings()
+    {
+        try
+        {
+            var dir = Path.GetDirectoryName(SharedBindingsPath)!;
+            Directory.CreateDirectory(dir);
+            var json = JsonSerializer.Serialize(TrainerBindings.ToList(), new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(SharedBindingsPath, json);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"写入共享绑定配置失败: {ex.Message}");
+        }
+    }
+
+    // ── 后台监控服务 ──
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MonitorStatusVisible))]
+    private bool _isServiceInstalled;
+
+    [ObservableProperty]
+    private string _monitorStatusText = string.Empty;
+
+    public bool MonitorStatusVisible => IsShowingBinding && IsServiceInstalled;
+
+    private static string MonitorDir => Path.Combine(
+        AppDomain.CurrentDomain.BaseDirectory, "SvcMonitor");
+
+    private static string MonitorExePath => Path.Combine(MonitorDir, "SvcMonitor.exe");
+
+    private const string RegistryRunName = "SteamLuaManagerMonitor";
+
+    private bool IsMonitorInstalled()
+    {
+        try
+        {
+            var procName = Path.GetFileNameWithoutExtension(MonitorExePath);
+            // 只要进程里有SvcMonitor在运行，就视为已安装
+            if (Process.GetProcessesByName(procName).Any(p => !p.HasExited))
+                return true;
+
+            // 没有运行则检查注册表（可能注册了但尚未启动）
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+                @"Software\Microsoft\Windows\CurrentVersion\Run");
+            var val = key?.GetValue(RegistryRunName) as string;
+            return !string.IsNullOrEmpty(val);
+        }
+        catch { return false; }
+    }
+
+    private static void KillMonitorProcess()
+    {
+        var name = Path.GetFileNameWithoutExtension(MonitorExePath);
+        foreach (var p in Process.GetProcessesByName(name))
+        {
+            if (!p.HasExited)
+            {
+                try { p.Kill(); p.WaitForExit(2000); }
+                catch { }
+            }
+        }
+    }
+
+    private void RefreshMonitorStatus()
+    {
+        var procName = Path.GetFileNameWithoutExtension(MonitorExePath);
+        var running = Process.GetProcessesByName(procName).Any(p => !p.HasExited);
+        var anyEnabled = TrainerBindings.Any(b => b.IsEnabled);
+        if (running)
+            MonitorStatusText = " -  SvcMonitor后台服务正在运行";
+        else if (!anyEnabled)
+            MonitorStatusText = " -  未有激活绑定项，SvcMonitor后台服务已结束进程";
+        else
+            MonitorStatusText = " -  SvcMonitor后台服务未运行";
+    }
+
+    private void TryStartMonitorIfNeeded()
+    {
+        try
+        {
+            var procName = Path.GetFileNameWithoutExtension(MonitorExePath);
+            if (Process.GetProcessesByName(procName).Any(p => !p.HasExited))
+                return;
+            if (!TrainerBindings.Any(b => b.IsEnabled))
+                return;
+
+            // 仅当已安装（exe 存在）时才启动，不自动安装
+            var exePath = MonitorExePath;
+            if (!File.Exists(exePath))
+                return;
+
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = exePath,
+                UseShellExecute = true,
+                WindowStyle = ProcessWindowStyle.Hidden,
+                CreateNoWindow = true
+            });
+
+            RefreshMonitorStatus();
+        }
+        catch { }
+    }
+
+    private static bool ExtractEmbeddedMonitor(string targetDir)
+    {
+        try
+        {
+            Directory.CreateDirectory(targetDir);
+            var assembly = Assembly.GetExecutingAssembly();
+            const string resourceName = "SteamLuaManager.Resources.SvcMonitor.zip";
+            using var stream = assembly.GetManifestResourceStream(resourceName);
+            if (stream == null) return false;
+            using var zip = new ZipArchive(stream);
+            foreach (var entry in zip.Entries)
+            {
+                var dest = Path.Combine(targetDir, entry.FullName);
+                var dir = Path.GetDirectoryName(dest)!;
+                Directory.CreateDirectory(dir);
+                if (!entry.FullName.EndsWith("/"))
+                    entry.ExtractToFile(dest, true);
+            }
+            return true;
+        }
+        catch { return false; }
+    }
+
+    [RelayCommand]
+    private async Task InstallServiceAsync()
+    {
+        var confirm = new iNKORE.UI.WPF.Modern.Controls.ContentDialog
+        {
+            Title = "安装后台服务",
+            Content = "安装该服务后可在不启动该软件的情况下实现打开游戏自启动修改器，是否安装？\n\n（本服务仅作为游戏进程监控，无其他作用，后台内存占用不到10MB）",
+            PrimaryButtonText = "安装",
+            CloseButtonText = "取消",
+            DefaultButton = iNKORE.UI.WPF.Modern.Controls.ContentDialogButton.Primary
+        };
+        if (await confirm.ShowAsync() != iNKORE.UI.WPF.Modern.Controls.ContentDialogResult.Primary)
+            return;
+
+        try
+        {
+            var exePath = MonitorExePath;
+            if (!File.Exists(exePath))
+            {
+                var dir = Path.GetDirectoryName(exePath)!;
+                if (!ExtractEmbeddedMonitor(dir))
+                {
+                    StatusMessage = "释放 SvcMonitor 失败";
+                    return;
+                }
+            }
+
+            using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+                @"Software\Microsoft\Windows\CurrentVersion\Run", true))
+                key?.SetValue(RegistryRunName, exePath);
+
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = exePath,
+                UseShellExecute = true,
+                WindowStyle = ProcessWindowStyle.Hidden,
+                CreateNoWindow = true
+            });
+
+            IsServiceInstalled = true;
+            StatusMessage = "后台服务已安装并启动，开机自动运行";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"安装异常: {ex.Message}";
+        }
+        RefreshMonitorStatus();
+    }
+
+    [RelayCommand]
+    private async Task UninstallServiceAsync()
+    {
+        var confirm = new iNKORE.UI.WPF.Modern.Controls.ContentDialog
+        {
+            Title = "卸载后台服务",
+            Content = "确定卸载该服务？卸载后需要开启该软件才能实现打开游戏自启动修改器",
+            PrimaryButtonText = "卸载",
+            CloseButtonText = "取消",
+            DefaultButton = iNKORE.UI.WPF.Modern.Controls.ContentDialogButton.Primary
+        };
+        if (await confirm.ShowAsync() != iNKORE.UI.WPF.Modern.Controls.ContentDialogResult.Primary)
+            return;
+
+        try
+        {
+            KillMonitorProcess();
+
+            using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+                @"Software\Microsoft\Windows\CurrentVersion\Run", true))
+                key?.DeleteValue(RegistryRunName, false);
+
+            // 删除 SvcMonitor 文件夹
+            try { Directory.Delete(MonitorDir, true); } catch { }
+
+            await Task.Delay(500);
+            IsServiceInstalled = IsMonitorInstalled();
+            StatusMessage = IsServiceInstalled ? "卸载失败，请手动删除注册表项" : "后台服务已卸载";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"卸载异常: {ex.Message}";
+        }
+        RefreshMonitorStatus();
+    }
+
+    [RelayCommand]
+    private async Task AddBindingAsync()
+    {
+        if (DownloadedTrainers.Count == 0)
+            await LoadDownloadedTrainersAsync();
+
+        var dialog = new TrainerBindingDialog(DownloadedTrainers);
+        dialog.Owner = Application.Current.MainWindow;
+        if (dialog.ShowDialog() == true && dialog.Result != null)
+        {
+            TrainerBindings.Add(dialog.Result);
+            SaveBindings();
+            StatusMessage = $"已添加绑定: {dialog.Result.GameName} → {System.IO.Path.GetFileName(dialog.Result.TrainerFilePath)}";
+        }
+    }
+
+    [RelayCommand]
+    private async Task EditBindingAsync(TrainerBinding? binding)
+    {
+        if (binding == null) return;
+
+        if (DownloadedTrainers.Count == 0)
+            await LoadDownloadedTrainersAsync();
+
+        var dialog = new TrainerBindingDialog(DownloadedTrainers, binding);
+        dialog.Owner = Application.Current.MainWindow;
+        if (dialog.ShowDialog() == true && dialog.Result != null)
+        {
+            var idx = TrainerBindings.IndexOf(binding);
+            if (idx >= 0)
+            {
+                TrainerBindings[idx] = dialog.Result;
+                SaveBindings();
+                StatusMessage = $"已更新绑定: {dialog.Result.GameName} → {System.IO.Path.GetFileName(dialog.Result.TrainerFilePath)}";
+            }
+        }
+    }
+
+    [RelayCommand]
+    private void RemoveBinding(TrainerBinding? binding)
+    {
+        if (binding == null) return;
+        TrainerBindings.Remove(binding);
+        SaveBindings();
+        StatusMessage = $"已删除绑定: {binding.GameName}";
     }
 
     [RelayCommand]

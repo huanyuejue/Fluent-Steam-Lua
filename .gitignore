@@ -37,6 +37,9 @@ bld/
 .idea/
 *.sln.iml
 
+# Build-generated resources
+Resources/SvcMonitor.exe
+
 # Windows
 Thumbs.db
 Desktop.ini

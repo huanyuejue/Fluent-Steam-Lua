@@ -20,6 +20,7 @@ public partial class TrainerView : UserControl
     {
         SearchContentPanel.IsVisibleChanged += OnContentPanelIsVisibleChanged;
         DownloadContentPanel.IsVisibleChanged += OnContentPanelIsVisibleChanged;
+        BindingContentPanel.IsVisibleChanged += OnContentPanelIsVisibleChanged;
         HotTrainersScrollViewer.PreviewMouseWheel += OnNestedScrollViewerPreviewMouseWheel;
         NewReleasesScrollViewer.PreviewMouseWheel += OnNestedScrollViewerPreviewMouseWheel;
     }
@@ -68,5 +69,11 @@ public partial class TrainerView : UserControl
     {
         if (DataContext is TrainerViewModel vm && vm.SearchCommand.CanExecute(null))
             vm.SearchCommand.Execute(null);
+    }
+
+    private void BindingCheckBox_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is TrainerViewModel vm)
+            vm.SaveBindingsCommand.Execute(null);
     }
 }

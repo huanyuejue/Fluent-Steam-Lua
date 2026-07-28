@@ -51,16 +51,42 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <!-- 标题 -->
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
-            <TextBlock Text="修改器" FontSize="28" FontWeight="SemiBold"
-                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="修改器" FontSize="28" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                <TextBlock Margin="12,14,0,0" FontSize="12" FontWeight="Normal"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Text="{Binding MonitorStatusText}"
+                           Visibility="{Binding MonitorStatusVisible, Converter={StaticResource BoolToVisibilityConverter}}"/>
+            </StackPanel>
+            <!-- 搜索页面描述 -->
             <TextBlock Text="搜索游戏并下载风灵月影修改器，仅支持英文名搜索，支持模糊搜索，最多显示十条结果"
                        FontSize="12" Margin="0,4,0,0"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                       TextWrapping="Wrap"/>
+                       TextWrapping="Wrap"
+                       Visibility="{Binding IsShowingSearch, Converter={StaticResource BoolToVisibilityConverter}}"/>
+            <!-- 已下载页面描述 -->
+            <TextBlock Text="当前本地已下载的游戏修改器"
+                       FontSize="12" Margin="0,4,0,0"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       TextWrapping="Wrap"
+                       Visibility="{Binding IsShowingDownloaded, Converter={StaticResource BoolToVisibilityConverter}}"/>
+            <!-- 游戏绑定页面描述 -->
+            <TextBlock Text="绑定修改器到指定游戏程序，实现启动游戏时自启动修改器"
+                       FontSize="12" Margin="0,4,0,0"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       TextWrapping="Wrap"
+                       Visibility="{Binding IsShowingBinding, Converter={StaticResource BoolToVisibilityConverter}}"/>
+            <TextBlock Text="需安装后台服务才能实现不启动该软件的情况下自启动修改器"
+                       FontSize="12" Margin="0,2,0,0"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       TextWrapping="Wrap"
+                       Visibility="{Binding IsShowingBinding, Converter={StaticResource BoolToVisibilityConverter}}"/>
         </StackPanel>
 
         <!-- 固定：顶部切换 Pills -->
@@ -73,22 +99,27 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
                 <RadioButton Grid.Column="0" Content="搜索修改器"
-                             IsChecked="{Binding IsShowingDownloaded, Converter={StaticResource BoolInvertConverter}}"
+                             IsChecked="{Binding IsShowingSearch}"
                              Style="{StaticResource PillButtonStyle}"
                              Command="{Binding ShowSearchViewCommand}"/>
                 <RadioButton Grid.Column="1" Content="已下载修改器"
                              IsChecked="{Binding IsShowingDownloaded}"
                              Style="{StaticResource PillButtonStyle}"
                              Command="{Binding ShowDownloadedViewCommand}"/>
+                <RadioButton Grid.Column="2" Content="游戏绑定"
+                             IsChecked="{Binding IsShowingBinding}"
+                             Style="{StaticResource PillButtonStyle}"
+                             Command="{Binding ShowBindingViewCommand}"/>
             </Grid>
         </Border>
 
         <!-- 固定：搜索框（仅搜索视图） -->
         <Border Grid.Row="2" CornerRadius="8" Padding="12" Margin="0,0,0,12"
                 BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1"
-                Visibility="{Binding IsShowingDownloaded, Converter={StaticResource InvertedBoolToVisibilityConverter}}">
+                Visibility="{Binding IsShowingSearch, Converter={StaticResource BoolToVisibilityConverter}}">
             <Border.Background>
                 <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
             </Border.Background>
@@ -138,7 +169,7 @@
 
                 <!-- ===== 搜索页面内容 ===== -->
                 <StackPanel x:Name="SearchContentPanel"
-                            Visibility="{Binding IsShowingDownloaded, Converter={StaticResource InvertedBoolToVisibilityConverter}}">
+                            Visibility="{Binding IsShowingSearch, Converter={StaticResource BoolToVisibilityConverter}}">
 
                     <!-- 搜索中加载指示 -->
                     <ui:ProgressRing IsActive="{Binding IsSearching}" Width="28" Height="28"
@@ -358,7 +389,7 @@
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="📂 已下载的修改器" FontSize="18" FontWeight="SemiBold"
+                        <TextBlock Grid.Column="0" Text="已下载的修改器" FontSize="18" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextFillColorPrimaryBrush}" VerticalAlignment="Center"/>
                         <Button Grid.Column="1" Command="{Binding RefreshChineseNamesCommand}"
                                 Padding="14,6" FontSize="13" Height="34" Margin="0,0,8,0">
@@ -446,7 +477,179 @@
 
                 </StackPanel>
 
+                <!-- ===== 游戏绑定页面 ===== -->
+                <StackPanel x:Name="BindingContentPanel"
+                            Visibility="{Binding IsShowingBinding, Converter={StaticResource BoolToVisibilityConverter}}">
+
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="游戏绑定" FontSize="18" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}" VerticalAlignment="Center"/>
+                        <Button Grid.Column="1" Command="{Binding InstallServiceCommand}"
+                                Padding="14,6" FontSize="13" Height="34" Margin="0,0,8,0"
+                                Visibility="{Binding IsServiceInstalled, Converter={StaticResource InvertedBoolToVisibilityConverter}}">
+                            <Button.Background>
+                                <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                            </Button.Background>
+                            <StackPanel Orientation="Horizontal">
+                                <ui:FontIcon Glyph="&#xE768;" FontSize="13" Margin="0,0,4,0"/>
+                                <TextBlock Text="安装后台服务" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Grid.Column="1" Command="{Binding UninstallServiceCommand}"
+                                Padding="14,6" FontSize="13" Height="34" Margin="0,0,8,0"
+                                Visibility="{Binding IsServiceInstalled, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <Button.Background>
+                                <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                            </Button.Background>
+                            <StackPanel Orientation="Horizontal">
+                                <ui:FontIcon Glyph="&#xE74D;" FontSize="13" Margin="0,0,4,0"/>
+                                <TextBlock Text="卸载后台服务" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Grid.Column="2" Command="{Binding AddBindingCommand}"
+                                Padding="14,6" FontSize="13" Height="34">
+                            <Button.Background>
+                                <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                            </Button.Background>
+                            <StackPanel Orientation="Horizontal">
+                                <ui:FontIcon Glyph="&#xE710;" FontSize="13" Margin="0,0,4,0"/>
+                                <TextBlock Text="添加绑定" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+
+                    <ItemsControl ItemsSource="{Binding TrainerBindings}"
+                                  Visibility="{Binding TrainerBindings.Count, Converter={StaticResource NonZeroToVisibilityConverter}}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border CornerRadius="8" Padding="12,10" Margin="0,0,0,6" HorizontalAlignment="Stretch"
+                                        BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1">
+                                    <Border.Background>
+                                        <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
+                                    </Border.Background>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <!-- Toggle enable/disable -->
+                                        <CheckBox Grid.Column="0" IsChecked="{Binding IsEnabled}"
+                                                  VerticalAlignment="Center" Width="20" MinWidth="0" Margin="4,0,14,0"
+                                                  Click="BindingCheckBox_Click"/>
+
+                                        <!-- Info -->
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,8,0">
+                                        <TextBlock FontSize="13" FontWeight="SemiBold"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Text="{Binding GameName}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsEnabled}" Value="False">
+                                                            <Setter Property="Foreground" Value="{DynamicResource TextFillColorDisabledBrush}"/>
+                                                            <Setter Property="TextDecorations" Value="Strikethrough"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                            <TextBlock FontSize="10" Margin="0,1,0,0"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Text="{Binding TrainerFileName}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsEnabled}" Value="False">
+                                                            <Setter Property="Foreground" Value="{DynamicResource TextFillColorDisabledBrush}"/>
+                                                            <Setter Property="TextDecorations" Value="Strikethrough"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                        </StackPanel>
+
+                                        <!-- Edit -->
+                                        <Button Grid.Column="3"
+                                                Command="{Binding DataContext.EditBindingCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                CommandParameter="{Binding}"
+                                                Padding="10,6" FontSize="12" Height="32" Margin="0,0,4,0">
+                                            <Button.Background>
+                                                <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                                            </Button.Background>
+                                            <StackPanel Orientation="Horizontal">
+                                                <ui:FontIcon Glyph="&#xE70F;" FontSize="12" Margin="0,0,3,0"/>
+                                                <TextBlock Text="编辑" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Button>
+
+                                        <!-- Delete -->
+                                        <Button Grid.Column="4"
+                                                Command="{Binding DataContext.RemoveBindingCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                CommandParameter="{Binding}"
+                                                Padding="10,6" FontSize="12" Height="32">
+                                            <Button.Background>
+                                                <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                                            </Button.Background>
+                                            <StackPanel Orientation="Horizontal">
+                                                <ui:FontIcon Glyph="&#xE74D;" FontSize="12" Margin="0,0,3,0"/>
+                                                <TextBlock Text="删除" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Button>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <Border CornerRadius="8" Padding="24,16" Margin="0,0,0,8"
+                            BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1"
+                            Visibility="{Binding TrainerBindings.Count, Converter={StaticResource ZeroToVisibilityConverter}}">
+                        <Border.Background>
+                            <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
+                        </Border.Background>
+                        <StackPanel HorizontalAlignment="Center">
+                            <TextBlock Text="暂无游戏绑定" FontSize="14" HorizontalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            <TextBlock Text="点击上方「添加绑定」配置修改器自动启动" FontSize="12" Margin="0,4,0,0" HorizontalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" Opacity="0.6"/>
+                        </StackPanel>
+                    </Border>
+
+                </StackPanel>
+
             </StackPanel>
         </ScrollViewer>
+
+        <ui:InfoBar Grid.Row="4"
+                    IsOpen="{Binding StatusMessage, Converter={StaticResource StringNotEmptyToBoolConverter}}"
+                    Message="{Binding StatusMessage}"
+                    Severity="Success"
+                    IsClosable="True"
+                    HorizontalAlignment="Stretch"
+                    Margin="0,4,0,0"
+                    ui:ControlHelper.CornerRadius="8">
+            <ui:InfoBar.Resources>
+                <Style TargetType="TextBlock">
+                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                </Style>
+            </ui:InfoBar.Resources>
+        </ui:InfoBar>
     </Grid>
 </UserControl>

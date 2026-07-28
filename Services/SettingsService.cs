@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using SteamLuaManager.Models;
 
 namespace SteamLuaManager.Services;
 
@@ -18,6 +19,7 @@ public class AppSettings
     public bool AutoCheckUpdateEnabled { get; set; } = true;
     public bool ShowTrainerSections { get; set; } = true;
     public bool ShowCopyLogButton { get; set; }
+    public List<TrainerBinding> TrainerBindings { get; set; } = new();
 }
 
 public interface ISettingsService
