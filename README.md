@@ -4,24 +4,54 @@
 
 ## 预览
 
-| 主页 | 设置页 | 入库页 |
-|------|--------|--------|
-| ![主页](screenshots/home.png) | ![设置页](screenshots/setting.png) | ![入库页](screenshots/ruku.png) |
+<table>
+  <tr>
+    <td align="center">
+      <img src="https://raw.githubusercontent.com/huanyuejue/Fluent-Steam-Lua/assets/screenshots/home.gif" width="400" />
+    </td>
+    <td align="center">
+      <img src="https://raw.githubusercontent.com/huanyuejue/Fluent-Steam-Lua/assets/screenshots/ruku.gif" width="400" />
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="https://raw.githubusercontent.com/huanyuejue/Fluent-Steam-Lua/assets/screenshots/setting.gif" width="400" />
+    </td>
+    <td align="center">
+      <img src="https://raw.githubusercontent.com/huanyuejue/Fluent-Steam-Lua/assets/screenshots/dlc.gif" width="400" />
+    </td>
+  </tr>
+</table>
 
 ## 功能特性
 
-- 自动/手动扫描 Steam Lua 文件并匹配显示对应游戏名和封面
-- 一键搜索预览并入库新游戏 支持 AppId / 游戏名 模糊搜索
-- 一键查询当前游戏清单的DLC入库情况
-- 一键下载游戏对应的修改器并管理
-- 修改器绑定游戏进程一键跟随自启动（支持自动激活功能项）
-- 快速禁用或启用已入库游戏的状态，无需删除Lua清单，支持筛选显示
-- 从 Steam 直接提取指定游戏 Lua 清单（需拥有正版游戏）
-- 快捷管理 OpenSteamTool 更新、安装与卸载
-- 游戏版本锁定：支持固定游戏清单版本到最新版本或当前已安装版本
-- Steam账号快速切换登录
-- 文件变更自动监控并刷新缓存（FileSystemWatcher）
-- Fluent Design 现代化界面（Acrylic 亚克力 / NavigationView / 圆角过渡）
+#### 入库管理
+- 已入库的游戏自动读取并展示封面和中文游戏名（三种布局展示自由切换）
+- 搜索预览并入库新游戏（支持 AppId / 游戏名）
+- 查询当前游戏清单的DLC入库情况
+- 从 Steam 正版账号中提取已拥有游戏的Lua清单和Bin成就文件
+- 快速禁用或启用 Lua 清单的游戏入库状态，无需删除 Lua 清单
+- 支持固定游戏清单版本到最新版本或当前已安装版本
+
+#### 修改器
+- 搜索游戏的修改器并下载管理（风灵月影修改器）
+- 修改器支持绑定游戏进程，以达到开启游戏自动启动修改器
+- 绑定后支持开启修改器的同时自动激活修改器的指定功能项
+
+#### 内核
+- 目前只适配 OpenSteamTool
+- 支持快捷 安装/更新/卸载 OpenSteamTool 内核
+
+#### Steam
+- 快捷启动和重启Steam程序
+- 快捷切换登录本地已有凭证的Steam账号
+
+#### 特性
+- 文件变更自动监控并刷新缓存
+- 基于 Fluent Design 的现代化界面，使用WPF编译，方便调试
+- 主题支持 跟随系统/深色模式/浅色模式
+- 背景色支持 亚克力/云母/无效果
+- 支持自动检测更新（可关闭）
 
 
 ## 系统要求
