@@ -39,15 +39,38 @@ public partial class AboutView : UserControl
 
             if (result.HasUpdate)
             {
+                var content = new StackPanel
+                {
+                    MaxWidth = 420
+                };
+                content.Children.Add(new TextBlock
+                {
+                    Text = $"当前版本：{result.CurrentVersion}\n最新版本：{result.TagName}",
+                    TextWrapping = TextWrapping.Wrap
+                });
+
+                if (!string.IsNullOrWhiteSpace(result.ReleaseNotes))
+                {
+                    var notes = new TextBlock
+                    {
+                        Text = result.ReleaseNotes,
+                        TextWrapping = TextWrapping.Wrap,
+                        Margin = new Thickness(0, 8, 0, 0)
+                    };
+                    content.Children.Add(new ScrollViewer
+                    {
+                        MaxHeight = 300,
+                        VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                        HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                        Padding = new Thickness(0, 0, 4, 0),
+                        Content = notes
+                    });
+                }
+
                 var dialog = new ContentDialog
                 {
                     Title = "发现新版本",
-                    Content = new TextBlock
-                    {
-                        Text = $"当前版本：{result.CurrentVersion}\n最新版本：{result.TagName}\n\n是否打开 Release 页面下载更新？",
-                        TextWrapping = TextWrapping.Wrap,
-                        MaxWidth = 420
-                    },
+                    Content = content,
                     PrimaryButtonText = "打开下载页",
                     CloseButtonText = "稍后再说",
                     DefaultButton = ContentDialogButton.Primary

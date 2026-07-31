@@ -48,3 +48,5 @@ Desktop.ini
 .DS_Store
 
 screenshots/
+# 构建产物
+Resources/
