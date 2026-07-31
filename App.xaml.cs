@@ -30,17 +30,22 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
-        // 全局未处理异常日志
-        var logPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "crash.log");
-        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
-            System.IO.File.WriteAllText(logPath, args.ExceptionObject.ToString());
-        DispatcherUnhandledException += (_, args) =>
+        // worker 子进程模式：仅用于成就/统计数据的读取与写回，
+        // 通过进程启动时设置 SteamAppId 避免单进程上下文固定问题
+        if (e.Args.Length >= 1 && e.Args[0] == "--worker")
         {
-            System.IO.File.WriteAllText(logPath, args.Exception.ToString());
-            args.Handled = true;
-        };
-        TaskScheduler.UnobservedTaskException += (_, args) =>
-            System.IO.File.WriteAllText(logPath, args.Exception.ToString());
+            int code;
+            try
+            {
+                code = StatsWorker.Run(e.Args);
+            }
+            catch
+            {
+                code = -1;
+            }
+            Shutdown(code);
+            return;
+        }
 
         var services = new ServiceCollection();
         ConfigureServices(services);
@@ -154,12 +159,14 @@ public partial class App : Application
         services.AddSingleton<IUpdateService, UpdateService>();
         services.AddSingleton<ITrainerService, TrainerService>();
         services.AddSingleton<ITrainerAutoLaunchService, TrainerAutoLaunchService>();
+        services.AddSingleton<ISteamAchievementService, SteamAchievementService>();
 
         services.AddTransient<MainViewModel>();
         services.AddTransient<SettingsViewModel>();
         services.AddTransient<ScriptDownloadViewModel>();
         services.AddTransient<ExtractionViewModel>();
         services.AddTransient<TrainerViewModel>();
+        services.AddTransient<AchievementViewModel>();
         services.AddTransient<MainWindow>();
     }
 }

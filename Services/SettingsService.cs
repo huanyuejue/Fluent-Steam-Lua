@@ -10,6 +10,7 @@ public class AppSettings
     public bool AutoRefreshEnabled { get; set; } = true;
     public int SelectedCdnIndex { get; set; }
     public string SelectedViewMode { get; set; } = "卡片";
+    public string AchievementViewMode { get; set; } = "卡片";
     public string SelectedBackdrop { get; set; } = "Acrylic10";
     public string DownloadMode { get; set; } = "DepotKey";
     public string KeyFolderPath { get; set; } = string.Empty;

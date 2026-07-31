@@ -22,7 +22,7 @@ namespace SteamLuaManager.Views;
 
 public partial class MainWindow : Window
 {
-    private readonly string[] _navOrder = ["Home", "ScriptDownload", "Extraction", "Trainer", "Settings", "About"];
+    private readonly string[] _navOrder = ["Home", "ScriptDownload", "Extraction", "Trainer", "Achievement", "Settings", "About"];
     private string _prevTag = "Home";
 
     private readonly MainViewModel _viewModel;
@@ -32,11 +32,13 @@ public partial class MainWindow : Window
     private readonly ScriptDownloadViewModel _scriptDownloadViewModel;
     private readonly ExtractionViewModel _extractionViewModel;
     private readonly TrainerViewModel _trainerViewModel;
+    private readonly AchievementViewModel _achievementViewModel;
     private readonly HomeView _homeView;
     private readonly SettingsView _settingsView;
     private readonly ScriptDownloadView _scriptDownloadView;
     private readonly ExtractionView _extractionView;
     private readonly TrainerView _trainerView;
+    private readonly AchievementView _achievementView;
     private readonly AboutView _aboutView;
     private readonly IOpenSteamToolService _openSteamToolService;
     private CancellationTokenSource? _kernelCts;
@@ -53,7 +55,7 @@ public partial class MainWindow : Window
     private const double FabSize = 44;
     private const double FabPanelGap = 8;
 
-    public MainWindow(MainViewModel viewModel, SettingsViewModel settingsViewModel, ScriptDownloadViewModel scriptDownloadViewModel, ExtractionViewModel extractionViewModel, TrainerViewModel trainerViewModel, ISettingsService settingsService, ISteamPathService steamPathService, IOpenSteamToolService openSteamToolService)
+    public MainWindow(MainViewModel viewModel, SettingsViewModel settingsViewModel, ScriptDownloadViewModel scriptDownloadViewModel, ExtractionViewModel extractionViewModel, TrainerViewModel trainerViewModel, AchievementViewModel achievementViewModel, ISettingsService settingsService, ISteamPathService steamPathService, IOpenSteamToolService openSteamToolService)
     {
         InitializeComponent();
         _openSteamToolService = openSteamToolService;
@@ -62,6 +64,7 @@ public partial class MainWindow : Window
         _scriptDownloadViewModel = scriptDownloadViewModel;
         _extractionViewModel = extractionViewModel;
         _trainerViewModel = trainerViewModel;
+        _achievementViewModel = achievementViewModel;
         _settingsService = settingsService;
         _steamPathService = steamPathService;
         DataContext = _viewModel;
@@ -76,6 +79,7 @@ public partial class MainWindow : Window
         _scriptDownloadView = new ScriptDownloadView { DataContext = scriptDownloadViewModel };
         _extractionView = new ExtractionView { DataContext = extractionViewModel };
         _trainerView = new TrainerView { DataContext = trainerViewModel };
+        _achievementView = new AchievementView { DataContext = achievementViewModel };
         _aboutView = new AboutView();
         ContentTransition.Content = _homeView;
         SteamMenuList.ItemsSource = new[]
@@ -437,6 +441,7 @@ public partial class MainWindow : Window
             "ScriptDownload" => _scriptDownloadView,
             "Extraction" => _extractionView,
             "Trainer" => _trainerView,
+            "Achievement" => _achievementView,
             "About" => _aboutView,
             _ => null
         };
@@ -448,6 +453,10 @@ public partial class MainWindow : Window
         {
             _ = _trainerViewModel.LoadSectionsCommand.ExecuteAsync(null);
             _trainerViewModel.LoadDownloadedTrainersCommand.Execute(null);
+        }
+        else if (tag == "Achievement")
+        {
+            _ = _achievementViewModel.EnsureLoadedAsync();
         }
     }
 

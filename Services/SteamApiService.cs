@@ -56,6 +56,28 @@ public class SteamApiService : ISteamApiService
 		_selectedCdnFailCount = 0;
 	}
 
+	/// <summary>
+	/// 按与主页封面获取一致的节点顺序（选中 CDN → 其余图片 CDN → Steam 官方兜底）返回封面 URL 列表，
+	/// 跟随设置中的封面节点。仅返回地址，不落盘。
+	/// </summary>
+	public List<string> GetCoverUrls(int appId)
+	{
+		var endpoints = CdnEndpoint.Defaults;
+		var urls = new List<string>();
+
+		if (_selectedCdnIndex > 0 && _selectedCdnIndex < endpoints.Count && endpoints[_selectedCdnIndex].IsImageEndpoint)
+			urls.Add(string.Format(endpoints[_selectedCdnIndex].UrlTemplate, appId));
+
+		for (int i = 1; i < endpoints.Count; i++)
+		{
+			if (i != _selectedCdnIndex && endpoints[i].IsImageEndpoint)
+				urls.Add(string.Format(endpoints[i].UrlTemplate, appId));
+		}
+
+		urls.Add($"https://cdn.steamstatic.com/steam/apps/{appId}/header.jpg");
+		return urls;
+	}
+
 	public async Task<List<(string Name, long LatencyMs, bool IsSuccess)>> TestCdnSpeedAsync(
 		IProgress<(string Name, long LatencyMs, bool IsSuccess)>? progress = null)
 	{
