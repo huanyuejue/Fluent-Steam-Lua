@@ -78,11 +78,51 @@ public sealed class SteamAchievementService : ISteamAchievementService
             LastError = null;
             return true;
         }
-        catch (Exception ex)
+        catch (ClientInitializeException ex)
         {
-            LastError = $"连接 Steam 失败：{ex}";
+            LastError = TranslateInitFailure(ex);
+            LogService.Error("成就", $"连接 Steam 初始化失败: {ex}");
             TryDisposeClient();
             return false;
+        }
+        catch (Exception ex)
+        {
+            LastError = $"连接 Steam 失败：{ex.Message}";
+            LogService.Error("成就", $"连接 Steam 失败: {ex}");
+            TryDisposeClient();
+            return false;
+        }
+    }
+
+    private static string TranslateInitFailure(ClientInitializeException ex)
+    {
+        switch (ex.Failure)
+        {
+            case ClientInitializeFailure.GetInstallPath:
+                return "无法获取 Steam 安装路径，请确认 Steam 已正确安装";
+
+            case ClientInitializeFailure.Load:
+                return "无法加载 Steam 客户端组件（steamclient.dll），请检查 Steam 安装是否完整";
+
+            case ClientInitializeFailure.CreateSteamClient:
+                return "创建 Steam 客户端接口失败，请检查 Steam 安装是否完整";
+
+            case ClientInitializeFailure.CreateSteamPipe:
+            {
+                var steam = Process.GetProcessesByName("steam");
+                return steam.Length == 0
+                    ? "未检测到 Steam 客户端运行，请先启动并登录 Steam 后重试"
+                    : "Steam 客户端正在运行但连接失败，可能尚未启动完成，请稍后重试";
+            }
+
+            case ClientInitializeFailure.ConnectToGlobalUser:
+                return "连接 Steam 用户会话失败，请确认已登录 Steam 后重试";
+
+            case ClientInitializeFailure.AppIdMismatch:
+                return "Steam 应用 ID 不匹配，请联系开发者";
+
+            default:
+                return $"连接 Steam 失败：{ex.Message}";
         }
     }
 
