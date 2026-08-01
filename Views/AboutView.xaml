@@ -19,7 +19,7 @@
                        HorizontalAlignment="Center" Margin="0,0,0,16"/>
 
                 <!-- 软件名 -->
-                <TextBlock Text="Fluent Steam Lua 管理工具" FontSize="24" FontWeight="Bold"
+                <TextBlock Text="Fluent Steam Lua 管理工具" FontSize="24" FontWeight="SemiBold"
                            HorizontalAlignment="Center" Margin="0,0,0,20"
                            Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
 
@@ -49,9 +49,13 @@
 
                 <Button Content="检查更新"
                         Click="CheckUpdate_Click"
-                        Padding="16,7"
+                        Padding="16,6"
                         Margin="0,12,0,0"
-                        HorizontalAlignment="Center"/>
+                        HorizontalAlignment="Center">
+                    <Button.Background>
+                        <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                    </Button.Background>
+                </Button>
 
             </StackPanel>
         </ScrollViewer>

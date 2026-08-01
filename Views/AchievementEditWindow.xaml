@@ -49,8 +49,11 @@
 
         <Grid Grid.Row="1">
             <!-- 成就列表 -->
-            <Border CornerRadius="8" Background="#1A000000"
-                    BorderBrush="#08FFFFFF" BorderThickness="1" Padding="8">
+            <Border CornerRadius="8"
+                    BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1" Padding="8">
+                <Border.Background>
+                    <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
+                </Border.Background>
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -93,7 +96,7 @@
                                                              HorizontalAlignment="Left" VerticalAlignment="Center"
                                                              Margin="0,0,8,0"/>
                                             <Border Grid.Column="1" Width="52" Height="52" CornerRadius="6"
-                                                    Background="#22000000" Margin="0,0,10,0">
+                                                    Background="{DynamicResource ControlFillColorDefaultBrush}" Margin="0,0,10,0">
                                                 <Border.Style>
                                                     <Style TargetType="Border">
                                                         <Setter Property="Visibility" Value="Visible"/>
@@ -161,6 +164,12 @@
                     IsClosable="False"
                     HorizontalAlignment="Left"
                     Margin="0,12,0,0"
-                    ui:ControlHelper.CornerRadius="8"/>
+                    ui:ControlHelper.CornerRadius="8">
+            <ui:InfoBar.Resources>
+                <Style TargetType="TextBlock">
+                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                </Style>
+            </ui:InfoBar.Resources>
+        </ui:InfoBar>
     </Grid>
 </Window>

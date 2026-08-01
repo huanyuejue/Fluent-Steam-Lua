@@ -12,7 +12,7 @@
     <UserControl.Resources>
         <Style x:Key="PillButtonStyle" TargetType="RadioButton">
             <Setter Property="Padding" Value="16,6"/>
-            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontSize" Value="14"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
@@ -127,7 +127,6 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <ui:AutoSuggestBox Grid.Column="0" x:Name="SearchBox"
                                    Text="{Binding SearchQuery, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
@@ -137,25 +136,17 @@
                     <ui:AutoSuggestBox.Background>
                         <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                     </ui:AutoSuggestBox.Background>
+                    <ui:AutoSuggestBox.QueryIcon>
+                        <ui:FontIcon Glyph="&#xE721;"/>
+                    </ui:AutoSuggestBox.QueryIcon>
                 </ui:AutoSuggestBox>
-                <Button Grid.Column="1" Command="{Binding SearchCommand}"
-                        Padding="14,6" Height="34" FontSize="13"
-                        IsEnabled="{Binding IsSearching, Converter={StaticResource BoolInvertConverter}}">
+                <Button Grid.Column="1" Command="{Binding ClearSearchCommand}"
+                        Padding="16,6" Height="36" FontSize="14">
                     <Button.Background>
                         <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                     </Button.Background>
                     <StackPanel Orientation="Horizontal">
-                        <ui:FontIcon Glyph="&#xE721;" FontSize="13" Margin="0,0,4,0"/>
-                        <TextBlock Text="搜索" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </Button>
-                <Button Grid.Column="2" Command="{Binding ClearSearchCommand}"
-                        Padding="14,6" Height="34" FontSize="13" Margin="6,0,0,0">
-                    <Button.Background>
-                        <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
-                    </Button.Background>
-                    <StackPanel Orientation="Horizontal">
-                        <ui:FontIcon Glyph="&#xE74D;" FontSize="13" Margin="0,0,4,0"/>
+                        <ui:FontIcon Glyph="&#xE74D;" FontSize="14" Margin="0,0,6,0"/>
                         <TextBlock Text="清除" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Button>
@@ -257,8 +248,12 @@
                     <!-- 热门推荐 -->
                     <StackPanel Visibility="{Binding IsHotSectionVisible, Converter={StaticResource BoolToVisibilityConverter}}"
                                 Margin="0,0,0,16">
-                        <TextBlock Text="🔥 热门推荐" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,10"
-                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                            <ui:FontIcon Glyph="&#xE734;" FontSize="16" VerticalAlignment="Center"
+                                         Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                            <TextBlock Text="热门推荐" FontSize="16" FontWeight="SemiBold" Margin="8,0,0,0"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                        </StackPanel>
                         <ScrollViewer x:Name="HotTrainersScrollViewer" VerticalScrollBarVisibility="Disabled" HorizontalScrollBarVisibility="Auto"
                                       Padding="0,0,12,20">
                             <ItemsControl ItemsSource="{Binding HotTrainers}">
@@ -318,8 +313,12 @@
 
                     <!-- 最新发布 -->
                     <StackPanel Visibility="{Binding IsHotSectionVisible, Converter={StaticResource BoolToVisibilityConverter}}">
-                        <TextBlock Text="🆕 最新发布" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,10"
-                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                            <ui:FontIcon Glyph="&#xE81C;" FontSize="16" VerticalAlignment="Center"
+                                         Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                            <TextBlock Text="最新发布" FontSize="16" FontWeight="SemiBold" Margin="8,0,0,0"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                        </StackPanel>
                         <ScrollViewer x:Name="NewReleasesScrollViewer" VerticalScrollBarVisibility="Disabled" HorizontalScrollBarVisibility="Auto"
                                       Padding="0,0,12,20">
                             <ItemsControl ItemsSource="{Binding NewReleases}">
@@ -391,7 +390,7 @@
                         <TextBlock Grid.Column="0" Text="已下载的修改器" FontSize="18" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextFillColorPrimaryBrush}" VerticalAlignment="Center"/>
                         <Button Grid.Column="1" Command="{Binding OpenCacheDirCommand}"
-                                Padding="14,6" FontSize="13" Height="34">
+                                Padding="16,6" FontSize="14" Height="36">
                             <Button.Background>
                                 <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                             </Button.Background>
@@ -430,7 +429,7 @@
                                         <Button Grid.Column="1"
                                                 Command="{Binding DataContext.OpenDownloadedFileCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                 CommandParameter="{Binding}"
-                                                Padding="14,6" FontSize="13" Margin="8,0,4,0" Height="34">
+                                                Padding="12,6" FontSize="13" Margin="8,0,4,0" Height="34">
                                             <Button.Background>
                                                 <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                                             </Button.Background>
@@ -442,7 +441,7 @@
                                         <Button Grid.Column="2"
                                                 Command="{Binding DataContext.DeleteDownloadedFileCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                 CommandParameter="{Binding}"
-                                                Padding="14,6" FontSize="13" Height="34">
+                                                Padding="12,6" FontSize="13" Height="34">
                                             <Button.Background>
                                                 <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                                             </Button.Background>
@@ -482,34 +481,34 @@
                         <TextBlock Grid.Column="0" Text="游戏绑定" FontSize="18" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextFillColorPrimaryBrush}" VerticalAlignment="Center"/>
                         <Button Grid.Column="1" Command="{Binding InstallServiceCommand}"
-                                Padding="14,6" FontSize="13" Height="34" Margin="0,0,8,0"
+                                Padding="16,6" FontSize="14" Height="36" Margin="0,0,8,0"
                                 Visibility="{Binding IsServiceInstalled, Converter={StaticResource InvertedBoolToVisibilityConverter}}">
                             <Button.Background>
                                 <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                             </Button.Background>
                             <StackPanel Orientation="Horizontal">
-                                <ui:FontIcon Glyph="&#xE768;" FontSize="13" Margin="0,0,4,0"/>
+                                <ui:FontIcon Glyph="&#xE768;" FontSize="14" Margin="0,0,6,0"/>
                                 <TextBlock Text="安装后台服务" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Button>
                         <Button Grid.Column="1" Command="{Binding UninstallServiceCommand}"
-                                Padding="14,6" FontSize="13" Height="34" Margin="0,0,8,0"
+                                Padding="16,6" FontSize="14" Height="36" Margin="0,0,8,0"
                                 Visibility="{Binding IsServiceInstalled, Converter={StaticResource BoolToVisibilityConverter}}">
                             <Button.Background>
                                 <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                             </Button.Background>
                             <StackPanel Orientation="Horizontal">
-                                <ui:FontIcon Glyph="&#xE74D;" FontSize="13" Margin="0,0,4,0"/>
+                                <ui:FontIcon Glyph="&#xE74D;" FontSize="14" Margin="0,0,6,0"/>
                                 <TextBlock Text="卸载后台服务" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Button>
                         <Button Grid.Column="2" Command="{Binding AddBindingCommand}"
-                                Padding="14,6" FontSize="13" Height="34">
+                                Padding="16,6" FontSize="14" Height="36">
                             <Button.Background>
                                 <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                             </Button.Background>
                             <StackPanel Orientation="Horizontal">
-                                <ui:FontIcon Glyph="&#xE710;" FontSize="13" Margin="0,0,4,0"/>
+                                <ui:FontIcon Glyph="&#xE710;" FontSize="14" Margin="0,0,6,0"/>
                                 <TextBlock Text="添加绑定" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Button>
@@ -605,12 +604,12 @@
                                         <Button Grid.Row="0" Grid.Column="3"
                                                 Command="{Binding DataContext.EditBindingCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                 CommandParameter="{Binding}"
-                                                Padding="10,6" FontSize="12" Height="32" Margin="0,0,4,0">
+                                                Padding="12,6" FontSize="13" Height="34" Margin="0,0,4,0">
                                             <Button.Background>
                                                 <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                                             </Button.Background>
                                             <StackPanel Orientation="Horizontal">
-                                                <ui:FontIcon Glyph="&#xE70F;" FontSize="12" Margin="0,0,3,0"/>
+                                                <ui:FontIcon Glyph="&#xE70F;" FontSize="13" Margin="0,0,4,0"/>
                                                 <TextBlock Text="编辑" VerticalAlignment="Center"/>
                                             </StackPanel>
                                         </Button>
@@ -619,12 +618,12 @@
                                         <Button Grid.Row="0" Grid.Column="4"
                                                 Command="{Binding DataContext.RemoveBindingCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                 CommandParameter="{Binding}"
-                                                Padding="10,6" FontSize="12" Height="32">
+                                                Padding="12,6" FontSize="13" Height="34">
                                             <Button.Background>
                                                 <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                                             </Button.Background>
                                             <StackPanel Orientation="Horizontal">
-                                                <ui:FontIcon Glyph="&#xE74D;" FontSize="12" Margin="0,0,3,0"/>
+                                                <ui:FontIcon Glyph="&#xE74D;" FontSize="13" Margin="0,0,4,0"/>
                                                 <TextBlock Text="删除" VerticalAlignment="Center"/>
                                             </StackPanel>
                                         </Button>

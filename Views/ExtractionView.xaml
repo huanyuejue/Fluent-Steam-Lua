@@ -69,7 +69,7 @@
                         </Grid>
 
                         <Button Grid.Column="2" Command="{Binding StartExtractionCommand}"
-                                Padding="12,6" Height="36" Margin="8,0,4,0">
+                                Padding="16,6" Height="36" Margin="8,0,4,0">
                             <Button.Background>
                                 <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                             </Button.Background>
@@ -84,7 +84,7 @@
                         </Button>
 
                         <Button Grid.Column="3" Command="{Binding ClearLogCommand}"
-                                Padding="12,6" Height="36" Margin="4,0,0,0">
+                                Padding="16,6" Height="36" Margin="4,0,0,0">
                             <Button.Background>
                                 <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                             </Button.Background>
@@ -138,7 +138,11 @@
                     <Button x:Name="CopyLogButton" Content="复制日志"
                             HorizontalAlignment="Right" VerticalAlignment="Top"
                             Margin="0,8,8,0" Padding="8,4" FontSize="12"
-                            Click="CopyLogButton_Click" Visibility="Collapsed"/>
+                            Click="CopyLogButton_Click" Visibility="Collapsed">
+                        <Button.Background>
+                            <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                        </Button.Background>
+                    </Button>
                 </Grid>
             </Border>
 

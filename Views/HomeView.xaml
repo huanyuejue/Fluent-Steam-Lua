@@ -54,7 +54,7 @@
 
     <Grid>
 
-        <Grid Margin="24,16,24,16">
+        <Grid Margin="36,24,36,24">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -71,14 +71,14 @@
             </Grid.ColumnDefinitions>
 
             <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                <TextBlock Text="已入库的游戏" FontSize="28" FontWeight="Bold"
+                <TextBlock Text="已入库的游戏" FontSize="28" FontWeight="SemiBold"
                            Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
                 <TextBlock Text="{Binding RefreshProgressText}" FontSize="12" Margin="0,2,0,0"
                            Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
             </StackPanel>
 
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                <Button Command="{Binding RefreshGamesCommand}" Padding="12,6" Margin="4,0">
+                <Button Command="{Binding RefreshGamesCommand}" Padding="16,6" Height="36" FontSize="14" Margin="4,0">
                     <Button.Background>
                         <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                     </Button.Background>
@@ -87,7 +87,7 @@
                         <TextBlock Text="刷新" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Button>
-                <Button Command="{Binding AddFilesCommand}" Padding="12,6" Margin="4,0">
+                <Button Command="{Binding AddFilesCommand}" Padding="16,6" Height="36" FontSize="14" Margin="4,0">
                     <Button.Background>
                         <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                     </Button.Background>
@@ -96,7 +96,7 @@
                         <TextBlock Text="添加游戏" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Button>
-                <Button Command="{Binding OpenLuaFolderCommand}" Padding="12,6" Margin="4,0">
+                <Button Command="{Binding OpenLuaFolderCommand}" Padding="16,6" Height="36" FontSize="14" Margin="4,0">
                     <Button.Background>
                         <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                     </Button.Background>
@@ -125,6 +125,9 @@
                 <ui:AutoSuggestBox.Background>
                     <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                 </ui:AutoSuggestBox.Background>
+                <ui:AutoSuggestBox.QueryIcon>
+                    <ui:FontIcon Glyph="&#xE721;"/>
+                </ui:AutoSuggestBox.QueryIcon>
             </ui:AutoSuggestBox>
 
             <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="0,0,12,0">
@@ -226,7 +229,7 @@
                 <Button Command="{Binding BatchDeleteCommand}" Padding="10,6" Margin="6,0,0,0"
                         Background="Transparent" BorderThickness="1"
                         BorderBrush="{DynamicResource ControlElevationBorderBrush}"
-                        Foreground="#FFFF4444">
+                        Foreground="{DynamicResource SystemFillColorCriticalBrush}">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="批量删除" VerticalAlignment="Center"/>
                     </StackPanel>
@@ -447,6 +450,7 @@
             <ScrollViewer VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled"
                           Loaded="ViewModeContainer_Loaded"
+                          Padding="0,0,20,0"
                           Visibility="{Binding SelectedViewMode, Converter={StaticResource EqualityToVisibilityConverter}, ConverterParameter=列表}">
                 <StackPanel Margin="0,0,0,16">
                     <ItemsControl ItemsSource="{Binding Games}">
@@ -672,7 +676,7 @@
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding IsDisabled}" Value="True">
                                                             <Setter Property="Text" Value="已禁用"/>
-                                                            <Setter Property="Foreground" Value="#FF888888"/>
+                                                            <Setter Property="Foreground" Value="{DynamicResource TextFillColorDisabledBrush}"/>
                                                         </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>

@@ -44,7 +44,6 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <ui:AutoSuggestBox x:Name="SearchBox" Grid.Column="0"
                                        PlaceholderText="输入游戏名或Steam ID"
@@ -57,19 +56,11 @@
                         <ui:AutoSuggestBox.Background>
                             <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                         </ui:AutoSuggestBox.Background>
+                        <ui:AutoSuggestBox.QueryIcon>
+                            <ui:FontIcon Glyph="&#xE721;"/>
+                        </ui:AutoSuggestBox.QueryIcon>
                     </ui:AutoSuggestBox>
-                    <Button Grid.Column="1" Command="{Binding SearchCommand}"
-                            Padding="16,6" Height="36" FontSize="14"
-                            IsEnabled="{Binding IsSearching, Converter={StaticResource BoolInvertConverter}}">
-                        <Button.Background>
-                            <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
-                        </Button.Background>
-                        <StackPanel Orientation="Horizontal">
-                            <ui:FontIcon Glyph="&#xE721;" FontSize="14" Margin="0,0,6,0"/>
-                            <TextBlock Text="搜索" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-                    <Button Grid.Column="2" Command="{Binding RefreshKeyCacheCommand}"
+                    <Button Grid.Column="1" Command="{Binding RefreshKeyCacheCommand}"
                             Padding="16,6" Height="36" FontSize="14" Margin="8,0,0,0"
                             Visibility="{Binding IsLocalCacheMode, Converter={StaticResource BoolToVisibilityConverter}}">
                         <Button.Background>
@@ -80,7 +71,7 @@
                             <TextBlock Text="更新密钥缓存" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button Grid.Column="3" Command="{Binding ClearLogCommand}"
+                    <Button Grid.Column="2" Command="{Binding ClearLogCommand}"
                             Padding="16,6" Height="36" FontSize="14" Margin="8,0,0,0">
                         <Button.Background>
                             <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>

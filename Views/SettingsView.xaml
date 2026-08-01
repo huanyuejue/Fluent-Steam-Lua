@@ -23,8 +23,8 @@
                     SelectionChanged="TabControl_SelectionChanged">
             <TabControl.Resources>
                 <Style TargetType="TabItem">
-                    <Setter Property="FontSize" Value="15"/>
-                    <Setter Property="Padding" Value="20,10"/>
+                    <Setter Property="FontSize" Value="14"/>
+                    <Setter Property="Padding" Value="16,6"/>
                     <Setter Property="Margin" Value="0,0,6,0"/>
                     <Setter Property="Background" Value="Transparent"/>
                     <Setter Property="BorderBrush" Value="Transparent"/>
@@ -288,6 +288,16 @@
                 <ScrollViewer VerticalScrollBarVisibility="Auto" BorderThickness="0"
                               Background="Transparent" Padding="0,0,20,0">
                     <StackPanel Margin="0,8,0,16">
+
+                        <ui:SettingsCard Header="日志记录" Margin="0,0,0,8"
+                                         Description="记录用户操作和运行错误，输出到软件目录的 app.log 文件"
+                                         ui:ControlHelper.CornerRadius="8">
+                            <ui:SettingsCard.Background>
+                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
+                            </ui:SettingsCard.Background>
+                            <ui:ToggleSwitch IsOn="{Binding EnableLogging}"
+                                             OnContent="开" OffContent="关"/>
+                        </ui:SettingsCard>
 
                         <ui:SettingsCard Header="入库接口" Margin="0,0,0,8"
                                          Description="选择游戏入库方式"
