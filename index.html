@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fluent Steam Lua 管理工具 - 现代化 Steam Lua 入库管理工具</title>
+<meta name="description" content="基于 WPF + Fluent Design 开发的现代化轻量级 Steam Lua 入库管理工具，支持入库管理、修改器、内核、成就管理。">
+<link rel="icon" type="image/png" href="favicon.png">
+<style>
+  :root {
+    --bg: #16181D;
+    --bg-soft: #1E2126;
+    --card: rgba(255,255,255,0.04);
+    --card-border: rgba(255,255,255,0.08);
+    --card-hover: rgba(255,255,255,0.07);
+    --text: #F5F7FA;
+    --text-2: #9CA3AF;
+    --text-3: #6B7280;
+    --accent-1: #22D3EE;
+    --accent-2: #3B82F6;
+    --accent-3: #8B5CF6;
+    --grad: linear-gradient(120deg, #22D3EE, #3B82F6 45%, #8B5CF6);
+    --radius: 16px;
+    --glow: rgba(59,130,246,0.25);
+    --nav-bg: rgba(22,24,29,0.75);
+    --border-subtle: rgba(255,255,255,0.06);
+    --pill-bg: rgba(255,255,255,0.04);
+    --pill-border: rgba(255,255,255,0.10);
+    --btn-sec-bg: rgba(255,255,255,0.06);
+    --btn-sec-border: rgba(255,255,255,0.14);
+    --btn-sec-hover: rgba(255,255,255,0.10);
+    --shine: rgba(255,255,255,0.25);
+    --card-border-strong: rgba(255,255,255,0.16);
+    --shot-mask: rgba(22,24,29,0.92);
+    --focus-ring: rgba(255,255,255,0.55);
+  }
+  :root.light {
+    --bg: #F3F4F6;
+    --bg-soft: #E9EBEE;
+    --card: rgba(255,255,255,0.62);
+    --card-border: rgba(0,0,0,0.08);
+    --card-hover: rgba(255,255,255,0.85);
+    --text: #16181D;
+    --text-2: #4B5563;
+    --text-3: #8A919C;
+    --glow: rgba(59,130,246,0.18);
+    --nav-bg: rgba(243,244,246,0.82);
+    --border-subtle: rgba(0,0,0,0.08);
+    --pill-bg: rgba(0,0,0,0.04);
+    --pill-border: rgba(0,0,0,0.10);
+    --btn-sec-bg: rgba(0,0,0,0.05);
+    --btn-sec-border: rgba(0,0,0,0.12);
+    --btn-sec-hover: rgba(0,0,0,0.08);
+    --shine: rgba(0,0,0,0.06);
+    --card-border-strong: rgba(0,0,0,0.14);
+    --shot-mask: rgba(243,244,246,0.92);
+    --focus-ring: rgba(0,0,0,0.45);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  a { color: var(--accent-1); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* 滚动弹出动画（JS 启用后生效，无 JS 时正常显示） */
+  .js .reveal {
+    opacity: 0;
+    transform: translateY(12px) scale(0.99);
+    transition: opacity 0.65s cubic-bezier(0.16, 1, 0.3, 1),
+                transform 0.65s cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: opacity, transform;
+  }
+  .js .reveal.visible {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  /* 顶栏 */
+  .nav {
+    position: sticky; top: 0; z-index: 100;
+    background: var(--nav-bg);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .nav-inner {
+    max-width: 1100px; margin: 0 auto; padding: 14px 24px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .nav-brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 15px; color: var(--text); }
+  .nav-brand:hover { text-decoration: none; }
+  .nav-logo {
+    width: 30px; height: 30px; border-radius: 7px;
+    display: inline-flex; align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+  .nav-logo img { width: 100%; height: 100%; display: block; }
+  .nav-links { display: flex; gap: 22px; align-items: center; font-size: 14px; }
+  .nav-links a { color: var(--text-2); transition: color 0.15s; }
+  .nav-links a:hover { color: var(--text); text-decoration: none; }
+  .nav-cta {
+    padding: 6px 16px; border-radius: 999px;
+    background: var(--grad); color: #fff !important;
+    font-weight: 600; font-size: 13px;
+    box-shadow: 0 2px 12px var(--glow);
+  }
+  .nav-cta:hover { filter: brightness(1.1); }
+
+  .theme-toggle {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 34px; height: 34px; border-radius: 10px;
+    background: var(--pill-bg); border: 1px solid var(--pill-border);
+    color: var(--text-2); cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .theme-toggle:hover { color: var(--text); background: var(--pill-border); }
+  .theme-toggle svg { display: block; }
+
+  .container { max-width: 1220px; margin: 0 auto; padding: 0 32px; }
+
+  /* Hero */
+  .hero {
+    padding: 96px 0 88px;
+    text-align: center; position: relative;
+    min-height: calc(100vh - 57px);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  .hero-badge {
+    display: inline-flex; align-items: center; gap: 9px;
+    padding: 8px 20px; border-radius: 999px;
+    border: 1px solid var(--pill-border);
+    background: var(--pill-bg);
+    font-size: 14px; color: var(--text-2);
+    margin-top: 60px;
+  }
+  .hero-badge::before {
+    content: ""; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--accent-1);
+    box-shadow: 0 0 8px var(--accent-1);
+    animation: pulse 2.2s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+  .hero h1 {
+    font-size: clamp(46px, 8vw, 84px);
+    font-weight: 800; letter-spacing: -1.5px; line-height: 1.12;
+    background: var(--grad);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+  .hero .sub {
+    font-size: 19px; color: var(--text-2);
+    margin: 28px auto 0; max-width: 720px; line-height: 1.7;
+  }
+  .hero-actions { margin-top: 40px; display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 11px 28px; border-radius: 12px;
+    font-size: 15px; font-weight: 600; cursor: pointer;
+    transition: transform 0.15s ease, filter 0.15s ease, background 0.15s ease;
+    border: 1px solid transparent;
+  }
+  .btn:hover { text-decoration: none; transform: translateY(-1px); }
+  .btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
+  .btn-primary {
+    background: linear-gradient(90deg, #22D3EE, #3B82F6);
+    background-clip: padding-box;
+    border: 1px solid rgba(59,130,246,0.55);
+    color: #fff;
+  }
+  .btn-primary:hover { filter: brightness(1.08); }
+  .btn-secondary {
+    background: var(--btn-sec-bg); color: var(--text);
+    border-color: var(--btn-sec-border);
+  }
+  .btn-secondary:hover { background: var(--btn-sec-hover); }
+  .hero .hint { margin-top: 26px; font-size: 14px; color: var(--text-3); }
+  .hero .hint a { color: var(--text-2); }
+
+  /* 功能气泡 */
+  .platforms {
+    margin-top: 32px;
+    display: flex; justify-content: center; flex-wrap: wrap; gap: 12px;
+  }
+  .plat-tag {
+    padding: 8px 16px; border-radius: 9px;
+    font-size: 13.5px; color: var(--text-2);
+    background: var(--pill-bg);
+    border: 1px solid var(--pill-border);
+  }
+
+  /* 区块通用 */
+  section { padding: 64px 0; }
+  .section-head { text-align: center; margin-bottom: 48px; }
+  .section-title { font-size: clamp(24px, 3.5vw, 34px); font-weight: 700; letter-spacing: -0.4px; }
+  .section-desc { color: var(--text-2); margin-top: 12px; font-size: 15px; }
+
+  /* 特性卡片 */
+  .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .feature {
+    position: relative; overflow: hidden;
+    background: var(--card); border: 1px solid var(--card-border);
+    border-radius: var(--radius); padding: 28px 26px;
+    transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+  }
+  .feature::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--shine), transparent);
+    opacity: 0.6;
+  }
+  .feature:hover {
+    transform: translateY(-4px);
+    background: var(--card-hover);
+    border-color: var(--card-border-strong);
+  }
+  .feature-icon {
+    width: 44px; height: 44px; border-radius: 12px;
+    background: rgba(34,211,238,0.10);
+    border: 1px solid rgba(34,211,238,0.22);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--accent-1);
+    margin-bottom: 18px;
+  }
+  .feature:nth-child(2) .feature-icon { background: rgba(59,130,246,0.10); border-color: rgba(59,130,246,0.25); color: var(--accent-2); }
+  .feature:nth-child(3) .feature-icon { background: rgba(139,92,246,0.10); border-color: rgba(139,92,246,0.25); color: var(--accent-3); }
+  .feature:nth-child(4) .feature-icon { background: rgba(139,92,246,0.10); border-color: rgba(139,92,246,0.25); color: var(--accent-3); }
+  .feature:nth-child(5) .feature-icon { background: rgba(34,211,238,0.10); border-color: rgba(34,211,238,0.22); color: var(--accent-1); }
+  .feature:nth-child(6) .feature-icon { background: rgba(59,130,246,0.10); border-color: rgba(59,130,246,0.25); color: var(--accent-2); }
+  .feature h3 { font-size: 17px; margin-bottom: 10px; }
+  .feature ul { list-style: none; }
+  .feature li { font-size: 13.5px; color: var(--text-2); padding: 3.5px 0 3.5px 18px; position: relative; }
+  .feature li::before {
+    content: ""; position: absolute; left: 2px; top: 13px;
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--grad);
+  }
+
+  /* 界面预览：功能独立区块 */
+  .showcase-row {
+    display: grid; grid-template-columns: 360px 1fr; gap: 56px;
+    align-items: center; margin-bottom: 48px; position: relative;
+  }
+  .showcase-info h3 { font-size: 30px; margin-bottom: 14px; }
+  .showcase-info > p {
+    font-size: 17px; color: var(--text-2);
+    margin-bottom: 22px; line-height: 1.75;
+  }
+  .showcase-info ul { list-style: none; }
+  .showcase-info li {
+    font-size: 16px; color: var(--text-2);
+    padding: 6px 0 6px 26px; position: relative;
+  }
+  .showcase-info li::before {
+    content: ""; position: absolute; left: 2px; top: 12px;
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--grad);
+  }
+  .carousel {
+    position: relative; overflow: hidden;
+    height: 470px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .carousel-track { position: absolute; inset: 0; }
+  .carousel-track img {
+    position: absolute; left: 50%; top: 50%;
+    width: 600px; height: 385px;
+    margin-left: -300px; margin-top: -192.5px;
+    object-fit: cover; object-position: top;
+    border-radius: 12px;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.35);
+    transition: transform 0.55s cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+  .carousel-arrow {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    width: 40px; height: 40px; border-radius: 50%;
+    background: rgba(0,0,0,0.45); color: #fff; border: none;
+    font-size: 22px; line-height: 1; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s ease, opacity 0.15s ease;
+    z-index: 4;
+  }
+  .carousel-arrow:hover { background: rgba(0,0,0,0.65); }
+  .carousel-arrow:disabled { opacity: 0.35; cursor: default; }
+  .carousel-arrow.prev { left: 22px; }
+  .carousel-arrow.next { right: 22px; }
+  .carousel-dots {
+    position: absolute; bottom: 10px; left: 0; right: 0;
+    display: flex; justify-content: center; gap: 8px; z-index: 5;
+  }
+  .carousel-dot {
+    width: 8px; height: 8px; border-radius: 50%; padding: 0;
+    background: rgba(255,255,255,0.5); border: none; cursor: pointer;
+    transition: background 0.2s ease, width 0.2s ease;
+  }
+  .carousel-dot.active { background: #fff; width: 22px; border-radius: 4px; }
+  .showcase-row.reversed { grid-template-columns: 1fr 360px; }
+  .showcase-row.reversed .showcase-info { order: 2; }
+  .feature-blocks-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
+  .feature-mini {
+    background: var(--card); border: 1px solid var(--card-border);
+    border-radius: var(--radius); padding: 22px 24px;
+    transition: border-color 0.18s ease, transform 0.18s ease;
+  }
+  .feature-mini:hover { border-color: var(--card-border-strong); transform: translateY(-2px); }
+  .feature-mini h4 { font-size: 15px; margin-bottom: 6px; }
+  .feature-mini p { font-size: 13px; color: var(--text-2); }
+
+  /* 快速上手 */
+  .steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 18px; }
+  .step {
+    background: var(--card); border: 1px solid var(--card-border);
+    border-radius: var(--radius); padding: 24px;
+    position: relative;
+  }
+  .step-num {
+    font-size: 34px; font-weight: 800; line-height: 1;
+    background: var(--grad);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 16px;
+  }
+  .step h4 { font-size: 15px; margin-bottom: 6px; }
+  .step p { font-size: 13px; color: var(--text-2); }
+
+  /* FAQ */
+  .faq { max-width: 760px; margin: 0 auto; }
+  details {
+    background: var(--card); border: 1px solid var(--card-border);
+    border-radius: 12px; margin-bottom: 12px; overflow: hidden;
+  }
+  details[open] { border-color: var(--card-border-strong); }
+  summary {
+    cursor: pointer; padding: 16px 20px;
+    font-size: 14.5px; font-weight: 600;
+    display: flex; align-items: center; justify-content: space-between;
+    list-style: none;
+  }
+  summary::-webkit-details-marker { display: none; }
+  summary::after {
+    content: "+"; font-size: 18px; color: var(--text-3);
+    transition: transform 0.2s ease;
+  }
+  details[open] summary::after { transform: rotate(45deg); }
+  .faq-body { padding: 0 20px 18px; font-size: 13.5px; color: var(--text-2); }
+  .faq-body .faq-inline { color: var(--accent-1); font-weight: 600; }
+
+  /* 页脚 */
+  .footer { border-top: 1px solid var(--border-subtle); margin-top: 48px; padding: 40px 0 32px; }
+  .footer-grid {
+    max-width: 1100px; margin: 0 auto; padding: 0 24px;
+    display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 32px;
+  }
+  .footer h5 { font-size: 13px; color: var(--text-2); margin-bottom: 12px; }
+  .footer a { display: block; font-size: 13px; color: var(--text-3); padding: 3px 0; }
+  .footer a:hover { color: var(--text); text-decoration: none; }
+  .footer-brand { font-size: 14px; color: var(--text); margin-bottom: 8px; font-weight: 600; }
+  .footer-brand span { background: var(--grad); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  .footer-desc { font-size: 12.5px; color: var(--text-3); max-width: 320px; }
+  .footer-copy {
+    text-align: center; font-size: 12px; color: var(--text-3);
+    padding: 24px 0 0; margin: 28px 24px 0; border-top: 1px solid var(--border-subtle);
+  }
+
+  /* 响应式 */
+  @media (max-width: 860px) {
+    .features { grid-template-columns: 1fr; }
+    .feature-blocks-grid { grid-template-columns: 1fr; }
+    .showcase-row { grid-template-columns: 1fr; gap: 28px; }
+    .carousel { height: 256px; }
+    .carousel-track img {
+      width: 240px; height: 160px;
+      margin-left: -120px; margin-top: -80px;
+    }
+    .carousel-arrow.prev { left: 4px; }
+    .carousel-arrow.next { right: 4px; }
+    .steps { grid-template-columns: 1fr; }
+    .footer-grid { grid-template-columns: 1fr; }
+    .hero { padding: 72px 0 60px; }
+    .nav-links a:not(.nav-cta) { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a class="nav-brand" href="#">
+      <span class="nav-logo"><img src="favicon.png" alt="" width="28" height="28"></span>
+      Fluent Steam Lua
+    </a>
+    <div class="nav-links">
+      <a href="#features">功能特性</a>
+      <a href="#screenshots">界面预览</a>
+      <a href="#usage">使用说明</a>
+      <a href="#faq">常见问题</a>
+      <a href="https://github.com/huanyuejue/Fluent-Steam-Lua" target="_blank" rel="noopener">GitHub</a>
+      <a class="nav-cta" href="https://github.com/huanyuejue/Fluent-Steam-Lua/releases/latest" target="_blank" rel="noopener">下载</a>
+      <button class="theme-toggle" id="themeToggle" title="切换浅色 / 深色主题" aria-label="切换浅色 / 深色主题">
+        <svg id="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+        <svg id="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="container">
+    <h1>Fluent Steam Lua<br>管理工具</h1>
+    <p class="sub">基于 WPF + Fluent Design 开发的现代化轻量级 Steam Lua 入库管理工具</p>
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="https://github.com/huanyuejue/Fluent-Steam-Lua/releases/latest" target="_blank" rel="noopener">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        下载最新版
+      </a>
+      <a class="btn btn-secondary" href="https://github.com/huanyuejue/Fluent-Steam-Lua" target="_blank" rel="noopener">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+        查看源码
+      </a>
+    </div>
+    <p class="hint">需要 Windows 10 1809+ 与 <a href="https://dotnet.microsoft.com/download/dotnet/8.0" target="_blank" rel="noopener">.NET 8 Runtime</a></p>
+    <div class="platforms">
+      <span class="plat-tag">游戏入库</span>
+      <span class="plat-tag">修改器管理</span>
+      <span class="plat-tag">内核安装</span>
+      <span class="plat-tag">成就解锁</span>
+      <span class="plat-tag">清单提取</span>
+    </div>
+    <span class="hero-badge">免费开源 · 无推广 · 专注入库体验</span>
+  </div>
+</header>
+
+<section id="features">
+  <div class="container">
+    <div class="section-head reveal">
+      <h2 class="section-title">功能特性</h2>
+      <p class="section-desc">一站式管理你的 Steam Lua 入库清单</p>
+    </div>
+    <div class="features">
+      <div class="feature reveal">
+        <div class="feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+        </div>
+        <h3>入库管理</h3>
+        <ul>
+          <li>自动读取封面与中文游戏名，三种布局自由切换</li>
+          <li>搜索预览并入库新游戏（AppId / 游戏名）</li>
+          <li>查询 DLC 入库情况，快速禁用 / 启用入库状态</li>
+          <li>固定清单版本到最新版或当前已安装版本</li>
+        </ul>
+      </div>
+      <div class="feature reveal">
+        <div class="feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        </div>
+        <h3>修改器管理</h3>
+        <ul>
+          <li>搜索并下载管理修改器（风灵月影）</li>
+          <li>绑定游戏进程，开游戏自动启动修改器</li>
+          <li>启动时自动激活修改器指定功能项</li>
+        </ul>
+      </div>
+      <div class="feature reveal">
+        <div class="feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        </div>
+        <h3>内核管理</h3>
+        <ul>
+          <li>目前只适配 OpenSteamTool</li>
+          <li>快捷安装 / 更新 / 卸载内核</li>
+        </ul>
+      </div>
+      <div class="feature reveal">
+        <div class="feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.9 6.26 6.9.8-5.1 4.7 1.4 6.8-6.1-3.4-6.1 3.4 1.4-6.8-5.1-4.7 6.9-.8z"/></svg>
+        </div>
+        <h3>Steam 成就</h3>
+        <ul>
+          <li>快捷启动 / 重启 Steam</li>
+          <li>一键切换本地已登录账号</li>
+          <li>成就数据解锁 / 回锁并保存云端</li>
+        </ul>
+      </div>
+      <div class="feature reveal">
+        <div class="feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        </div>
+        <h3>自动监控</h3>
+        <ul>
+          <li>文件变更自动监控并刷新缓存</li>
+          <li>项目有新版本自动检测并提醒</li>
+        </ul>
+      </div>
+      <div class="feature reveal">
+        <div class="feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
+        </div>
+        <h3>现代化界面</h3>
+        <ul>
+          <li>Fluent Design 设计语言</li>
+          <li>跟随系统 / 深色 / 浅色主题</li>
+          <li>亚克力 / 云母背景效果</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="screenshots">
+  <div class="container">
+    <div class="section-head reveal">
+      <h2 class="section-title">界面预览</h2>
+    </div>
+    <div class="showcase-row reveal">
+      <div class="showcase-info">
+        <h3>主页 · 入库游戏展示</h3>
+        <p>自动读取封面与中文游戏名，三种视图布局自由切换，游戏入库状态一目了然</p>
+        <ul>
+          <li>列表 / 网格 / 大图三种视图自由切换</li>
+          <li>自动读取封面与中文游戏名</li>
+          <li>游戏信息、DLC查询、版本固定</li>
+        </ul>
+      </div>
+      <div class="carousel">
+        <div class="carousel-track">
+          <img src="https://sunky.top/i/2026/08/01/6a6db776c6bcc.png" alt="主页视图一" loading="lazy">
+          <img src="https://sunky.top/i/2026/08/01/6a6da85105e70.png" alt="主页视图二" loading="lazy">
+          <img src="https://sunky.top/i/2026/08/01/6a6da85a866e4.png" alt="主页视图三" loading="lazy">
+        </div>
+        <button class="carousel-arrow prev" aria-label="上一张">&#8249;</button>
+        <button class="carousel-arrow next" aria-label="下一张">&#8250;</button>
+        <div class="carousel-dots">
+          <button class="carousel-dot active" aria-label="第 1 张"></button>
+          <button class="carousel-dot" aria-label="第 2 张"></button>
+          <button class="carousel-dot" aria-label="第 3 张"></button>
+        </div>
+      </div>
+    </div>
+
+    <div class="feature-blocks-grid">
+      <div class="feature-mini reveal">
+        <h4>DLC查询</h4>
+        <p>一键查询当前游戏清单 DLC 信息是否齐全</p>
+      </div>
+      <div class="feature-mini reveal">
+        <h4>版本固定</h4>
+        <p>将清单游戏版本固定到最新版本或当前已安装版本</p>
+      </div>
+      <div class="feature-mini reveal">
+        <h4>封面节点</h4>
+        <p>内置五大封面接口，默认使用 Steam Store 接口</p>
+      </div>
+      <div class="feature-mini reveal">
+        <h4>入库状态</h4>
+        <p>可在不删除 Lua 清单的情况下禁用或启动该游戏的入库状态</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="manifest">
+  <div class="container">
+    <div class="showcase-row reversed reveal">
+      <div class="showcase-info">
+        <h3>清单 · 搜索即入库</h3>
+        <p>一键搜索游戏并自动下载补全 DLC，只需搜索并点击入库，游戏即可出现在 Steam 游戏库存</p>
+        <ul>
+          <li>搜索游戏一键入库，自动下载补全 DLC</li>
+          <li>入库状态实时同步，Steam 库存即时可见</li>
+          <li>清单提取与备份，轻松迁移与恢复</li>
+        </ul>
+      </div>
+      <div class="carousel">
+        <div class="carousel-track">
+          <img src="https://sunky.top/i/2026/08/01/6a6dbe3b88ca4.png" alt="清单入库一" loading="lazy">
+          <img src="https://sunky.top/i/2026/08/01/6a6dbe7dc7169.png" alt="清单入库二" loading="lazy">
+          <img src="https://sunky.top/i/2026/08/01/6a6dbe8fa3a4f.png" alt="清单入库三" loading="lazy">
+        </div>
+        <button class="carousel-arrow prev" aria-label="上一张">&#8249;</button>
+        <button class="carousel-arrow next" aria-label="下一张">&#8250;</button>
+        <div class="carousel-dots">
+          <button class="carousel-dot active" aria-label="第 1 张"></button>
+          <button class="carousel-dot" aria-label="第 2 张"></button>
+          <button class="carousel-dot" aria-label="第 3 张"></button>
+        </div>
+      </div>
+    </div>
+
+    <div class="feature-blocks-grid">
+      <div class="feature-mini reveal">
+        <h4>多清单接口</h4>
+        <p>内置三个清单接口，防止清单库跑路无法使用</p>
+      </div>
+      <div class="feature-mini reveal">
+        <h4>模糊搜索</h4>
+        <p>支持输入模糊游戏名进行匹配搜索</p>
+      </div>
+      <div class="feature-mini reveal">
+        <h4>游戏信息</h4>
+        <p>快速点击跳转 Steam 商店确认游戏信息</p>
+      </div>
+      <div class="feature-mini reveal">
+        <h4>仓库更新</h4>
+        <p>可手动更新仓库在本地的缓存密钥，获取最新游戏清单</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="mods">
+  <div class="container">
+    <div class="showcase-row reveal">
+      <div class="showcase-info">
+        <h3>修改器 · 风灵月影</h3>
+        <p>接口直达官网，无篡改风险，搜索一键下载，修改器绑定游戏进程同步启动</p>
+        <ul>
+          <li>接口直达官网，无篡改风险</li>
+          <li>搜索一键下载游戏修改器</li>
+          <li>绑定游戏进程，随游戏同步启动</li>
+        </ul>
+      </div>
+      <div class="carousel">
+        <div class="carousel-track">
+          <img src="https://sunky.top/i/2026/08/01/6a6dc833a02a7.png" alt="修改器一" loading="lazy">
+          <img src="https://sunky.top/i/2026/08/01/6a6dc8486dd48.png" alt="修改器二" loading="lazy">
+          <img src="https://sunky.top/i/2026/08/01/6a6dc8570a9bb.png" alt="修改器三" loading="lazy">
+        </div>
+        <button class="carousel-arrow prev" aria-label="上一张">&#8249;</button>
+        <button class="carousel-arrow next" aria-label="下一张">&#8250;</button>
+        <div class="carousel-dots">
+          <button class="carousel-dot active" aria-label="第 1 张"></button>
+          <button class="carousel-dot" aria-label="第 2 张"></button>
+          <button class="carousel-dot" aria-label="第 3 张"></button>
+        </div>
+      </div>
+    </div>
+
+    <div class="feature-blocks-grid">
+      <div class="feature-mini reveal">
+        <h4>官网接口</h4>
+        <p>修改器均为官网接口直链下载，无任何篡改风险</p>
+      </div>
+      <div class="feature-mini reveal">
+        <h4>下载管理</h4>
+        <p>已下载的修改器一键统计并管理，随时启动想要的修改器</p>
+      </div>
+      <div class="feature-mini reveal">
+        <h4>游戏绑定</h4>
+        <p>可指定修改器绑定对应的游戏进程，实现同步启动</p>
+      </div>
+      <div class="feature-mini reveal">
+        <h4>功能激活</h4>
+        <p>预设激活想要的功能项，修改器启动自动激活，无需手动点击</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="achievements">
+  <div class="container">
+    <div class="showcase-row reversed reveal">
+      <div class="showcase-info">
+        <h3>成就 · 快速解锁</h3>
+        <p>快速解锁 / 回锁指定游戏的成就数据，并同步数据至 Steam 云端，无需下载游戏即可解锁成就</p>
+        <ul>
+          <li>快速解锁 / 回锁指定游戏成就</li>
+          <li>成就数据同步至 Steam 云端</li>
+          <li>无需下载游戏即可解锁成就</li>
+        </ul>
+      </div>
+      <div class="carousel">
+        <div class="carousel-track">
+          <img src="https://sunky.top/i/2026/08/01/6a6dcb65632b0.png" alt="成就解锁一" loading="lazy">
+          <img src="https://sunky.top/i/2026/08/01/6a6dcb732e757.png" alt="成就解锁二" loading="lazy">
+          <img src="https://sunky.top/i/2026/08/01/6a6dcb86b7d84.png" alt="成就解锁三" loading="lazy">
+        </div>
+        <button class="carousel-arrow prev" aria-label="上一张">&#8249;</button>
+        <button class="carousel-arrow next" aria-label="下一张">&#8250;</button>
+        <div class="carousel-dots">
+          <button class="carousel-dot active" aria-label="第 1 张"></button>
+          <button class="carousel-dot" aria-label="第 2 张"></button>
+          <button class="carousel-dot" aria-label="第 3 张"></button>
+        </div>
+      </div>
+    </div>
+
+    <div class="feature-blocks-grid">
+      <div class="feature-mini reveal">
+        <h4>成就解锁</h4>
+        <p>使用 Steam 官方接口解锁成就，无客户端篡改风险</p>
+      </div>
+      <div class="feature-mini reveal">
+        <h4>云端同步</h4>
+        <p>解锁数据回传云端，跨设备依旧保留</p>
+      </div>
+      <div class="feature-mini reveal">
+        <h4>无需下载</h4>
+        <p>无需下载游戏即可一键解锁成就，快速白金游戏</p>
+      </div>
+      <div class="feature-mini reveal">
+        <h4>成就回锁</h4>
+        <p>想要重新体验游戏？一键回锁全部成就，从零开始体验游戏</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="usage">
+  <div class="container">
+    <div class="section-head reveal">
+      <h2 class="section-title">快速上手</h2>
+      <p class="section-desc">五步完成首次入库</p>
+    </div>
+    <div class="steps">
+      <div class="step reveal">
+        <div class="step-num">01</div>
+        <h4>下载并安装</h4>
+        <p>前往 Release 下载最新版，解压并运行</p>
+      </div>
+      <div class="step reveal">
+        <div class="step-num">02</div>
+        <h4>设置 Steam 路径</h4>
+        <p>在「设置」中确认或手动指定 Steam 安装目录</p>
+      </div>
+      <div class="step reveal">
+        <div class="step-num">03</div>
+        <h4>安装内核</h4>
+        <p>在右下角悬浮面板中的内核管理安装 OpenSteamTool，并重启 Steam 使内核生效</p>
+      </div>
+      <div class="step reveal">
+        <div class="step-num">04</div>
+        <h4>开始入库</h4>
+        <p>在「入库」页搜索游戏，一键生成 Lua 清单</p>
+      </div>
+      <div class="step reveal">
+        <div class="step-num">05</div>
+        <h4>下载游戏</h4>
+        <p>打开 Steam 库存搜索游戏并下载安装</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="faq">
+  <div class="container">
+    <div class="section-head reveal">
+      <h2 class="section-title">常见问题</h2>
+      <p class="section-desc">了解更多</p>
+    </div>
+    <div class="faq">
+      <details class="reveal">
+        <summary>软件完全免费使用吗？</summary>
+        <div class="faq-body">完全免费开源，源代码托管在 GitHub，无任何收费或变相付费。</div>
+      </details>
+      <details class="reveal">
+        <summary>支持哪些 Windows 版本？</summary>
+        <div class="faq-body">Windows 10 1809 及以上版本，以及 Windows 11。首次运行需安装 <a href="https://dotnet.microsoft.com/download/dotnet/8.0" target="_blank" rel="noopener">.NET 8 Runtime</a>。</div>
+      </details>
+      <details class="reveal">
+        <summary>使用的什么内核？</summary>
+        <div class="faq-body">本工具目前仅适配 OpenSteamTool 内核，内核提供底层入库能力，可在软件右下角悬浮按钮内的「内核管理」中一键 <span class="faq-inline">安装 / 更新 / 卸载</span>。</div>
+      </details>
+      <details class="reveal">
+        <summary>如何反馈问题或建议？</summary>
+        <div class="faq-body">欢迎前往 <a href="https://github.com/huanyuejue/Fluent-Steam-Lua/issues" target="_blank" rel="noopener">GitHub Issues</a> 提交反馈或发送问题到邮箱 <a href="mailto:1376158303@qq.com">1376158303@qq.com</a>。</div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="footer-grid reveal">
+    <div>
+      <div class="footer-brand">Fluent Steam <span>Lua 管理工具</span></div>
+      <p class="footer-desc">基于 WPF + Fluent Design 开发的现代化轻量级 Steam Lua 入库管理工具，开源免费，持续更新。</p>
+    </div>
+    <div>
+      <h5>产品</h5>
+      <a href="#features">功能特性</a>
+      <a href="#screenshots">界面预览</a>
+      <a href="#usage">使用说明</a>
+      <a href="#faq">常见问题</a>
+    </div>
+    <div>
+      <h5>社区</h5>
+      <a href="https://github.com/huanyuejue/Fluent-Steam-Lua" target="_blank" rel="noopener">GitHub 仓库</a>
+      <a href="https://github.com/huanyuejue/Fluent-Steam-Lua/releases/latest" target="_blank" rel="noopener">下载 Release</a>
+      <a href="https://github.com/huanyuejue/Fluent-Steam-Lua/issues" target="_blank" rel="noopener">问题反馈</a>
+      <a href="mailto:1376158303@qq.com">邮箱联系</a>
+    </div>
+  </div>
+  <div class="footer-copy">
+    Fluent Steam Lua 管理工具 · 免费开源 · Copyright © 2024-present huanyuejue
+  </div>
+</footer>
+
+<script>
+  document.documentElement.classList.add('js');
+
+  (function () {
+    var toggle = document.getElementById('themeToggle');
+    var sun = document.getElementById('icon-sun');
+    var moon = document.getElementById('icon-moon');
+    var saved = 'dark';
+    try { saved = localStorage.getItem('theme') || 'dark'; } catch (e) {}
+
+    function applyTheme(t) {
+      var root = document.documentElement;
+      root.classList.toggle('light', t === 'light');
+      root.classList.toggle('dark', t === 'dark');
+      if (sun && moon) {
+        var isLight = t === 'light';
+        sun.style.display = isLight ? 'none' : 'block';
+        moon.style.display = isLight ? 'block' : 'none';
+      }
+    }
+    applyTheme(saved);
+
+    if (toggle) {
+      toggle.addEventListener('click', function () {
+        var root = document.documentElement;
+        var next = root.classList.contains('light') ? 'dark' : 'light';
+        try { localStorage.setItem('theme', next); } catch (e) {}
+        applyTheme(next);
+      });
+    }
+  })();
+
+  (function () {
+    document.querySelectorAll('.carousel').forEach(function (carousel) {
+      var track = carousel.querySelector('.carousel-track');
+      var imgs = Array.prototype.slice.call(track.children);
+      var n = imgs.length;
+      if (n < 2) return;
+      var idx = 0;
+      var prevBtn = carousel.querySelector('.prev');
+      var nextBtn = carousel.querySelector('.next');
+      var dots = carousel.querySelectorAll('.carousel-dot');
+      function off() {
+        var w = imgs[0].offsetWidth;
+        var edge = w * 0.5 * 0.78;
+        var half = (carousel.clientWidth || carousel.offsetWidth) / 2;
+        var maxOff = Math.max(0, half - edge - 10);
+        return Math.min(w * 0.28, maxOff);
+      }
+      function paint() {
+        var OFF = off();
+        imgs.forEach(function (img, i) {
+          var diff = ((i - idx) % n + n) % n;
+          if (diff === 0) {
+            img.style.transform = 'translateX(0) scale(1)';
+            img.style.zIndex = 3;
+          } else if (diff === 1) {
+            img.style.transform = 'translateX(' + OFF + 'px) scale(0.78)';
+            img.style.zIndex = 1;
+          } else {
+            img.style.transform = 'translateX(' + (-OFF) + 'px) scale(0.78)';
+            img.style.zIndex = 2;
+          }
+        });
+        dots.forEach(function (d, k) { d.classList.toggle('active', k === idx); });
+      }
+      if (prevBtn) prevBtn.addEventListener('click', function () { idx = (idx - 1 + n) % n; paint(); restart(); });
+      if (nextBtn) nextBtn.addEventListener('click', function () { idx = (idx + 1) % n; paint(); restart(); });
+      dots.forEach(function (d, k) {
+        d.addEventListener('click', function () { idx = k; paint(); restart(); });
+      });
+      function restart() { clearInterval(timer); timer = setInterval(auto, 2000); }
+      function auto() { idx = (idx + 1) % n; paint(); }
+      var timer = setInterval(auto, 2000);
+      carousel.addEventListener('mouseenter', function () { clearInterval(timer); });
+      carousel.addEventListener('mouseleave', restart);
+      window.addEventListener('resize', paint);
+      paint();
+    });
+  })();
+
+  (function () {
+    var colsMap = { '.features': 3, '.shots': 2, '.steps': 4, '.faq': 1 };
+    function applyDelays() {
+      var mobile = window.innerWidth < 860;
+      Object.keys(colsMap).forEach(function (sel) {
+        var cols = mobile ? 1 : colsMap[sel];
+        document.querySelectorAll(sel + ' > .reveal').forEach(function (el, i) {
+          var row = Math.floor(i / cols);
+          el.style.transitionDelay = Math.min(row * 90, 360) + 'ms';
+        });
+      });
+    }
+    applyDelays();
+    window.addEventListener('resize', applyDelays);
+
+    var observer = new IntersectionObserver(function (entries) {
+      var now = Date.now();
+      entries.forEach(function (entry) {
+        var el = entry.target;
+        if (el._lock && now < el._lock) return;
+        var want = entry.isIntersecting;
+        if (el.classList.contains('visible') === want) return;
+        el.classList.toggle('visible', want);
+        el._lock = now + 300;
+      });
+    }, { threshold: 0.01, rootMargin: '-10% 0px -10% 0px' });
+    document.querySelectorAll('.reveal').forEach(function (el) {
+      observer.observe(el);
+    });
+  })();
+</script>
+
+</body>
+</html>
