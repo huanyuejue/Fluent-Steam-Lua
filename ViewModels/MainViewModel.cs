@@ -233,7 +233,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 		}
 		ApplyFilter();
 	}
-		catch (Exception ex) { StatusText = $"刷新失败: {ex.Message}"; }
+		catch (Exception ex) { StatusText = $"刷新失败: {ex.Message}"; LogService.Error("主页", $"刷新游戏信息失败: {ex}"); }
 		finally
 		{
 			IsRefreshing = false;
@@ -247,7 +247,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
 				_refreshCts = null;
 			}
 			if (wasCancelled)
+			{
 				StatusText = "已取消刷新";
+				LogService.Info("主页", "刷新已取消");
+			}
 			IsRefreshSlow = false;
 			if (!wasCancelled)
 				RefreshProgressText = $"共 {_allGames.Count} 个游戏";
@@ -334,7 +337,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 				});
 			});
 		}
-		catch (Exception ex) { StatusText = $"刷新失败: {ex.Message}"; }
+		catch (Exception ex) { StatusText = $"刷新失败: {ex.Message}"; LogService.Error("主页", $"快速刷新失败: {ex}"); }
 	}
 
 	partial void OnSearchTextChanged(string value)
@@ -466,12 +469,16 @@ public partial class MainViewModel : ObservableObject, IDisposable
 						binCount++;
 					}
 				}
-				catch (Exception ex) { StatusText = $"添加失败: {ex.Message}"; }
+				catch (Exception ex) { StatusText = $"添加失败: {ex.Message}"; LogService.Error("主页", $"添加文件失败: {ex}"); }
 			}
 			var msgs = new List<string>();
 			if (luaCount > 0) msgs.Add($"导入游戏成功 ({luaCount})");
 			if (binCount > 0) msgs.Add($"导入成就成功 ({binCount})");
-			if (msgs.Count > 0) StatusMessage = string.Join("，", msgs);
+			if (msgs.Count > 0)
+			{
+				StatusMessage = string.Join("，", msgs);
+				LogService.Info("主页", string.Join("，", msgs));
+			}
 			await QuickRefreshAsync();
 		}
 	}
@@ -495,7 +502,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 		if (confirmed)
 		{
 			try { await _luaFileManager.DeleteLuaFileAsync(game.AppId); await QuickRefreshAsync(); }
-			catch (Exception ex) { StatusText = $"删除失败: {ex.Message}"; }
+			catch (Exception ex) { StatusText = $"删除失败: {ex.Message}"; LogService.Error("主页", $"删除游戏失败 ({game.GameName} AppID {game.AppId}): {ex}"); }
 		}
 	}
 
@@ -540,6 +547,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 		foreach (var game in selected)
 			await _luaFileManager.EnableGameAsync(game.AppId);
 		StatusText = $"已启用 {selected.Count} 个游戏";
+		LogService.Info("主页", $"批量启用 {selected.Count} 个游戏");
 		await QuickRefreshAsync();
 		ClearSelection();
 	}
@@ -556,6 +564,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 		foreach (var game in selected)
 			await _luaFileManager.DisableGameAsync(game.AppId);
 		StatusText = $"已禁用 {selected.Count} 个游戏";
+		LogService.Info("主页", $"批量禁用 {selected.Count} 个游戏");
 		await QuickRefreshAsync();
 		ClearSelection();
 	}
@@ -578,6 +587,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 			foreach (var game in selected)
 				await _luaFileManager.DeleteLuaFileAsync(game.AppId);
 			StatusText = $"已删除 {selected.Count} 个游戏";
+			LogService.Info("主页", $"批量删除 {selected.Count} 个游戏");
 			await QuickRefreshAsync();
 			ClearSelection();
 		}
@@ -600,7 +610,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 		if (File.Exists(filePath))
 		{
 			try { Process.Start(new ProcessStartInfo { FileName = filePath, UseShellExecute = true }); }
-			catch (Exception ex) { StatusText = $"打开失败: {ex.Message}"; }
+			catch (Exception ex) { StatusText = $"打开失败: {ex.Message}"; LogService.Warn("主页", $"打开 Lua 文件失败 ({game.GameName}): {ex.Message}"); }
 		}
 	}
 
@@ -684,6 +694,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 			await _luaFileManager.SetManifestPinAsync(game.AppId, false);
 			game.ManifestSourceIndex = 0;
 			StatusText = $"已解除 {game.GameName} 的版本固定";
+			LogService.Info("主页", $"已解除 {game.GameName} 的版本固定");
 		}
 		else
 		{
@@ -720,6 +731,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
 			await _luaFileManager.SetManifestPinAsync(game.AppId, true, manifestIds);
 			StatusText = $"已将 {game.GameName} 固定到{sourceName}";
+			LogService.Info("主页", $"已将 {game.GameName} 固定到{sourceName} (manifest: {string.Join(", ", manifestIds.Select(kv => $"{kv.Key}={kv.Value}"))})");
 		}
 
 		var refreshed = await _luaFileManager.ParseLuaFileAsync(game.AppId);
@@ -859,12 +871,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
 			if (file.EndsWith(".lua", StringComparison.OrdinalIgnoreCase))
 			{
 				try { await _luaFileManager.AddLuaFileAsync(file); luaCount++; }
-				catch (Exception ex) { StatusText = $"拖拽添加 lua 失败: {ex.Message}"; }
+				catch (Exception ex) { StatusText = $"拖拽添加 lua 失败: {ex.Message}"; LogService.Error("主页", $"拖拽添加 lua 失败: {ex}"); }
 			}
 			else if (file.EndsWith(".bin", StringComparison.OrdinalIgnoreCase))
 			{
 				try { await _luaFileManager.AddBinFileAsync(file); binCount++; }
-				catch (Exception ex) { StatusText = $"拖拽添加 bin 失败: {ex.Message}"; }
+				catch (Exception ex) { StatusText = $"拖拽添加 bin 失败: {ex.Message}"; LogService.Error("主页", $"拖拽添加 bin 失败: {ex}"); }
 			}
 		}
 		if (luaCount > 0 || binCount > 0)
@@ -873,6 +885,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 			if (luaCount > 0) msgs.Add($"导入游戏成功 ({luaCount})");
 			if (binCount > 0) msgs.Add($"导入成就成功 ({binCount})");
 			StatusMessage = string.Join("，", msgs);
+			LogService.Info("主页", $"拖拽导入: {string.Join("，", msgs)}");
 		}
 		await QuickRefreshAsync();
 	}

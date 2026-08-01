@@ -299,6 +299,7 @@ public partial class ExtractionViewModel : ObservableObject
 
     private void PostLog(string message)
     {
+        LogService.Info("提取", message);
         _ = Application.Current.Dispatcher.BeginInvoke(new Action(() => LogLines.Add(message)));
     }
 }

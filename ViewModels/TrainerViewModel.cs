@@ -109,7 +109,14 @@ public partial class TrainerViewModel : ObservableObject
 
         _autoLaunchService = autoLaunchService;
         _isShowTrainerSections = _settingsService.Load().ShowTrainerSections;
-        _autoLaunchService.StatusChanged += msg => StatusMessage = msg;
+        _autoLaunchService.StatusChanged += msg =>
+        {
+            StatusMessage = msg;
+            if (msg.Contains("失败") || msg.Contains("超时"))
+                LogService.Warn("修改器", $"自动启动: {msg}");
+            else
+                LogService.Info("修改器", $"自动启动: {msg}");
+        };
         _settingsService.SettingsChanged += OnSettingsChanged;
         LoadBindings();
         IsServiceInstalled = IsMonitorInstalled();
@@ -152,6 +159,7 @@ public partial class TrainerViewModel : ObservableObject
         catch (Exception ex)
         {
             StatusMessage = $"加载热门推荐失败：{ex.Message}";
+            LogService.Error("修改器", $"加载热门推荐失败: {ex}");
         }
     }
 
@@ -165,7 +173,7 @@ public partial class TrainerViewModel : ObservableObject
             foreach (var t in trainers)
                 NewReleases.Add(t);
         }
-        catch { }
+        catch (Exception ex) { LogService.Warn("修改器", $"加载最新发布失败: {ex.Message}"); }
     }
 
     [RelayCommand]
@@ -208,7 +216,7 @@ public partial class TrainerViewModel : ObservableObject
             SyncDownloadedStates(downloadedNames);
 
         }
-        catch { }
+        catch (Exception ex) { LogService.Warn("修改器", $"加载已下载修改器列表失败: {ex.Message}"); }
 
         return Task.CompletedTask;
     }
@@ -293,7 +301,7 @@ public partial class TrainerViewModel : ObservableObject
             var json = File.ReadAllText(file);
             return JsonSerializer.Deserialize<List<CheatOption>>(json);
         }
-        catch { return null; }
+        catch (Exception ex) { LogService.Warn("修改器", $"读取功能项缓存失败: {ex.Message}"); return null; }
     }
 
     private static void DeleteCachedOptions(string trainerFilePath)
@@ -307,7 +315,7 @@ public partial class TrainerViewModel : ObservableObject
                 if (File.Exists(file)) File.Delete(file);
             }
         }
-        catch { }
+        catch (Exception ex) { LogService.Warn("修改器", $"删除功能项缓存失败: {ex.Message}"); }
     }
 
     public static string? LoadCachedGameName(string trainerFilePath)
@@ -318,7 +326,7 @@ public partial class TrainerViewModel : ObservableObject
             var file = Path.Combine(CheatOptionsCacheDir, $"{key}.name.txt");
             return File.Exists(file) ? File.ReadAllText(file).Trim() : null;
         }
-        catch { return null; }
+        catch (Exception ex) { LogService.Warn("修改器", $"读取中文名缓存失败: {ex.Message}"); return null; }
     }
 
     private void LoadBindings()
@@ -392,7 +400,7 @@ public partial class TrainerViewModel : ObservableObject
             var val = key?.GetValue(RegistryRunName) as string;
             return !string.IsNullOrEmpty(val);
         }
-        catch { return false; }
+        catch (Exception ex) { LogService.Warn("修改器", $"检查后台服务注册失败: {ex.Message}"); return false; }
     }
 
     private static void KillMonitorProcess()
@@ -446,7 +454,7 @@ public partial class TrainerViewModel : ObservableObject
 
             RefreshMonitorStatus();
         }
-        catch { }
+        catch (Exception ex) { LogService.Warn("修改器", $"启动后台监控进程失败: {ex.Message}"); }
     }
 
     private static bool ExtractEmbeddedMonitor(string targetDir)
@@ -469,7 +477,7 @@ public partial class TrainerViewModel : ObservableObject
             }
             return true;
         }
-        catch { return false; }
+        catch (Exception ex) { LogService.Warn("修改器", $"释放 SvcMonitor 失败: {ex.Message}"); return false; }
     }
 
     [RelayCommand]
@@ -495,6 +503,7 @@ public partial class TrainerViewModel : ObservableObject
                 if (!ExtractEmbeddedMonitor(dir))
                 {
                     StatusMessage = "释放 SvcMonitor 失败";
+                    LogService.Error("修改器", "释放 SvcMonitor 失败");
                     return;
                 }
             }
@@ -513,10 +522,12 @@ public partial class TrainerViewModel : ObservableObject
 
             IsServiceInstalled = true;
             StatusMessage = "后台服务已安装并启动，开机自动运行";
+            LogService.Info("修改器", "后台服务已安装并启动，开机自动运行");
         }
         catch (Exception ex)
         {
             StatusMessage = $"安装异常: {ex.Message}";
+            LogService.Error("修改器", $"后台服务安装异常: {ex}");
         }
         RefreshMonitorStatus();
     }
@@ -549,10 +560,15 @@ public partial class TrainerViewModel : ObservableObject
             await Task.Delay(500);
             IsServiceInstalled = IsMonitorInstalled();
             StatusMessage = IsServiceInstalled ? "卸载失败，请手动删除注册表项" : "后台服务已卸载";
+            if (IsServiceInstalled)
+                LogService.Error("修改器", "后台服务卸载失败，注册表项仍存在");
+            else
+                LogService.Info("修改器", "后台服务已卸载");
         }
         catch (Exception ex)
         {
             StatusMessage = $"卸载异常: {ex.Message}";
+            LogService.Error("修改器", $"后台服务卸载异常: {ex}");
         }
         RefreshMonitorStatus();
     }
@@ -570,6 +586,7 @@ public partial class TrainerViewModel : ObservableObject
             TrainerBindings.Add(dialog.Result);
             SaveBindings();
             StatusMessage = $"已添加绑定: {dialog.Result.GameName} → {System.IO.Path.GetFileName(dialog.Result.TrainerFilePath)}";
+            LogService.Info("修改器", $"已添加绑定: {dialog.Result.GameName} → {dialog.Result.TrainerFilePath}");
         }
     }
 
@@ -591,6 +608,7 @@ public partial class TrainerViewModel : ObservableObject
                 TrainerBindings[idx] = dialog.Result;
                 SaveBindings();
                 StatusMessage = $"已更新绑定: {dialog.Result.GameName} → {System.IO.Path.GetFileName(dialog.Result.TrainerFilePath)}";
+                LogService.Info("修改器", $"已更新绑定: {dialog.Result.GameName} → {dialog.Result.TrainerFilePath}");
             }
         }
     }
@@ -602,6 +620,7 @@ public partial class TrainerViewModel : ObservableObject
         TrainerBindings.Remove(binding);
         SaveBindings();
         StatusMessage = $"已删除绑定: {binding.GameName}";
+        LogService.Info("修改器", $"已删除绑定: {binding.GameName}");
     }
 
     [RelayCommand]
@@ -632,11 +651,15 @@ public partial class TrainerViewModel : ObservableObject
             OnPropertyChanged(nameof(HasNoResults));
             IsShowingHot = results.Count == 0;
             if (results.Count == 0)
+            {
                 StatusMessage = "未找到匹配的修改器";
+                LogService.Warn("修改器", $"搜索未找到匹配的修改器: {query}");
+            }
         }
         catch (Exception ex)
         {
             StatusMessage = $"搜索失败：{ex.Message}";
+            LogService.Error("修改器", $"搜索修改器失败: {ex}");
         }
         finally
         {
@@ -664,12 +687,14 @@ public partial class TrainerViewModel : ObservableObject
         trainer.DownloadProgress = 0;
         StatusMessage = string.Empty;
 
+        string? downloadUrl = null;
         try
         {
-            var downloadUrl = await _trainerService.GetDownloadUrlAsync(trainer.PageUrl);
+            downloadUrl = await _trainerService.GetDownloadUrlAsync(trainer.PageUrl);
             if (string.IsNullOrWhiteSpace(downloadUrl))
             {
                 StatusMessage = $"获取 {trainer.GameName} 下载链接失败";
+                LogService.Warn("修改器", $"获取 {trainer.GameName} 下载链接失败 (URL: {trainer.PageUrl})");
                 return;
             }
 
@@ -710,14 +735,17 @@ public partial class TrainerViewModel : ObservableObject
             StatusMessage = $"{trainer.GameName} 下载完成，正在解析修改器功能...";
             var parseResult = await CacheCheatOptionsAsync(trainer);
             StatusMessage = parseResult ?? $"{trainer.GameName} 下载完成";
+            LogService.Info("修改器", $"{trainer.GameName} 下载完成: {savePath} ({bytesReadTotal} bytes)");
         }
         catch (OperationCanceledException)
         {
             StatusMessage = $"{trainer.GameName} 下载超时";
+            LogService.Warn("修改器", $"{trainer.GameName} 下载超时 (URL: {downloadUrl})");
         }
         catch (Exception ex)
         {
             StatusMessage = $"下载 {trainer.GameName} 失败：{ex.Message}";
+            LogService.Error("修改器", $"下载 {trainer.GameName} 失败: {ex}");
         }
         finally
         {

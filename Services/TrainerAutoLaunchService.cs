@@ -12,6 +12,7 @@ public class TrainerAutoLaunchService : ITrainerAutoLaunchService
     private readonly HashSet<string> _pendingLaunches = new(StringComparer.OrdinalIgnoreCase);
     private CancellationTokenSource? _cts;
     private readonly object _lock = new();
+    private bool _pollErrorLogged;
 
     public event Action<string>? StatusChanged;
 
@@ -59,7 +60,14 @@ public class TrainerAutoLaunchService : ITrainerAutoLaunchService
                 ProcessBindings();
             }
             catch (OperationCanceledException) { break; }
-            catch { }
+            catch (Exception ex)
+            {
+                if (!_pollErrorLogged)
+                {
+                    _pollErrorLogged = true;
+                    LogService.Warn("自动启动", $"轮询绑定异常: {ex.Message}");
+                }
+            }
         }
     }
 

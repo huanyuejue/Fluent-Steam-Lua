@@ -505,6 +505,7 @@ public partial class ScriptDownloadViewModel : ObservableObject
 
     private void AddLog(string message)
     {
+        LogService.Info("入库", message);
         Application.Current.Dispatcher.Invoke(() => LogLines.Add(message));
     }
 

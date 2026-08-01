@@ -98,7 +98,7 @@ public class OpenSteamToolService : IOpenSteamToolService
                 }
             }
         }
-        catch { }
+        catch (Exception ex) { LogService.Warn("内核", $"读取本地版本失败: {ex.Message}"); }
 
         return Task.FromResult<string?>(null);
     }

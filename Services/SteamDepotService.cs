@@ -88,7 +88,7 @@ public class SteamDepotService : ISteamDepotService
                 return true;
             }
         }
-        catch { }
+        catch (Exception ex) { LogService.Warn("入库", $"解析密钥仓库地址失败 ({_currentSource}): {ex.Message}"); }
 
         return false;
     }
@@ -112,7 +112,7 @@ public class SteamDepotService : ISteamDepotService
                 var result = await UpdateKeyFilesAsync(ct);
                 if (result.Success) return true;
             }
-            catch { }
+            catch (Exception ex) { LogService.Warn("入库", $"更新密钥文件失败 (第{attempt}次): {ex.Message}"); }
 
             if (attempt < 3)
                 await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, attempt)), ct);
@@ -149,7 +149,7 @@ public class SteamDepotService : ISteamDepotService
                     var oldDict = JsonSerializer.Deserialize<Dictionary<string, string>>(oldContent);
                     result.DepotKeysOldCount = oldDict?.Count ?? 0;
                 }
-                catch { result.DepotKeysOldCount = 0; }
+                catch (Exception ex) { LogService.Warn("入库", $"解析旧 depot 密钥文件失败: {ex.Message}"); result.DepotKeysOldCount = 0; }
             }
             if (File.Exists(tokenPath))
             {
@@ -159,7 +159,7 @@ public class SteamDepotService : ISteamDepotService
                     var oldDict = JsonSerializer.Deserialize<Dictionary<string, string>>(oldContent);
                     result.TokenKeysOldCount = oldDict?.Count ?? 0;
                 }
-                catch { result.TokenKeysOldCount = 0; }
+                catch (Exception ex) { LogService.Warn("入库", $"解析旧 token 密钥文件失败: {ex.Message}"); result.TokenKeysOldCount = 0; }
             }
 
             // 下载新文件
@@ -191,19 +191,20 @@ public class SteamDepotService : ISteamDepotService
                 var newDict = JsonSerializer.Deserialize<Dictionary<string, string>>(depotData);
                 result.DepotKeysNewCount = newDict?.Count ?? 0;
             }
-            catch { result.DepotKeysNewCount = 0; }
+            catch (Exception ex) { LogService.Warn("入库", $"解析新 depot 密钥文件失败: {ex.Message}"); result.DepotKeysNewCount = 0; }
             try
             {
                 var newDict = JsonSerializer.Deserialize<Dictionary<string, string>>(tokenData);
                 result.TokenKeysNewCount = newDict?.Count ?? 0;
             }
-            catch { result.TokenKeysNewCount = 0; }
+            catch (Exception ex) { LogService.Warn("入库", $"解析新 token 密钥文件失败: {ex.Message}"); result.TokenKeysNewCount = 0; }
 
             result.Success = true;
             return result;
         }
-        catch
+        catch (Exception ex)
         {
+            LogService.Error("入库", $"更新密钥文件失败: {ex.Message}");
             result.Success = false;
             return result;
         }
@@ -215,7 +216,7 @@ public class SteamDepotService : ISteamDepotService
         {
             UseDataSource(source);
             try { await EnsureKeyFilesAsync(ct); }
-            catch { }
+            catch (Exception ex) { LogService.Warn("入库", $"后台更新密钥文件失败 ({source}): {ex.Message}"); }
         }
     }
 
@@ -309,7 +310,7 @@ public class SteamDepotService : ISteamDepotService
                 appTokens = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(tokenKeysPath))
                     ?? new Dictionary<string, string>();
             }
-            catch { return null; }
+            catch (Exception ex) { LogService.Warn("入库", $"读取密钥文件失败: {ex.Message}"); return null; }
 
             var queryResult = await QueryAppAsync(appId, ct);
             if (queryResult == null) return null;
@@ -363,7 +364,7 @@ public class SteamDepotService : ISteamDepotService
             return luaPath;
         }
         catch (InvalidOperationException) { throw; }
-        catch { return null; }
+        catch (Exception ex) { LogService.Error("入库", $"生成入库文件失败 (AppID {appId}): {ex.Message}"); return null; }
     }
 
     public async Task<string?> GenerateLuaWithDlcAsync(int appId, string? keyFolderPath = null, CancellationToken ct = default)
@@ -385,7 +386,7 @@ public class SteamDepotService : ISteamDepotService
                 appTokens = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(tokenKeysPath))
                     ?? new Dictionary<string, string>();
             }
-            catch { return null; }
+            catch (Exception ex) { LogService.Warn("入库", $"读取密钥文件失败 (DLC): {ex.Message}"); return null; }
 
             var queryResult = await QueryAppAsync(appId, ct);
             if (queryResult == null) return null;
@@ -474,6 +475,6 @@ public class SteamDepotService : ISteamDepotService
             return luaPath;
         }
         catch (InvalidOperationException) { throw; }
-        catch { return null; }
+        catch (Exception ex) { LogService.Error("入库", $"生成入库文件失败 (AppID {appId}, DLC): {ex.Message}"); return null; }
     }
 }

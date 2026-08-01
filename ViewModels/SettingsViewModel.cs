@@ -86,6 +86,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         AutoCheckUpdateEnabled = _settings.AutoCheckUpdateEnabled;
         IsShowTrainerSections = _settings.ShowTrainerSections;
         IsShowCopyLogButton = _settings.ShowCopyLogButton;
+        EnableLogging = _settings.EnableLogging;
 
         SelectedTheme = _settings.SelectedTheme;
         SelectedCdnIndex = Math.Clamp(_settings.SelectedCdnIndex, 0, CdnEndpoints.Count - 1);
@@ -111,6 +112,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             {
                 SelectedCdnIndex = newIndex;
                 StatusMessage = $"封面节点已自动切换: {CdnEndpoints[newIndex].Name}";
+                LogService.Warn("设置", $"封面节点已自动切换: {CdnEndpoints[newIndex].Name}");
             }
         });
     }
@@ -151,6 +153,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         _settingsService.Save(_settings);
         _steamApiService.UpdateCdnPreference(value);
         StatusMessage = $"封面节点已切换: {CdnEndpoints[value].Name}";
+        LogService.Info("设置", $"封面节点已切换: {CdnEndpoints[value].Name}");
     }
 
     partial void OnIsFabVisibleChanged(bool value)
@@ -158,6 +161,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         _settings.IsFabVisible = value;
         _settingsService.Save(_settings);
         StatusMessage = value ? "悬浮按钮已显示" : "悬浮按钮已隐藏";
+        LogService.Info("设置", value ? "悬浮按钮已显示" : "悬浮按钮已隐藏");
     }
 
     partial void OnSelectedThemeChanged(string value)
@@ -185,6 +189,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             "Light" => "已切换为浅色模式",
             _ => "已跟随系统主题",
         };
+        LogService.Info("设置", $"主题已切换: {StatusMessage}");
     }
 
     private static ApplicationTheme GetSystemTheme()
@@ -205,6 +210,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         _settings.IsCardRefreshVisible = value;
         _settingsService.Save(_settings);
         StatusMessage = value ? "卡片刷新按钮已显示" : "卡片刷新按钮已隐藏";
+        LogService.Info("设置", value ? "卡片刷新按钮已显示" : "卡片刷新按钮已隐藏");
     }
 
     partial void OnIsAutoRefreshEnabledChanged(bool value)
@@ -217,6 +223,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         else
             _luaFileManager.StopWatching();
         StatusMessage = value ? "自动监控已开启" : "自动监控已关闭";
+        LogService.Info("设置", value ? "自动监控已开启" : "自动监控已关闭");
     }
 
     partial void OnAutoCheckUpdateEnabledChanged(bool value)
@@ -224,6 +231,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         _settings.AutoCheckUpdateEnabled = value;
         _settingsService.Save(_settings);
         StatusMessage = value ? "启动时自动检查更新已开启" : "启动时自动检查更新已关闭";
+        LogService.Info("设置", value ? "启动时自动检查更新已开启" : "启动时自动检查更新已关闭");
     }
 
     partial void OnSelectedBackdropChanged(string value)
@@ -237,6 +245,8 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             "None" => "背景效果已关闭",
             _ => ""
         };
+        if (!string.IsNullOrEmpty(StatusMessage))
+            LogService.Info("设置", StatusMessage);
     }
 
     [RelayCommand]
@@ -258,6 +268,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
                 _settings.SteamPath = dir;
                 _settingsService.Save(_settings);
                 StatusMessage = $"Steam路径已设置为: {dir}";
+                LogService.Info("设置", $"Steam路径已设置为: {dir}");
             }
         }
     }
@@ -271,6 +282,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         _settings.SteamPath = string.Empty;
         _settingsService.Save(_settings);
         StatusMessage = "已重置为自动检测路径";
+        LogService.Info("设置", "已重置为自动检测路径");
     }
 
     [RelayCommand]
@@ -282,6 +294,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             if (!Directory.Exists(cacheDir))
             {
                 StatusMessage = "没有需要清理的缓存";
+                LogService.Info("设置", "没有需要清理的缓存");
                 return;
             }
 
@@ -314,11 +327,21 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             });
 
             if (lockedFiles.Count > 0)
+            {
                 StatusMessage = $"缓存已清理(跳过{lockedFiles.Count}个占用文件)";
+                LogService.Info("设置", $"缓存已清理(跳过{lockedFiles.Count}个占用文件): {string.Join(", ", lockedFiles)}");
+            }
             else
+            {
                 StatusMessage = $"缓存已清理(共{deletedCount}个文件)";
+                LogService.Info("设置", $"缓存已清理(共{deletedCount}个文件)");
+            }
         }
-        catch (Exception ex) { StatusMessage = $"清理失败: {ex.Message}"; }
+        catch (Exception ex)
+        {
+            StatusMessage = $"清理失败: {ex.Message}";
+            LogService.Error("设置", $"清理缓存失败: {ex}");
+        }
     }
 
     [RelayCommand]
@@ -327,7 +350,11 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         var luaFolder = _steamPathService.GetLuaFolder();
         if (!string.IsNullOrEmpty(luaFolder) && Directory.Exists(luaFolder))
             Process.Start(new ProcessStartInfo { FileName = luaFolder, UseShellExecute = true });
-        else StatusMessage = "Lua文件夹不存在";
+        else
+        {
+            StatusMessage = "Lua文件夹不存在";
+            LogService.Warn("设置", "Lua文件夹不存在");
+        }
     }
 
     [RelayCommand]
@@ -337,7 +364,10 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         if (!string.IsNullOrEmpty(steamDir) && Directory.Exists(steamDir))
             Process.Start(new ProcessStartInfo { FileName = steamDir, UseShellExecute = true });
         else
+        {
             StatusMessage = "Steam路径不存在或未设置";
+            LogService.Warn("设置", "Steam路径不存在或未设置");
+        }
     }
 
     [RelayCommand]
@@ -347,6 +377,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         if (string.IsNullOrEmpty(steamDir) || !Directory.Exists(steamDir))
         {
             StatusMessage = "Steam路径不存在或未设置";
+            LogService.Warn("设置", "Steam路径不存在或未设置");
             return;
         }
         var statsDir = Path.Combine(steamDir, "appcache", "stats");
@@ -390,13 +421,20 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
 
             var best = SpeedTestResults.Where(r => r.IsSuccess).OrderBy(r => r.LatencyMs).FirstOrDefault();
             if (best != null)
+            {
                 StatusMessage = $"测速完成，最快节点: {best.Name} ({best.LatencyMs}ms)";
+                LogService.Info("设置", $"CDN 测速完成，最快节点: {best.Name} ({best.LatencyMs}ms)");
+            }
             else
+            {
                 StatusMessage = "所有节点均不可达";
+                LogService.Warn("设置", "CDN 测速完成，所有节点均不可达");
+            }
         }
         catch (Exception ex)
         {
             StatusMessage = $"测速失败: {ex.Message}";
+            LogService.Error("设置", $"CDN 测速失败: {ex}");
         }
         finally
         {
@@ -428,11 +466,24 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private bool _isShowCopyLogButton;
 
+    [ObservableProperty]
+    private bool _enableLogging;
+
+    partial void OnEnableLoggingChanged(bool value)
+    {
+        _settings.EnableLogging = value;
+        _settingsService.Save(_settings);
+        LogService.SetEnabled(value);
+        StatusMessage = value ? "日志记录已开启，将输出到软件目录的 app.log" : "日志记录已关闭";
+        LogService.Info("设置", value ? "日志记录已开启，将输出到软件目录的 app.log" : "日志记录已关闭");
+    }
+
     partial void OnIsShowCopyLogButtonChanged(bool value)
     {
         _settings.ShowCopyLogButton = value;
         _settingsService.Save(_settings);
         StatusMessage = value ? "日志复制按钮已显示" : "日志复制按钮已隐藏";
+        LogService.Info("设置", value ? "日志复制按钮已显示" : "日志复制按钮已隐藏");
     }
 
     partial void OnIsShowTrainerSectionsChanged(bool value)
@@ -440,6 +491,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         _settings.ShowTrainerSections = value;
         _settingsService.Save(_settings);
         StatusMessage = value ? "修改器推荐栏目已显示" : "修改器推荐栏目已隐藏";
+        LogService.Info("设置", value ? "修改器推荐栏目已显示" : "修改器推荐栏目已隐藏");
     }
 
     [ObservableProperty]
@@ -459,6 +511,8 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             "DepotKey2" => "已切换为本地缓存仓库 V2",
             _ => ""
         };
+        if (!string.IsNullOrEmpty(StatusMessage))
+            LogService.Info("设置", StatusMessage);
     }
 
     partial void OnKeyFolderPathChanged(string value)

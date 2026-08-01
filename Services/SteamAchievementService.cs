@@ -19,6 +19,7 @@ public sealed class SteamAchievementService : ISteamAchievementService
     private DispatcherTimer? _callbackTimer;
     private TaskCompletionSource<UserStatsReceived>? _pendingStatsTcs;
     private string _steamPath = "";
+    private bool _callbackErrorLogged;
 
     private static readonly string[] AppTypes =
     [
@@ -61,8 +62,15 @@ public sealed class SteamAchievementService : ISteamAchievementService
             };
             _callbackTimer.Tick += (_, _) =>
             {
-                try { client.RunCallbacks(false); }
-                catch { }
+                try { client.RunCallbacks(false); _callbackErrorLogged = false; }
+                catch (Exception ex)
+                {
+                    if (!_callbackErrorLogged)
+                    {
+                        _callbackErrorLogged = true;
+                        LogService.Warn("成就", $"Steam 回调执行失败: {ex.Message}");
+                    }
+                }
             };
             _callbackTimer.Start();
 
@@ -94,8 +102,15 @@ public sealed class SteamAchievementService : ISteamAchievementService
     /// <summary>手动泵回调（worker 进程内无 UI 线程轮询时的等待方式）。</summary>
     private void PumpCallbacks()
     {
-        try { _client?.RunCallbacks(false); }
-        catch { }
+        try { _client?.RunCallbacks(false); _callbackErrorLogged = false; }
+        catch (Exception ex)
+        {
+            if (!_callbackErrorLogged)
+            {
+                _callbackErrorLogged = true;
+                LogService.Warn("成就", $"Steam 回调执行失败: {ex.Message}");
+            }
+        }
     }
 
     /// <summary>预热：等待首次 UserStatsReceived 回调（steamclient 会话就绪），供 serve 模式启动时调用。</summary>

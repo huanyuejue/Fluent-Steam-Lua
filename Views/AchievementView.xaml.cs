@@ -6,6 +6,7 @@ using System.Windows.Threading;
 using iNKORE.UI.WPF.Modern.Controls;
 using SteamLuaManager.Controls;
 using SteamLuaManager.Models;
+using SteamLuaManager.Services;
 using SteamLuaManager.ViewModels;
 
 namespace SteamLuaManager.Views;
@@ -154,6 +155,7 @@ public partial class AchievementView : UserControl
     {
         if (sender is FrameworkElement { Tag: AchievementGameInfo game })
         {
+            LogService.Info("操作", $"打开成就编辑: {game.Name} (AppID {game.AppId})");
             OpenEditWindow(game);
         }
     }

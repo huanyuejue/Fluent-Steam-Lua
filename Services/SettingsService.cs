@@ -20,6 +20,7 @@ public class AppSettings
     public bool AutoCheckUpdateEnabled { get; set; } = true;
     public bool ShowTrainerSections { get; set; } = true;
     public bool ShowCopyLogButton { get; set; }
+    public bool EnableLogging { get; set; }
     public List<TrainerBinding> TrainerBindings { get; set; } = new();
 }
 
@@ -53,7 +54,10 @@ public class SettingsService : ISettingsService
                 return settings;
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            LogService.Warn("设置", $"读取配置失败，已使用默认配置: {ex.Message}");
+        }
         return new AppSettings();
     }
 
@@ -67,6 +71,9 @@ public class SettingsService : ISettingsService
             File.WriteAllText(_settingsFilePath, json);
             SettingsChanged?.Invoke(settings);
         }
-        catch { }
+        catch (Exception ex)
+        {
+            LogService.Error("设置", $"保存配置失败: {ex.Message}");
+        }
     }
 }

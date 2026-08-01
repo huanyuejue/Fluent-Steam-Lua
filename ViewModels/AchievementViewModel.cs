@@ -126,13 +126,16 @@ public partial class AchievementViewModel : ObservableObject
         {
             if (!_achievementService.IsConnected && !_achievementService.Connect())
             {
-                StatusMessage = _achievementService.LastError ?? "连接 Steam 失败";
+                var error = _achievementService.LastError ?? "连接 Steam 失败";
+                StatusMessage = error;
+                LogService.Error("成就", $"连接 Steam 失败: {error}");
                 return;
             }
 
             var candidates = await _achievementService.ParseOwnedGamesAsync();
             var games = _achievementService.FilterSubscribed(candidates);
             _allGames = games;
+            LogService.Info("成就", $"游戏列表加载完成: 解析 {candidates.Count} 款，筛选后 {games.Count} 款");
 
             foreach (var game in _allGames)
                 game.CoverUrl = string.Join("|", _steamApiService.GetCoverUrls((int)game.AppId));
@@ -142,11 +145,13 @@ public partial class AchievementViewModel : ObservableObject
             if (Games.Count == 0)
             {
                 StatusMessage = "未找到账号拥有的游戏，请确认 Steam 已登录";
+                LogService.Warn("成就", "未找到账号拥有的游戏，请确认 Steam 已登录");
             }
         }
         catch (Exception ex)
         {
             StatusMessage = $"加载游戏列表失败:{ex.Message}";
+            LogService.Error("成就", $"加载游戏列表失败: {ex}");
         }
         finally
         {

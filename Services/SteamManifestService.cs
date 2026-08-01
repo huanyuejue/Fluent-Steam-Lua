@@ -55,7 +55,7 @@ public class SteamManifestService : ISteamManifestService
                 }
             }
         }
-        catch { }
+        catch (Exception ex) { LogService.Warn("版本固定", $"解析 MountedManifests 失败: {ex.Message}"); }
         return result;
     }
 
@@ -82,7 +82,7 @@ public class SteamManifestService : ISteamManifestService
 
             return gid.GetString();
         }
-        catch { }
+        catch (Exception ex) { LogService.Warn("版本固定", $"查询最新清单 ID 失败 (AppID {appId}, Depot {depotId}): {ex.Message}"); }
         return null;
     }
 }

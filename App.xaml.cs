@@ -1,5 +1,6 @@
 ﻿using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Diagnostics;
 using iNKORE.UI.WPF.Modern;
 using iNKORE.UI.WPF.Modern.Controls;
@@ -51,10 +52,17 @@ public partial class App : Application
         ConfigureServices(services);
         ServiceProvider = services.BuildServiceProvider();
 
-        var mainWindow = ServiceProvider.GetRequiredService<MainWindow>();
-
         var settingsService = ServiceProvider.GetRequiredService<ISettingsService>();
         var settings = settingsService.Load();
+
+        LogService.SetEnabled(settings.EnableLogging);
+        LogService.Info("系统", $"程序启动，版本 {System.Reflection.Assembly.GetExecutingAssembly().GetName().Version}");
+        LogService.Info("系统", $"操作系统: {Environment.OSVersion.VersionString}, .NET: {Environment.Version}, 进程: {(Environment.Is64BitProcess ? "x64" : "x86")}");
+        var steamPathService = ServiceProvider.GetRequiredService<ISteamPathService>();
+        LogService.Info("系统", $"Steam 路径: {steamPathService.DetectSteamPath() ?? "未检测到"}");
+        RegisterGlobalLogging();
+        var mainWindow = ServiceProvider.GetRequiredService<MainWindow>();
+
         switch (settings.SelectedTheme)
         {
             case "Light":
@@ -90,6 +98,57 @@ public partial class App : Application
         base.OnStartup(e);
     }
 
+    protected override void OnExit(ExitEventArgs e)
+    {
+        LogService.Info("系统", "程序退出");
+        LogService.Shutdown();
+        base.OnExit(e);
+    }
+
+    private void RegisterGlobalLogging()
+    {
+        DispatcherUnhandledException += (_, args) =>
+            LogService.Exception("UI未处理异常", args.Exception);
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+            LogService.Exception("AppDomain异常",
+                args.ExceptionObject as Exception ?? new Exception(args.ExceptionObject?.ToString() ?? "未知异常"));
+        TaskScheduler.UnobservedTaskException += (_, args) =>
+        {
+            LogService.Exception("后台任务异常", args.Exception);
+            args.SetObserved();
+        };
+        EventManager.RegisterClassHandler(typeof(ButtonBase), ButtonBase.ClickEvent,
+            new RoutedEventHandler(OnGlobalButtonClick));
+    }
+
+    private static void OnGlobalButtonClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not ButtonBase button) return;
+        var desc = DescribeButtonContent(button.Content);
+        if (string.IsNullOrEmpty(desc))
+            desc = string.IsNullOrEmpty(button.Name) ? button.GetType().Name : button.Name;
+        LogService.Info("操作", $"[{Views.MainWindow.CurrentPage ?? "?"}] 点击按钮: {desc}");
+    }
+
+    private static string? DescribeButtonContent(object? content)
+    {
+        switch (content)
+        {
+            case string s when !string.IsNullOrWhiteSpace(s):
+                return s;
+            case TextBlock tb when !string.IsNullOrWhiteSpace(tb.Text):
+                return tb.Text;
+            case Panel panel:
+                foreach (var child in panel.Children)
+                {
+                    var desc = DescribeButtonContent(child);
+                    if (!string.IsNullOrEmpty(desc)) return desc;
+                }
+                break;
+        }
+        return null;
+    }
+
     private static async Task CheckUpdateOnStartupAsync(Window owner)
     {
         if (ServiceProvider == null) return;
@@ -98,6 +157,7 @@ public partial class App : Application
             await Task.Delay(1200);
             var updateService = ServiceProvider.GetRequiredService<IUpdateService>();
             var result = await updateService.CheckForUpdateAsync();
+            LogService.Info("更新", $"检查更新完成: 当前版本 {result.CurrentVersion}, 最新版本 {result.TagName}, 有更新={result.HasUpdate}");
             if (!result.HasUpdate) return;
 
             await owner.Dispatcher.InvokeAsync(async () =>

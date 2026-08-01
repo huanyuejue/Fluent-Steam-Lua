@@ -52,6 +52,7 @@ public partial class AchievementEditViewModel : ObservableObject, IDisposable
                 {
                     StatusMessage = "启动 Steam 会话失败，请确认 Steam 正在运行且已登录";
                     EmptyHintText = "启动 Steam 会话失败，可点击「重新加载」重试";
+                    LogService.Error("成就", $"启动 Steam 会话失败 ({_gameName} AppID {_appId})，请确认 Steam 正在运行且已登录");
                     return;
                 }
             }
@@ -67,6 +68,7 @@ public partial class AchievementEditViewModel : ObservableObject, IDisposable
         {
             StatusMessage = "自动加载异常：" + ex.Message;
             EmptyHintText = "加载失败，可点击「重新加载」重试";
+            LogService.Error("成就", $"自动加载异常 ({_gameName} AppID {_appId}): {ex}");
         }
         finally
         {
@@ -101,6 +103,7 @@ public partial class AchievementEditViewModel : ObservableObject, IDisposable
             {
                 StatusMessage = _session.LastError ?? "加载成就数据失败";
                 EmptyHintText = "加载失败，可点击「重新加载」重试";
+                LogService.Error("成就", $"加载成就数据失败 ({_gameName} AppID {_appId}): {StatusMessage}");
                 return false;
             }
 
@@ -110,6 +113,7 @@ public partial class AchievementEditViewModel : ObservableObject, IDisposable
                 Achievements.Add(entry);
             }
 
+            LogService.Info("成就", $"已加载 {Achievements.Count} 个成就 ({_gameName} AppID {_appId})");
             StatusMessage = $"已加载 {Achievements.Count} 个成就";
             if (Achievements.Count == 0)
             {
@@ -150,12 +154,14 @@ public partial class AchievementEditViewModel : ObservableObject, IDisposable
         if (result == null)
         {
             StatusMessage = "保存失败（会话无响应）";
+            LogService.Error("成就", $"保存成就失败 ({_gameName} AppID {_appId}): 会话无响应");
             return;
         }
 
         if (result.Ok == false)
         {
             StatusMessage = result.Message;
+            LogService.Error("成就", $"保存成就失败 ({_gameName} AppID {_appId}): {result.Message}");
             return;
         }
 
@@ -164,6 +170,7 @@ public partial class AchievementEditViewModel : ObservableObject, IDisposable
             entry.OriginalAchieved = entry.IsAchieved;
         }
 
+        LogService.Info("成就", $"已保存 {modifiedAchievements.Count} 个成就修改 ({_gameName} AppID {_appId})");
         StatusMessage = $"已保存 {modifiedAchievements.Count} 个成就";
     }
 

@@ -25,6 +25,9 @@ public partial class MainWindow : Window
     private readonly string[] _navOrder = ["Home", "ScriptDownload", "Extraction", "Trainer", "Achievement", "Settings", "About"];
     private string _prevTag = "Home";
 
+    /// <summary>当前页面 tag，供全局操作日志标注上下文。</summary>
+    public static string? CurrentPage { get; private set; }
+
     private readonly MainViewModel _viewModel;
     private readonly ISettingsService _settingsService;
     private readonly ISteamPathService _steamPathService;
@@ -58,6 +61,7 @@ public partial class MainWindow : Window
     public MainWindow(MainViewModel viewModel, SettingsViewModel settingsViewModel, ScriptDownloadViewModel scriptDownloadViewModel, ExtractionViewModel extractionViewModel, TrainerViewModel trainerViewModel, AchievementViewModel achievementViewModel, ISettingsService settingsService, ISteamPathService steamPathService, IOpenSteamToolService openSteamToolService)
     {
         InitializeComponent();
+        CurrentPage = "Home";
         _openSteamToolService = openSteamToolService;
         _viewModel = viewModel;
         _settingsViewModel = settingsViewModel;
@@ -448,6 +452,8 @@ public partial class MainWindow : Window
 
         if (newView is null || newView == ContentTransition.Content) return;
         ContentTransition.Content = newView;
+        CurrentPage = tag;
+        LogService.Info("导航", $"切换到 {tag}");
 
         if (tag == "Trainer")
         {
@@ -473,6 +479,7 @@ public partial class MainWindow : Window
         if (e.Data.GetDataPresent(DataFormats.FileDrop))
         {
             var files = (string[])e.Data.GetData(DataFormats.FileDrop)!;
+            LogService.Info("操作", $"拖拽入库 {files.Length} 个文件: {string.Join("; ", files)}");
             await _viewModel.HandleDropAsync(files);
         }
     }
@@ -579,6 +586,7 @@ public partial class MainWindow : Window
     private async void FabMenuItem_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (sender is not Border { Tag: FabMenuItem item }) return;
+        LogService.Info("操作", $"悬浮菜单: {item.Header}");
 
         switch (item.Action)
         {
@@ -870,6 +878,7 @@ public partial class MainWindow : Window
         if (sender is not Border b || b.Tag is not KernelMenuItem item || !item.IsEnabled || item.IsSeparator) return;
         KernelSubmenu.Visibility = Visibility.Collapsed;
         SteamPanel.Visibility = Visibility.Collapsed;
+        LogService.Info("操作", $"内核管理: {item.Header}");
 
         switch (item.Action)
         {

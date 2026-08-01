@@ -132,7 +132,11 @@ public class SteamApiService : ISteamApiService
 				_nameCache = JsonSerializer.Deserialize<ConcurrentDictionary<int, string>>(json) ?? new();
 			}
 		}
-		catch { _nameCache = new(); }
+		catch (Exception ex)
+		{
+			LogService.Warn("名称缓存", $"加载缓存失败: {ex.Message}");
+			_nameCache = new();
+		}
 	}
 
 	private void SaveCache()
@@ -142,7 +146,7 @@ public class SteamApiService : ISteamApiService
 			var json = JsonSerializer.Serialize(_nameCache, new JsonSerializerOptions { WriteIndented = true });
 			File.WriteAllText(_cacheFilePath, json);
 		}
-		catch { }
+		catch (Exception ex) { LogService.Warn("名称缓存", $"保存缓存失败: {ex.Message}"); }
 	}
 
 	public void PopulateFromCache(List<GameInfo> games)
@@ -325,7 +329,10 @@ public class SteamApiService : ISteamApiService
 				}
 			}
 		}
-		catch { }
+		catch (Exception ex)
+		{
+			LogService.Warn("封面", $"刷新游戏信息失败 (AppID {game.AppId}): {ex.Message}");
+		}
 		finally
 		{
 			game.IsLoading = false;
@@ -346,6 +353,7 @@ public class SteamApiService : ISteamApiService
 				settings.SelectedCdnIndex = i;
 				_settingsService.Save(settings);
 				CdnAutoSwitched?.Invoke(i);
+				LogService.Warn("封面", $"选中 CDN 连续失败，自动切换到节点 {endpoints[i].Name}");
 				return;
 			}
 		}
@@ -356,6 +364,7 @@ public class SteamApiService : ISteamApiService
 		s.SelectedCdnIndex = 0;
 		_settingsService.Save(s);
 		CdnAutoSwitched?.Invoke(0);
+		LogService.Warn("封面", $"所有 CDN 节点均不可用，已重置为 Store API");
 	}
 
 	private static bool IsValidCoverFile(string path)
@@ -425,8 +434,11 @@ public class SteamApiService : ISteamApiService
 				return (name, header);
 			}
 		}
-		catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { }
-		catch { }
+		catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+		{
+			LogService.Warn("Steam API", $"appdetails 请求超时 (AppID {appId})");
+		}
+		catch (Exception ex) { LogService.Warn("Steam API", $"appdetails 请求失败 (AppID {appId}): {ex.Message}"); }
 		return (null, null);
 	}
 
@@ -444,7 +456,7 @@ public class SteamApiService : ISteamApiService
 			if (doc.RootElement.TryGetProperty("name", out var name))
 				return name.GetString();
 		}
-		catch { }
+		catch (Exception ex) { LogService.Warn("Steam API", $"steamspy 请求失败 (AppID {appId}): {ex.Message}"); }
 		return null;
 	}
 
@@ -476,7 +488,7 @@ public class SteamApiService : ISteamApiService
 
 			return title.Trim();
 		}
-		catch { }
+		catch (Exception ex) { LogService.Warn("Steam API", $"steamcommunity 请求失败 (AppID {appId}): {ex.Message}"); }
 		return null;
 	}
 
@@ -504,7 +516,7 @@ public class SteamApiService : ISteamApiService
 			await File.WriteAllBytesAsync(localPath, bytes, cancellationToken);
 			return localPath;
 		}
-		catch { }
+		catch (Exception ex) { LogService.Warn("封面", $"下载封面失败 (AppID {appId}): {ex.Message}"); }
 		return null;
 	}
 
@@ -551,7 +563,7 @@ public class SteamApiService : ISteamApiService
 					return localPath;
 				}
 				catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
-				catch { }
+				catch (Exception ex) { LogService.Warn("封面", $"CDN 封面获取失败 (AppID {appId}, {url}): {ex.Message}"); }
 			}
 			if (attempt == 0)
 				await Task.Delay(2000, cancellationToken);

@@ -54,7 +54,7 @@ public class SteamPathService : ISteamPathService
         if (!Directory.Exists(luaPath))
         {
             try { Directory.CreateDirectory(luaPath); }
-            catch { return null; }
+            catch (Exception ex) { LogService.Warn("Steam路径", $"创建 Lua 目录失败: {ex.Message}"); return null; }
         }
         return luaPath;
     }
@@ -119,7 +119,7 @@ public class SteamPathService : ISteamPathService
                 }
             }
         }
-        catch { }
+        catch (Exception ex) { LogService.Warn("Steam路径", $"解析 libraryfolders.vdf 失败: {ex.Message}"); }
 
         return paths;
     }
