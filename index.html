@@ -187,14 +187,24 @@
 
   /* 功能气泡 */
   .platforms {
-    margin-top: 32px;
+    margin-top: 36px;
     display: flex; justify-content: center; flex-wrap: wrap; gap: 12px;
   }
   .plat-tag {
-    padding: 8px 16px; border-radius: 9px;
-    font-size: 13.5px; color: var(--text-2);
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 9px 18px; border-radius: 999px;
+    font-size: 13.5px; font-weight: 500; color: var(--text);
     background: var(--pill-bg);
     border: 1px solid var(--pill-border);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+    transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+  }
+  .plat-tag svg { color: var(--accent-1); opacity: 0.95; flex: none; }
+  .plat-tag:hover {
+    transform: translateY(-2px);
+    border-color: rgba(34,211,238,0.38);
+    background: rgba(34,211,238,0.07);
+    box-shadow: 0 6px 18px rgba(34,211,238,0.12);
   }
 
   /* 区块通用 */
@@ -372,8 +382,20 @@
 
   /* 响应式 */
   @media (max-width: 860px) {
-    .features { grid-template-columns: 1fr; }
-    .feature-blocks-grid { grid-template-columns: 1fr; }
+    .features { grid-template-columns: repeat(2, 1fr); gap: 14px; }
+    .feature {
+      display: grid; grid-template-columns: auto 1fr; gap: 0 10px;
+      align-items: center; padding: 18px 16px;
+    }
+    .feature-icon {
+      grid-column: 1; grid-row: 1; margin-bottom: 0;
+      width: 36px; height: 36px; border-radius: 10px;
+    }
+    .feature h3 { grid-column: 2; grid-row: 1; font-size: 15px; margin-bottom: 0; }
+    .feature ul { grid-column: 1 / -1; grid-row: 2; margin-top: 12px; }
+    .feature li { font-size: 12.5px; padding: 3px 0 3px 14px; }
+    .feature li::before { top: 11px; width: 4px; height: 4px; }
+    .feature-blocks-grid { grid-template-columns: repeat(2, 1fr); }
     .showcase-row { grid-template-columns: 1fr; gap: 28px; }
     .showcase-row.reversed { grid-template-columns: 1fr; }
     .showcase-row.reversed .showcase-info { order: 0; }
@@ -385,7 +407,10 @@
     .carousel-arrow.prev { left: 4px; }
     .carousel-arrow.next { right: 4px; }
     .steps { grid-template-columns: 1fr; }
-    .footer-grid { grid-template-columns: 1fr; }
+    .footer-grid { grid-template-columns: repeat(2, 1fr); gap: 24px; }
+    .footer-grid > div:first-child { grid-column: 1 / -1; }
+    .footer-grid > div:nth-child(2) { order: 2; }
+    .footer-grid > div:nth-child(3) { order: 1; }
     .hero { padding: 72px 0 60px; }
     .nav-links a:not(.nav-cta) { display: none; }
   }
@@ -421,7 +446,7 @@
     <div class="hero-actions">
       <a class="btn btn-primary" href="https://github.com/huanyuejue/Fluent-Steam-Lua/releases/latest" target="_blank" rel="noopener">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        下载最新版
+        前往下载
       </a>
       <a class="btn btn-secondary" href="https://github.com/huanyuejue/Fluent-Steam-Lua" target="_blank" rel="noopener">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
@@ -430,11 +455,11 @@
     </div>
     <p class="hint">需要 Windows 10 1809+ 与 <a href="https://dotnet.microsoft.com/download/dotnet/8.0" target="_blank" rel="noopener">.NET 8 Runtime</a></p>
     <div class="platforms">
-      <span class="plat-tag">游戏入库</span>
-      <span class="plat-tag">修改器管理</span>
-      <span class="plat-tag">内核安装</span>
-      <span class="plat-tag">成就解锁</span>
-      <span class="plat-tag">清单提取</span>
+      <span class="plat-tag"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="12" x2="10" y2="12"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="15" y1="13" x2="15.01" y2="13"/><line x1="18" y1="11" x2="18.01" y2="11"/><rect x="2" y="6" width="20" height="12" rx="2"/></svg>游戏入库</span>
+      <span class="plat-tag"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>修改器管理</span>
+      <span class="plat-tag"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/></svg>内核安装</span>
+      <span class="plat-tag"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 5h3a1 1 0 0 1 1 1v1a4 4 0 0 1-4 4M7 5H4a1 1 0 0 0-1 1v1a4 4 0 0 0 4 4"/></svg>成就解锁</span>
+      <span class="plat-tag"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>清单提取</span>
     </div>
     <span class="hero-badge">免费开源 · 无推广 · 专注入库体验</span>
   </div>
@@ -904,7 +929,20 @@
       var now = Date.now();
       entries.forEach(function (entry) {
         var el = entry.target;
-        if (el._lock && now < el._lock) return;
+        if (el._lock && now < el._lock) {
+          // 锁期内收到状态翻转：安排锁过期后的复核，避免快速滑动导致状态卡死
+          if (el._resync) return;
+          el._resync = true;
+          setTimeout(function () {
+            el._resync = false;
+            el._lock = 0;
+            var r = el.getBoundingClientRect();
+            var vh = window.innerHeight;
+            var inView = r.top < vh * 0.9 && r.bottom > vh * 0.1;
+            el.classList.toggle('visible', inView);
+          }, 330);
+          return;
+        }
         var want = entry.isIntersecting;
         if (el.classList.contains('visible') === want) return;
         el.classList.toggle('visible', want);
