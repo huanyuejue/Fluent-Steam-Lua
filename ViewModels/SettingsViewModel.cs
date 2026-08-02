@@ -6,6 +6,7 @@ using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using iNKORE.UI.WPF.Modern;
+using iNKORE.UI.WPF.Modern.Controls;
 using Microsoft.Win32;
 using SteamLuaManager.Models;
 using SteamLuaManager.Services;
@@ -22,6 +23,9 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private string _steamPath = string.Empty;
+
+    [ObservableProperty]
+    private string _luaFolderPath = string.Empty;
 
     [ObservableProperty]
     private bool _isAutoRefreshEnabled = true;
@@ -101,6 +105,8 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             var detectedPath = steamPathService.DetectSteamPath();
             SteamPath = detectedPath ?? "未检测到Steam";
         }
+
+        LuaFolderPath = steamPathService.GetLuaFolder() ?? "未配置";
 
     }
 
@@ -355,6 +361,151 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             StatusMessage = "Lua文件夹不存在";
             LogService.Warn("设置", "Lua文件夹不存在");
         }
+    }
+
+    [RelayCommand]
+    private async Task ChangeLuaFolderAsync()
+    {
+        var oldFolder = _steamPathService.GetLuaFolder();
+
+        string? dir;
+        try
+        {
+            var owner = new System.Windows.Interop.WindowInteropHelper(System.Windows.Application.Current.MainWindow).Handle;
+            dir = FolderPicker.PickFolder(oldFolder, owner);
+        }
+        catch (Exception ex)
+        {
+            LogService.Error("设置", $"选择 Lua 目录失败: {ex}");
+            StatusMessage = "打开目录选择失败，请重试";
+            return;
+        }
+        if (string.IsNullOrEmpty(dir)) return;
+        if (string.Equals(oldFolder, dir, StringComparison.OrdinalIgnoreCase)) return;
+
+        if (_steamPathService.SetConfiguredLuaPath(dir))
+        {
+            LuaFolderPath = _steamPathService.GetLuaFolder() ?? "未配置";
+
+            // 路径变更后重启文件监听，指向新目录
+            if (IsAutoRefreshEnabled)
+            {
+                _luaFileManager.StopWatching();
+                _luaFileManager.StartWatching();
+            }
+
+            // 检测原路径是否有残留 lua 文件（含子目录，如被禁用清单），询问是否迁移
+            await MigrateLuaFilesIfNeededAsync(oldFolder, dir);
+
+            // 通知主页重新扫描游戏，避免残留旧路径的 lua 引用
+            MainViewModel.RequestRefresh();
+
+            StatusMessage = $"Lua 目录已设置为: {dir}";
+            LogService.Info("设置", $"Lua 目录已设置为: {dir}");
+        }
+        else
+        {
+            StatusMessage = "Lua 目录设置失败，请检查配置文件写入权限";
+            LogService.Error("设置", "Lua 目录设置失败，请检查配置文件写入权限");
+        }
+    }
+
+    [RelayCommand]
+    private async Task ResetLuaConfigAsync()
+    {
+        var oldFolder = _steamPathService.GetLuaFolder();
+
+        if (_steamPathService.ResetConfiguredLuaPath())
+        {
+            LuaFolderPath = _steamPathService.GetLuaFolder() ?? "未配置";
+
+            // 自定义路径 → 默认路径，同样触发迁移检测
+            await MigrateLuaFilesIfNeededAsync(oldFolder, LuaFolderPath);
+
+            if (IsAutoRefreshEnabled)
+            {
+                _luaFileManager.StopWatching();
+                _luaFileManager.StartWatching();
+            }
+
+            MainViewModel.RequestRefresh();
+
+            StatusMessage = $"已重置为默认目录: {LuaFolderPath}";
+            LogService.Info("设置", $"已重置 Lua 目录为默认: {LuaFolderPath}");
+        }
+        else
+        {
+            StatusMessage = "重置失败，请检查配置文件写入权限";
+            LogService.Error("设置", "重置 Lua 目录配置失败");
+        }
+    }
+
+    /// <summary>检测旧路径残留 lua 文件（含子目录），弹窗询问后迁移到新路径。</summary>
+    private async Task<bool> MigrateLuaFilesIfNeededAsync(string? oldFolder, string newFolder)
+    {
+        if (string.IsNullOrEmpty(oldFolder) || !Directory.Exists(oldFolder) ||
+            string.Equals(oldFolder, newFolder, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var files = Directory.GetFiles(oldFolder, "*.lua", SearchOption.AllDirectories);
+        if (files.Length == 0) return false;
+
+        var migrate = await ShowConfirmAsync(
+            "迁移 Lua 文件",
+            $"原路径 {oldFolder} 存在 {files.Length} 个 lua 文件（含子目录），\n是否迁移到新路径 {newFolder}？",
+            "迁移", "不迁移");
+        if (!migrate) return false;
+
+        var copied = 0;
+        foreach (var file in files)
+        {
+            try
+            {
+                var relative = Path.GetRelativePath(oldFolder, file);
+                var dest = Path.Combine(newFolder, relative);
+                Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+                File.Move(file, dest, overwrite: true);
+                copied++;
+            }
+            catch
+            {
+                // 跨卷等场景 File.Move 不可用时回退为复制后删除
+                try
+                {
+                    var relative = Path.GetRelativePath(oldFolder, file);
+                    var dest = Path.Combine(newFolder, relative);
+                    Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+                    File.Copy(file, dest, overwrite: true);
+                    File.Delete(file);
+                    copied++;
+                }
+                catch (Exception ex2)
+                {
+                    LogService.Warn("设置", $"迁移 {file} 失败: {ex2.Message}");
+                }
+            }
+        }
+        StatusMessage = $"已迁移 {copied}/{files.Length} 个 lua 文件";
+        LogService.Info("设置", $"已迁移 {copied}/{files.Length} 个 lua 文件到 {newFolder}");
+        return true;
+    }
+
+    private static async Task<bool> ShowConfirmAsync(string title, string message, string primaryText = "确定", string closeText = "取消")
+    {
+        var dialog = new ContentDialog
+        {
+            Title = title,
+            Content = new System.Windows.Controls.TextBlock
+            {
+                Text = message,
+                TextWrapping = System.Windows.TextWrapping.Wrap,
+                MaxWidth = 420
+            },
+            PrimaryButtonText = primaryText,
+            CloseButtonText = closeText,
+            DefaultButton = ContentDialogButton.Primary
+        };
+        return await dialog.ShowAsync() == ContentDialogResult.Primary;
     }
 
     [RelayCommand]

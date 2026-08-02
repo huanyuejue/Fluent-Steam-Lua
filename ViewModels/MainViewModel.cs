@@ -13,9 +13,15 @@ using SteamLuaManager.Services;
 
 namespace SteamLuaManager.ViewModels;
 
-public partial class MainViewModel : ObservableObject, IDisposable
-{
-	private readonly ISteamPathService _steamPathService;
+	public partial class MainViewModel : ObservableObject, IDisposable
+	{
+		/// <summary>Lua 目录变更后由设置页触发，主页据此重新扫描游戏。</summary>
+		public static event Action? RefreshRequested;
+
+		/// <summary>请求主页重新扫描游戏（供设置页在 Lua 目录变更后调用）。</summary>
+		public static void RequestRefresh() => RefreshRequested?.Invoke();
+
+		private readonly ISteamPathService _steamPathService;
 	private readonly ILuaFileManager _luaFileManager;
 	private readonly ISteamApiService _steamApiService;
 	private readonly ISettingsService _settingsService;
@@ -151,6 +157,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 		_httpClientProvider = httpClientProvider;
 
 		_luaFileManager.FilesChanged += OnFilesChanged;
+		RefreshRequested += OnRefreshRequested;
 
 		var settings = settingsService.Load();
 		IsAutoRefreshEnabled = settings.AutoRefreshEnabled;
@@ -171,6 +178,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
 		_searchDebounceTimer?.Stop();
 		_searchDebounceTimer = null;
 		_luaFileManager.FilesChanged -= OnFilesChanged;
+		RefreshRequested -= OnRefreshRequested;
+	}
+
+	private void OnRefreshRequested()
+	{
+		Application.Current.Dispatcher.Invoke(() => { _ = RefreshGamesAsync(); });
 	}
 
 	[RelayCommand]

@@ -98,13 +98,41 @@
                                         <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                                     </TextBox.Background>
                                 </TextBox>
-                                <Button Content="浏览" Command="{Binding BrowseSteamPathCommand}"
+                                <Button Content="自定义" Command="{Binding BrowseSteamPathCommand}"
                                         Padding="12,6" Margin="4,0">
                                     <Button.Background>
                                         <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                                     </Button.Background>
                                 </Button>
                                 <Button Content="重置" Command="{Binding ResetSteamPathCommand}"
+                                        Padding="12,6" Margin="4,0">
+                                    <Button.Background>
+                                        <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                                    </Button.Background>
+                                </Button>
+                            </StackPanel>
+                        </ui:SettingsCard>
+
+                        <ui:SettingsCard Header="Lua 清单路径" Margin="0,0,0,8"
+                                         Description="OpenSteamTool 内核所读取的 Lua 清单文件所在路径"
+                                         ui:ControlHelper.CornerRadius="8">
+                            <ui:SettingsCard.Background>
+                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
+                            </ui:SettingsCard.Background>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBox Text="{Binding LuaFolderPath, Mode=OneWay}"
+                                         IsReadOnly="True" Width="240" Padding="8,6" Margin="0,0,4,0">
+                                    <TextBox.Background>
+                                        <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                                    </TextBox.Background>
+                                </TextBox>
+                                <Button Content="自定义" Command="{Binding ChangeLuaFolderCommand}"
+                                        Padding="12,6" Margin="4,0">
+                                    <Button.Background>
+                                        <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                                    </Button.Background>
+                                </Button>
+                                <Button Content="重置" Command="{Binding ResetLuaConfigCommand}"
                                         Padding="12,6" Margin="4,0">
                                     <Button.Background>
                                         <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
@@ -131,20 +159,6 @@
                             </ui:SettingsCard.Background>
                             <ui:ToggleSwitch IsOn="{Binding AutoCheckUpdateEnabled}"
                                              OnContent="开" OffContent="关"/>
-                        </ui:SettingsCard>
-
-                        <ui:SettingsCard Header="Lua 清单文件夹" Margin="0,0,0,8"
-                                         Description="打开Steam Lua配置目录"
-                                         ui:ControlHelper.CornerRadius="8">
-                            <ui:SettingsCard.Background>
-                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
-                            </ui:SettingsCard.Background>
-                            <Button Content="打开目录" Command="{Binding OpenLuaFolderCommand}"
-                                    Padding="12,6" Margin="4,0">
-                                <Button.Background>
-                                    <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
-                                </Button.Background>
-                            </Button>
                         </ui:SettingsCard>
 
                         <ui:SettingsCard Header="Bin 成就文件夹" Margin="0,0,0,8"
@@ -176,7 +190,7 @@
                         </ui:SettingsCard>
 
                         <ui:SettingsCard Header="缓存管理" Margin="0,0,0,8"
-                                         Description="清理游戏名称和封面图片缓存"
+                                         Description="清理软件运行的本地缓存文件（游戏名称 封面 修改器 本地缓存密钥）"
                                          ui:ControlHelper.CornerRadius="8">
                             <ui:SettingsCard.Background>
                                 <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
