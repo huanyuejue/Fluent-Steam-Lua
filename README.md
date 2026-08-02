@@ -2,6 +2,8 @@
 
 基于 WPF + Fluent Design 开发的现代化轻量级 Steam Lua 入库管理工具，目前仅适配OpenSteamTool
 
+> 🌐 项目介绍页：https://huanyuejue.github.io/Fluent-Steam-Lua/
+
 ## 预览
 
 <table>
@@ -41,6 +43,7 @@
 #### 内核
 - 目前只适配 OpenSteamTool
 - 支持快捷 安装/更新/卸载 OpenSteamTool 内核
+- 支持自定义 Lua 清单文件的扫描存放位置
 
 #### Steam
 - 快捷启动和重启Steam程序
@@ -65,7 +68,7 @@
 发布为单文件可执行程序：
 
 ```bash
-dotnet publish -c Release -r win-x64 --no-self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none
+dotnet publish -c Release -r win-x64 --self-contained false /p:PublishSingleFile=true /p:DebugType=None /p:DebugFullType=None
 ```
 
 发布为散文件可执行程序：
