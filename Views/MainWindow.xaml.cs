@@ -9,6 +9,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Media.Animation;
 using System.Windows.Interop;
+using System.Windows.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Win32;
 using iNKORE.UI.WPF.Modern;
@@ -63,6 +64,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         CurrentPage = "Home";
         _openSteamToolService = openSteamToolService;
+        _dropHintHideTimer.Tick += (_, _) => { _dropHintHideTimer.Stop(); DropHintGrid.Visibility = Visibility.Collapsed; };
         _viewModel = viewModel;
         _settingsViewModel = settingsViewModel;
         _scriptDownloadViewModel = scriptDownloadViewModel;
@@ -466,16 +468,25 @@ public partial class MainWindow : Window
         }
     }
 
-    private void Window_DragEnter(object sender, DragEventArgs e)
+    private readonly DispatcherTimer _dropHintHideTimer = new() { Interval = TimeSpan.FromMilliseconds(120) };
+
+    private void Window_DragOver(object sender, DragEventArgs e)
     {
-        if (e.Data.GetDataPresent(DataFormats.FileDrop))
-            e.Effects = DragDropEffects.Copy;
-        else
+        if (!e.Data.GetDataPresent(DataFormats.FileDrop))
+        {
             e.Effects = DragDropEffects.None;
+            return;
+        }
+        e.Effects = DragDropEffects.Copy;
+        DropHintGrid.Visibility = Visibility.Visible;
+        _dropHintHideTimer.Stop();
+        _dropHintHideTimer.Start();
     }
 
     private async void Window_Drop(object sender, DragEventArgs e)
     {
+        _dropHintHideTimer.Stop();
+        DropHintGrid.Visibility = Visibility.Collapsed;
         if (e.Data.GetDataPresent(DataFormats.FileDrop))
         {
             var files = (string[])e.Data.GetData(DataFormats.FileDrop)!;

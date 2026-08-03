@@ -14,7 +14,8 @@
         ui:TitleBar.Height="40"
         Background="Transparent"
         AllowDrop="True"
-        DragEnter="Window_DragEnter"
+        DragEnter="Window_DragOver"
+        DragOver="Window_DragOver"
         Drop="Window_Drop"
         Loaded="Window_Loaded"
         SizeChanged="Window_SizeChanged"
@@ -405,6 +406,30 @@
                             Padding="12,6" FontSize="13" HorizontalAlignment="Center"
                             Command="{Binding CancelDlcQueryCommand}"/>
                 </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- 拖拽导入提示层 -->
+        <Grid x:Name="DropHintGrid" Panel.ZIndex="220"
+              Visibility="Collapsed" Background="#A0000000" IsHitTestVisible="False">
+            <Border HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Width="420" MinHeight="180" CornerRadius="16"
+                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
+                <Grid>
+                    <Rectangle RadiusX="16" RadiusY="16"
+                               Stroke="{DynamicResource SystemAccentColorBrush}"
+                               StrokeThickness="2" StrokeDashArray="4,3"/>
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="32,24">
+                        <ui:FontIcon Glyph="&#xE896;" FontSize="48" HorizontalAlignment="Center"
+                                     Foreground="{DynamicResource SystemAccentColorBrush}"/>
+                        <TextBlock Text="拖拽到此处即可一键导入" FontSize="18" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                   HorizontalAlignment="Center" Margin="0,16,0,0"/>
+                        <TextBlock Text="支持 .lua（游戏清单）和 .bin（成就数据）文件" FontSize="13"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   HorizontalAlignment="Center" Margin="0,6,0,0"/>
+                    </StackPanel>
+                </Grid>
             </Border>
         </Grid>
     </Grid>
