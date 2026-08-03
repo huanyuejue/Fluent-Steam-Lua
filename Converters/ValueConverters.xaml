@@ -13,6 +13,5 @@
     <converters:BoolToDownloadTextConverter x:Key="BoolToDownloadTextConverter"/>
     <converters:BoolToDownloadIconConverter x:Key="BoolToDownloadIconConverter"/>
     <converters:StringNotEmptyToBoolConverter x:Key="StringNotEmptyToBoolConverter"/>
-    <converters:ThemeToSelectionBrushConverter x:Key="ThemeToSelectionBrushConverter"/>
 
 </ResourceDictionary>

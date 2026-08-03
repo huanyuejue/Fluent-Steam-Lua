@@ -4,7 +4,6 @@ using System.Windows;
 using System.Windows.Data;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using iNKORE.UI.WPF.Modern;
 
 namespace SteamLuaManager.Converters;
 
@@ -90,23 +89,6 @@ public class StringNotEmptyToBoolConverter : IValueConverter
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
         return value is string s && !string.IsNullOrEmpty(s);
-    }
-
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-    {
-        return Binding.DoNothing;
-    }
-}
-
-public class ThemeToSelectionBrushConverter : IValueConverter
-{
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-    {
-        var theme = value is ApplicationTheme applicationTheme
-            ? applicationTheme
-            : ThemeManager.Current.ActualApplicationTheme;
-
-        return theme == ApplicationTheme.Light ? Brushes.Black : Brushes.White;
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
