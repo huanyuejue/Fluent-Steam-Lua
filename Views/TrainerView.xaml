@@ -655,16 +655,10 @@
         <ui:InfoBar Grid.Row="4"
                     IsOpen="{Binding StatusMessage, Converter={StaticResource StringNotEmptyToBoolConverter}}"
                     Message="{Binding StatusMessage}"
-                    Severity="Success"
-                    IsClosable="True"
-                    HorizontalAlignment="Stretch"
+                    Severity="Informational"
+                    IsClosable="False"
+                    HorizontalAlignment="Left"
                     Margin="0,4,0,0"
-                    ui:ControlHelper.CornerRadius="8">
-            <ui:InfoBar.Resources>
-                <Style TargetType="TextBlock">
-                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
-                </Style>
-            </ui:InfoBar.Resources>
-        </ui:InfoBar>
+                    ui:ControlHelper.CornerRadius="8"/>
     </Grid>
 </UserControl>

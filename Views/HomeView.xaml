@@ -211,21 +211,6 @@
             </StackPanel>
         </Grid>
 
-        <ui:InfoBar Grid.Row="3"
-                    IsOpen="{Binding StatusMessage, Converter={StaticResource StringNotEmptyToBoolConverter}}"
-                    Message="{Binding StatusMessage}"
-                    Severity="Success"
-                    IsClosable="True"
-                    HorizontalAlignment="Stretch"
-                    Margin="0,0,0,4"
-                    ui:ControlHelper.CornerRadius="8">
-            <ui:InfoBar.Resources>
-                <Style TargetType="TextBlock">
-                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
-                </Style>
-            </ui:InfoBar.Resources>
-        </ui:InfoBar>
-
         <!-- Loading提示 -->
         <StackPanel Grid.Row="4" HorizontalAlignment="Center" Margin="0,40,0,0"
                     Visibility="{Binding IsRefreshing, Converter={StaticResource BoolToVisibilityConverter}}">
@@ -342,9 +327,13 @@
                                         <TextBlock Grid.Row="1" Text="{Binding GameName}"
                                                    FontWeight="SemiBold" FontSize="14"
                                                    Margin="12,10,12,2" TextTrimming="CharacterEllipsis"
-                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+                                                   Cursor="Hand" ToolTip="点击复制游戏名"
+                                                   MouseEnter="CopyableText_MouseEnter"
+                                                   MouseLeave="CopyableText_MouseLeave"
+                                                   MouseLeftButtonDown="GameNameText_MouseLeftButtonDown">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding IsDisabled}" Value="True">
                                                             <Setter Property="TextDecorations" Value="Strikethrough"/>
@@ -356,12 +345,16 @@
                                         </TextBlock>
 
                                         <TextBlock Grid.Row="2" FontSize="12" Margin="12,0,12,8"
-                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                   Cursor="Hand" ToolTip="点击复制 AppID"
+                                                   MouseEnter="CopyableText_MouseEnter"
+                                                   MouseLeave="CopyableText_MouseLeave"
+                                                   MouseLeftButtonDown="AppIdText_MouseLeftButtonDown"
                                                    x:Name="AppIdText">
                                             <Run Text="AppID: "/>
                                             <Run Text="{Binding AppId, Mode=OneWay}"/>
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding IsDisabled}" Value="True">
                                                             <Setter Property="TextDecorations" Value="Strikethrough"/>
@@ -472,9 +465,13 @@
                                         <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="14,0">
                                             <TextBlock Text="{Binding GameName}" FontWeight="SemiBold" FontSize="14"
                                                        TextTrimming="CharacterEllipsis"
-                                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+                                                       Cursor="Hand" ToolTip="点击复制游戏名"
+                                                       MouseEnter="CopyableText_MouseEnter"
+                                                       MouseLeave="CopyableText_MouseLeave"
+                                                       MouseLeftButtonDown="GameNameText_MouseLeftButtonDown">
                                                 <TextBlock.Style>
                                                     <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
                                                         <Style.Triggers>
                                                             <DataTrigger Binding="{Binding IsDisabled}" Value="True">
                                                                 <Setter Property="TextDecorations" Value="Strikethrough"/>
@@ -486,11 +483,15 @@
                                             </TextBlock>
                                             <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
                                                 <TextBlock FontSize="12"
-                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                                                           Cursor="Hand" ToolTip="点击复制 AppID"
+                                                           MouseEnter="CopyableText_MouseEnter"
+                                                           MouseLeave="CopyableText_MouseLeave"
+                                                           MouseLeftButtonDown="AppIdText_MouseLeftButtonDown">
                                                     <Run Text="AppID: "/>
                                                     <Run Text="{Binding AppId, Mode=OneWay}"/>
                                                     <TextBlock.Style>
                                                         <Style TargetType="TextBlock">
+                                                            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
                                                             <Style.Triggers>
                                                                 <DataTrigger Binding="{Binding IsDisabled}" Value="True">
                                                                     <Setter Property="TextDecorations" Value="Strikethrough"/>
@@ -606,9 +607,13 @@
                                                   Checked="CheckBox_Checked" Unchecked="CheckBox_Unchecked"/>
                                         <TextBlock Grid.Column="1" Text="{Binding GameName}" FontSize="13" Padding="14,9"
                                                    TextTrimming="CharacterEllipsis"
-                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+                                                   Cursor="Hand" ToolTip="点击复制游戏名"
+                                                   MouseEnter="CopyableText_MouseEnter"
+                                                   MouseLeave="CopyableText_MouseLeave"
+                                                   MouseLeftButtonDown="GameNameText_MouseLeftButtonDown">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding IsDisabled}" Value="True">
                                                             <Setter Property="TextDecorations" Value="Strikethrough"/>
@@ -648,9 +653,13 @@
                                             </TextBlock.Style>
                                         </TextBlock>
                                         <TextBlock Grid.Column="4" Text="{Binding AppId}" FontSize="13" Padding="14,9"
-                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                                                   Cursor="Hand" ToolTip="点击复制 AppID"
+                                                   MouseEnter="CopyableText_MouseEnter"
+                                                   MouseLeave="CopyableText_MouseLeave"
+                                                   MouseLeftButtonDown="AppIdText_MouseLeftButtonDown">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding IsDisabled}" Value="True">
                                                             <Setter Property="TextDecorations" Value="Strikethrough"/>
@@ -831,6 +840,16 @@
                 </ItemsControl>
             </Border>
         </Canvas>
+
+        <ui:InfoBar VerticalAlignment="Bottom"
+                    HorizontalAlignment="Left"
+                    Margin="36,0,36,24"
+                    Panel.ZIndex="10"
+                    IsOpen="{Binding StatusMessage, Converter={StaticResource StringNotEmptyToBoolConverter}}"
+                    Message="{Binding StatusMessage}"
+                    Severity="Informational"
+                    IsClosable="False"
+                    ui:ControlHelper.CornerRadius="8"/>
 
     </Grid>
 </UserControl>

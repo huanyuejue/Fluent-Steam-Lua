@@ -4,6 +4,8 @@ using System.Windows.Media.Animation;
 using System.Diagnostics;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Runtime.InteropServices;
+using System.Text;
 using iNKORE.UI.WPF.Modern.Controls;
 using iNKORE.UI.WPF.Modern;
 using SteamLuaManager.Models;
@@ -376,5 +378,114 @@ public partial class HomeView : UserControl
     {
         if (DataContext is MainViewModel vm)
             vm.NotifySelectionChanged();
+    }
+
+    private async void AppIdText_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement fe && fe.DataContext is GameInfo game)
+        {
+            var ok = await CopyToClipboardAsync(game.AppId.ToString());
+            if (DataContext is MainViewModel vm)
+                vm.StatusMessage = ok ? $"已复制 AppID: {game.AppId}" : "复制失败，剪贴板被占用，请重试";
+        }
+        e.Handled = true;
+    }
+
+    private async void GameNameText_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement fe && fe.DataContext is GameInfo game && !string.IsNullOrEmpty(game.GameName))
+        {
+            var ok = await CopyToClipboardAsync(game.GameName);
+            if (DataContext is MainViewModel vm)
+                vm.StatusMessage = ok ? $"已复制游戏名: {game.GameName}" : "复制失败，剪贴板被占用，请重试";
+        }
+        e.Handled = true;
+    }
+
+    private void CopyableText_MouseEnter(object sender, MouseEventArgs e)
+    {
+        try
+        {
+            if (sender is TextBlock tb)
+            {
+                var brush = TryFindResource("SystemAccentColorBrush") as Brush ?? SystemColors.HighlightBrush;
+                tb.Foreground = brush;
+            }
+        }
+        catch { }
+    }
+
+    private void CopyableText_MouseLeave(object sender, MouseEventArgs e)
+    {
+        try
+        {
+            if (sender is TextBlock tb)
+                tb.ClearValue(TextBlock.ForegroundProperty);
+        }
+        catch { }
+    }
+
+    private const uint GmemMoveable = 0x0002;
+    private const uint GmemZeroinit = 0x0040;
+    private const uint CfUnicodeText = 13;
+
+    [DllImport("user32.dll")]
+    private static extern bool OpenClipboard(IntPtr hWndNewOwner);
+    [DllImport("user32.dll")]
+    private static extern bool EmptyClipboard();
+    [DllImport("user32.dll")]
+    private static extern IntPtr SetClipboardData(uint uFormat, IntPtr hMem);
+    [DllImport("user32.dll")]
+    private static extern bool CloseClipboard();
+    [DllImport("kernel32.dll")]
+    private static extern IntPtr GlobalAlloc(uint uFlags, nuint dwBytes);
+    [DllImport("kernel32.dll")]
+    private static extern IntPtr GlobalLock(IntPtr hMem);
+    [DllImport("kernel32.dll")]
+    private static extern bool GlobalUnlock(IntPtr hMem);
+    [DllImport("kernel32.dll")]
+    private static extern IntPtr GlobalFree(IntPtr hMem);
+
+    private static Task<bool> CopyToClipboardAsync(string text)
+    {
+        return Task.Run(() =>
+        {
+            var data = Encoding.Unicode.GetBytes(text + "\0");
+            for (int i = 0; i < 5; i++)
+            {
+                if (!OpenClipboard(IntPtr.Zero))
+                {
+                    Thread.Sleep(40);
+                    continue;
+                }
+                try
+                {
+                    if (!EmptyClipboard())
+                        return false;
+                    var hMem = GlobalAlloc(GmemMoveable | GmemZeroinit, (nuint)data.Length);
+                    if (hMem == IntPtr.Zero)
+                        return false;
+                    var pMem = GlobalLock(hMem);
+                    if (pMem == IntPtr.Zero)
+                    {
+                        GlobalFree(hMem);
+                        return false;
+                    }
+                    Marshal.Copy(data, 0, pMem, data.Length);
+                    GlobalUnlock(hMem);
+                    if (SetClipboardData(CfUnicodeText, hMem) == IntPtr.Zero)
+                    {
+                        GlobalFree(hMem);
+                        return false;
+                    }
+                    return true;
+                }
+                finally
+                {
+                    CloseClipboard();
+                }
+            }
+            return false;
+        });
     }
 }
