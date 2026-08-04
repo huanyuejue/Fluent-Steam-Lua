@@ -139,9 +139,13 @@ public class SteamPathService : ISteamPathService
         string luaPath;
         if (configured is { Count: > 0 })
         {
+            // 相对路径基于 Steam 根目录解析为绝对路径（与 OpenSteamTool 工作目录语义一致）
+            var absolute = configured
+                .Select(p => Path.IsPathRooted(p) ? p : Path.GetFullPath(Path.Combine(basePath, p)))
+                .ToList();
             // 取第一个实际存在的目录；都不存在则取第一个
-            var existing = configured.FirstOrDefault(Directory.Exists);
-            luaPath = existing ?? configured[0];
+            var existing = absolute.FirstOrDefault(Directory.Exists);
+            luaPath = existing ?? absolute[0];
         }
         else
         {

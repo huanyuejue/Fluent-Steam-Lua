@@ -632,8 +632,20 @@ namespace SteamLuaManager.ViewModels;
 	private void OpenLuaFolder()
 	{
 		var luaFolder = _steamPathService.GetLuaFolder();
-		if (!string.IsNullOrEmpty(luaFolder) && Directory.Exists(luaFolder))
+		if (string.IsNullOrEmpty(luaFolder) || !Directory.Exists(luaFolder))
+		{
+			StatusText = "Lua 文件夹不存在";
+			return;
+		}
+		try
+		{
 			Process.Start(new ProcessStartInfo { FileName = luaFolder, UseShellExecute = true });
+		}
+		catch (Exception ex)
+		{
+			StatusText = $"打开失败: {ex.Message}";
+			LogService.Warn("主页", $"打开 Lua 文件夹失败 ({luaFolder}): {ex.Message}");
+		}
 	}
 
 	[RelayCommand]

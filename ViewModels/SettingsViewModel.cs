@@ -354,12 +354,20 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     private void OpenLuaFolder()
     {
         var luaFolder = _steamPathService.GetLuaFolder();
-        if (!string.IsNullOrEmpty(luaFolder) && Directory.Exists(luaFolder))
-            Process.Start(new ProcessStartInfo { FileName = luaFolder, UseShellExecute = true });
-        else
+        if (string.IsNullOrEmpty(luaFolder) || !Directory.Exists(luaFolder))
         {
             StatusMessage = "Lua文件夹不存在";
             LogService.Warn("设置", "Lua文件夹不存在");
+            return;
+        }
+        try
+        {
+            Process.Start(new ProcessStartInfo { FileName = luaFolder, UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"打开失败: {ex.Message}";
+            LogService.Error("设置", $"打开 Lua 文件夹失败 ({luaFolder}): {ex}");
         }
     }
 
