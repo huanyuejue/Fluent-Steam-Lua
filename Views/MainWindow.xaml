@@ -27,6 +27,19 @@
         SnapsToDevicePixels="True">
 
     <Grid Background="Transparent">
+        <Grid.Resources>
+            <Style x:Key="OverlayCardStyle" TargetType="Border">
+                <Setter Property="CornerRadius" Value="12"/>
+                <Setter Property="Padding" Value="32"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource SurfaceStrokeColorDefaultBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Background">
+                    <Setter.Value>
+                        <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+        </Grid.Resources>
         <ui:NavigationView x:Name="NavView"
                            PaneDisplayMode="Left"
                            IsPaneOpen="False"
@@ -432,5 +445,79 @@
                 </Grid>
             </Border>
         </Grid>
+
+        <!-- 窗口级加载遮罩：覆盖整个窗口（含导航栏），加载期间无法点击任何其他区域；深色遮罩与拖拽导入提示层一致 -->
+        <Border Panel.ZIndex="230" IsHitTestVisible="True" Background="#A0000000">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                    <Style.Triggers>
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding IsRefreshing}" Value="True"/>
+                                <Condition Binding="{Binding IsRefreshSlow}" Value="False"/>
+                            </MultiDataTrigger.Conditions>
+                            <Setter Property="Visibility" Value="Visible"/>
+                        </MultiDataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <Grid VerticalAlignment="Center" HorizontalAlignment="Center" Margin="32">
+                <Border Style="{StaticResource OverlayCardStyle}">
+                    <StackPanel HorizontalAlignment="Center" MinWidth="260">
+                        <ui:ProgressRing IsActive="True" Width="34" Height="34" Margin="0,0,0,16"
+                                         HorizontalAlignment="Center"/>
+                        <TextBlock Text="正在加载游戏信息..." FontSize="16" FontWeight="SemiBold"
+                                   HorizontalAlignment="Center" Margin="0,0,0,6"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                        <TextBlock Text="{Binding RefreshProgressText}" FontSize="12"
+                                   HorizontalAlignment="Center"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- 窗口级超时浮层：20秒后弹出，同样覆盖全窗口 -->
+        <Border Panel.ZIndex="231" IsHitTestVisible="True"
+                Visibility="{Binding IsRefreshSlow, Converter={StaticResource BoolToVisibilityConverter}}"
+                Background="#A0000000">
+            <Grid VerticalAlignment="Center" HorizontalAlignment="Center" Margin="32">
+                <Border Style="{StaticResource OverlayCardStyle}" MaxWidth="400">
+                    <StackPanel HorizontalAlignment="Center" Width="280">
+
+                        <ui:FontIcon Glyph="&#xE7BA;" FontSize="36" HorizontalAlignment="Center"
+                                      Foreground="{DynamicResource SystemAccentColorBrush}"/>
+                        <TextBlock Text="获取游戏信息较慢" FontSize="20" FontWeight="SemiBold"
+                                   HorizontalAlignment="Center" Margin="0,0,0,4"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+
+                        <TextBlock Text="{Binding RefreshProgressText}" FontSize="14" FontWeight="SemiBold"
+                                   HorizontalAlignment="Center" Margin="0,0,0,12"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+
+                        <ui:ProgressRing IsActive="True" Width="24" Height="24" Margin="0,0,0,12"/>
+
+                        <TextBlock Text="已超过20秒，后台仍在尝试获取中..."
+                                   FontSize="13" TextWrapping="Wrap" HorizontalAlignment="Center"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+
+                        <TextBlock Text="提示：&#x0a;• 可尝试开启 VPN / 代理&#x0a;• 或前往 设置 → 封面CDN节点 切换试试"
+                                   FontSize="12" TextWrapping="Wrap" HorizontalAlignment="Center" Margin="0,8,0,16"
+                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <Button Content="后台获取" Command="{Binding DismissSlowOverlayCommand}"
+                                    Padding="20,10" MinWidth="100" Margin="0,0,6,0"
+                                    FontWeight="SemiBold"/>
+                            <Button Content="取消获取" Command="{Binding CancelRefreshCommand}"
+                                    Padding="20,10" MinWidth="100" Margin="6,0,0,0"
+                                    Background="{DynamicResource SystemAccentColorBrush}" Foreground="White"
+                                    FontWeight="SemiBold"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
     </Grid>
 </Window>

@@ -211,18 +211,8 @@
             </StackPanel>
         </Grid>
 
-        <!-- Loading提示 -->
-        <StackPanel Grid.Row="4" HorizontalAlignment="Center" Margin="0,40,0,0"
-                    Visibility="{Binding IsRefreshing, Converter={StaticResource BoolToVisibilityConverter}}">
-            <ui:ProgressRing IsActive="True" Width="32" Height="32" Margin="0,0,0,12"/>
-            <TextBlock Text="正在加载游戏信息..." HorizontalAlignment="Center" FontSize="15"
-                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-            <TextBlock Text="{Binding RefreshProgressText}" HorizontalAlignment="Center" FontSize="12" Margin="0,4,0,0"
-                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
-        </StackPanel>
-
-        <!-- 游戏内容区域（非加载 且 有游戏时显示） -->
-        <Grid Grid.Row="4" Visibility="{Binding IsRefreshing, Converter={StaticResource InvertedBoolToVisibilityConverter}}">
+        <!-- 游戏内容区域（加载时保持显示，不改变页面配色） -->
+        <Grid Grid.Row="4">
 
             <!-- 卡片模式 -->
             <ScrollViewer x:Name="CardScrollViewer"
@@ -707,53 +697,7 @@
 
         </Grid>
 
-        <!-- 慢速获取浮层 -->
-        <Border Visibility="{Binding IsRefreshSlow, Converter={StaticResource BoolToVisibilityConverter}}"
-                Background="{DynamicResource SolidBackgroundFillColorBaseBrush}" Opacity="0.72" IsHitTestVisible="True">
-            <Grid VerticalAlignment="Center" HorizontalAlignment="Center" Margin="32">
-                <Border CornerRadius="12" Padding="32"
-                        BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1"
-                        MaxWidth="400">
-                    <Border.Background>
-                        <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
-                    </Border.Background>
-                    <StackPanel HorizontalAlignment="Center" Width="280">
-
-                        <ui:FontIcon Glyph="&#xE7BA;" FontSize="36" HorizontalAlignment="Center"
-                                      Foreground="{DynamicResource SystemAccentColorBrush}"/>
-                        <TextBlock Text="获取游戏信息较慢" FontSize="20" FontWeight="SemiBold"
-                                   HorizontalAlignment="Center" Margin="0,0,0,4"
-                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-
-                        <TextBlock Text="{Binding RefreshProgressText}" FontSize="14" FontWeight="SemiBold"
-                                   HorizontalAlignment="Center" Margin="0,0,0,12"
-                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-
-                        <ui:ProgressRing IsActive="True" Width="24" Height="24" Margin="0,0,0,12"/>
-
-                        <TextBlock Text="已超过20秒，后台仍在尝试获取中..."
-                                   FontSize="13" TextWrapping="Wrap" HorizontalAlignment="Center"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-
-                        <TextBlock Text="提示：&#x0a;• 可尝试开启 VPN / 代理&#x0a;• 或前往 设置 → 封面CDN节点 切换试试"
-                                   FontSize="12" TextWrapping="Wrap" HorizontalAlignment="Center" Margin="0,8,0,16"
-                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
-
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <Button Content="后台获取" Command="{Binding DismissSlowOverlayCommand}"
-                                    Padding="20,10" MinWidth="100" Margin="0,0,6,0"
-                                    FontWeight="SemiBold"/>
-                            <Button Content="取消获取" Command="{Binding CancelRefreshCommand}"
-                                    Padding="20,10" MinWidth="100" Margin="6,0,0,0"
-                                    Background="{DynamicResource SystemAccentColorBrush}" Foreground="White"
-                                    FontWeight="SemiBold"/>
-                        </StackPanel>
-                    </StackPanel>
-                </Border>
-            </Grid>
-        </Border>
-
-        <!-- 游戏卡片扩展菜单（与悬浮按钮面板同类实现） -->
+<!-- 游戏卡片扩展菜单（与悬浮按钮面板同类实现） -->
         <Canvas x:Name="CardMenuCanvas" Panel.ZIndex="90" IsHitTestVisible="True">
             <Border x:Name="CardMenuPanel" Canvas.Left="0" Canvas.Top="0"
                     MinWidth="128" MaxWidth="172" Padding="6" CornerRadius="10"
