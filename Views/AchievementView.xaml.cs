@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -39,7 +40,43 @@ public partial class AchievementView : UserControl
 
     private void CardsScrollViewer_Loaded(object sender, RoutedEventArgs e)
     {
+        // 订阅容器生成完成事件：刷新/排序/搜索会重建 ItemsSource → 容器重新生成 → 此时必然触发封面检测，
+        // 不依赖"调度时机恰好布局就绪"的猜测。
+        var generator = CardsItemsControl.ItemContainerGenerator;
+        generator.StatusChanged -= CardsGenerator_StatusChanged;
+        generator.StatusChanged += CardsGenerator_StatusChanged;
         CheckVisibleCovers();
+    }
+
+    private bool _coverCheckQueued;
+
+    /// <summary>容器重建完成（列表刷新/排序/搜索后）时兜底触发当前视口封面加载。</summary>
+    private void CardsGenerator_StatusChanged(object? sender, EventArgs e)
+    {
+        if (CardsItemsControl.ItemContainerGenerator.Status != GeneratorStatus.ContainersGenerated)
+        {
+            return;
+        }
+        CheckVisibleCovers();
+        // 容器刚生成时布局（ActualHeight/ViewportHeight）可能尚未就绪，延迟一轮布局完成后再查一次
+        QueueCoverCheck();
+    }
+
+    /// <summary>布局完成后再补查一次视口封面；布局未就绪（容器刚重建时 ActualHeight=0）则自动重试，
+    /// 最多 5 次，覆盖排序/刷新等容器重建的时序窗口。</summary>
+    private void QueueCoverCheck(int attempt = 0)
+    {
+        if (_coverCheckQueued) return;
+        _coverCheckQueued = true;
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
+        {
+            _coverCheckQueued = false;
+            var ok = CheckVisibleCovers();
+            if (!ok && attempt < 5)
+            {
+                QueueCoverCheck(attempt + 1);
+            }
+        });
     }
 
     /// <summary>滚动到哪加载到哪：同步检查，避免延迟调度在滚动停止后仍批量加载；接近底部时增量渲染下一页。</summary>
@@ -80,18 +117,21 @@ public partial class AchievementView : UserControl
     }
 
     /// <summary>懒加载：按滚动位置估算当前视口内的卡片索引范围（卡片固定宽 200 + 右边距 14，行高取首个容器），
-    /// 仅触发视口内卡片的封面下载，滚动到哪才加载到哪。</summary>
-    private void CheckVisibleCovers()
+    /// 仅触发视口内卡片的封面下载，滚动到哪才加载到哪。返回是否成功执行（false 表示布局未就绪被跳过）。</summary>
+    private bool CheckVisibleCovers()
     {
         var scrollViewer = CardsScrollViewer;
         var itemsControl = CardsItemsControl;
         if (scrollViewer == null || itemsControl == null || scrollViewer.ViewportHeight <= 0)
         {
-            return;
+            return false;
         }
 
         var count = itemsControl.Items.Count;
-        if (count == 0) return;
+        if (count == 0)
+        {
+            return false;
+        }
 
         const double cardWidth = 214;
         var cols = Math.Max(1, (int)(scrollViewer.ViewportWidth / cardWidth));
@@ -100,7 +140,7 @@ public partial class AchievementView : UserControl
         if (itemsControl.ItemContainerGenerator.ContainerFromIndex(0) is not FrameworkElement first ||
             first.ActualHeight <= 0)
         {
-            return;
+            return false;
         }
         var rowHeight = first.ActualHeight + 14;
 
@@ -121,6 +161,7 @@ public partial class AchievementView : UserControl
                 image.BeginLoad();
             }
         }
+        return true;
     }
 
     /// <summary>每张卡片仅一个 AsyncImage，找到即返回（短路，避免无谓遍历整个子树）。</summary>

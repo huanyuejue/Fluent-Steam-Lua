@@ -10,6 +10,7 @@ public interface ISteamApiService
     int SelectedCdnIndex { get; }
     void UpdateCdnPreference(int selectedIndex);
     List<string> GetCoverUrls(int appId);
+    Task<string?> ResolveHeaderUrlAsync(int appId, CancellationToken cancellationToken = default);
     Task<List<(string Name, long LatencyMs, bool IsSuccess)>> TestCdnSpeedAsync(
         IProgress<(string Name, long LatencyMs, bool IsSuccess)>? progress = null);
     event Action<int>? CdnAutoSwitched;

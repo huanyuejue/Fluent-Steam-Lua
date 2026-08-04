@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Threading;
@@ -82,6 +83,25 @@ public partial class AchievementViewModel : ObservableObject
         ApplyFilterAndSort();
     }
 
+    private DispatcherTimer? _statusTimer;
+
+    /// <summary>统一 3 秒后自动清除底部通知（与全局各页一致）。</summary>
+    partial void OnStatusMessageChanged(string value)
+    {
+        _statusTimer?.Stop();
+        if (string.IsNullOrEmpty(value)) return;
+        _statusTimer ??= new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+        _statusTimer.Tick -= StatusTimer_Tick;
+        _statusTimer.Tick += StatusTimer_Tick;
+        _statusTimer.Start();
+    }
+
+    private void StatusTimer_Tick(object? sender, EventArgs e)
+    {
+        _statusTimer?.Stop();
+        StatusMessage = string.Empty;
+    }
+
     private void ApplyFilterAndSort()
     {
         // 使进行中的 LoadMoreAsync 旧批次失效
@@ -144,13 +164,29 @@ public partial class AchievementViewModel : ObservableObject
         }
     }
 
+    /// <summary>封面 URL 链（按命中速度排序）：本地已下载封面 → CDN 模板链 → storeapi 实时兜底标记。</summary>
+    private string BuildCoverUrl(AchievementGameInfo game)
+    {
+        var appId = (int)game.AppId;
+        var parts = new List<string>();
+
+        var local = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "cache", "covers", $"{appId}.jpg");
+        if (File.Exists(local))
+            parts.Add(new Uri(local).AbsoluteUri);
+
+        parts.AddRange(_steamApiService.GetCoverUrls(appId));
+        parts.Add($"storeapi://{appId}");
+
+        return string.Join("|", parts.Distinct());
+    }
+
     [RelayCommand]
     private async Task LoadGamesAsync()
     {
         if (IsLoadingGames) return;
 
         IsLoadingGames = true;
-        StatusMessage = "";
+        StatusMessage = "正在加载游戏列表...";
         try
         {
             if (!_achievementService.IsConnected && !_achievementService.Connect())
@@ -167,7 +203,7 @@ public partial class AchievementViewModel : ObservableObject
             LogService.Info("成就", $"游戏列表加载完成: 解析 {candidates.Count} 款，筛选后 {games.Count} 款");
 
             foreach (var game in _allGames)
-                game.CoverUrl = string.Join("|", _steamApiService.GetCoverUrls((int)game.AppId));
+                game.CoverUrl = BuildCoverUrl(game);
 
             ApplyFilterAndSort();
 
@@ -175,6 +211,11 @@ public partial class AchievementViewModel : ObservableObject
             {
                 StatusMessage = "未找到账号拥有的游戏，请确认 Steam 已登录";
                 LogService.Warn("成就", "未找到账号拥有的游戏，请确认 Steam 已登录");
+            }
+            else
+            {
+                StatusMessage = $"游戏列表已刷新，共 {games.Count} 款";
+                LogService.Info("成就", $"游戏列表刷新完成: {games.Count} 款");
             }
         }
         catch (Exception ex)

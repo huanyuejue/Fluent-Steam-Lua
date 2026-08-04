@@ -30,12 +30,6 @@ public class SteamApiService : ISteamApiService
 			client.DefaultRequestHeaders.Add("Accept", "application/json");
 	}
 
-	private static void ConfigureCoverHeaders(HttpClient client)
-	{
-		if (!client.DefaultRequestHeaders.UserAgent.Any())
-			client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
-	}
-
 	public SteamApiService(ISettingsService settingsService, IHttpClientProvider httpClientProvider)
 	{
 		_settingsService = settingsService;
@@ -62,6 +56,14 @@ public class SteamApiService : ISteamApiService
 	/// </summary>
 	public List<string> GetCoverUrls(int appId)
 	{
+		var urls = BuildCdnUrlChain(appId);
+		urls.Add($"https://cdn.steamstatic.com/steam/apps/{appId}/header.jpg");
+		return urls;
+	}
+
+	/// <summary>按选中图片节点优先 → 其余图片节点的顺序构建 CDN 封面 URL 链（不含官方兜底）。</summary>
+	private List<string> BuildCdnUrlChain(int appId)
+	{
 		var endpoints = CdnEndpoint.Defaults;
 		var urls = new List<string>();
 
@@ -74,8 +76,16 @@ public class SteamApiService : ISteamApiService
 				urls.Add(string.Format(endpoints[i].UrlTemplate, appId));
 		}
 
-		urls.Add($"https://cdn.steamstatic.com/steam/apps/{appId}/header.jpg");
 		return urls;
+	}
+
+	/// <summary>实时查询 Store API 的真实封面 URL（header_image 字段）：schinese 优先，失败回退 english。</summary>
+	public async Task<string?> ResolveHeaderUrlAsync(int appId, CancellationToken cancellationToken = default)
+	{
+		var result = await TryStoreApi(appId, "schinese", cancellationToken);
+		if (string.IsNullOrEmpty(result.HeaderUrl))
+			result = await TryStoreApi(appId, "english", cancellationToken);
+		return result.HeaderUrl;
 	}
 
 	public async Task<List<(string Name, long LatencyMs, bool IsSuccess)>> TestCdnSpeedAsync(
@@ -289,26 +299,21 @@ public class SteamApiService : ISteamApiService
 			if (needCover)
 			{
 				string? cover = null;
-				var endpoints = CdnEndpoint.Defaults;
 
 				// 用户选中了某个图片 CDN（非 Store API）→ 优先尝试
-				if (_selectedCdnIndex > 0 && _selectedCdnIndex < endpoints.Count)
+				var cdnChain = BuildCdnUrlChain(game.AppId);
+				if (cdnChain.Count > 0)
 				{
-					var selected = endpoints[_selectedCdnIndex];
-					if (selected.IsImageEndpoint)
+					cover = await DownloadCoverFromUrl(cdnChain[0], game.AppId, cancellationToken);
+					if (string.IsNullOrEmpty(cover))
 					{
-						var cdnUrl = string.Format(selected.UrlTemplate, game.AppId);
-						cover = await DownloadCoverFromUrl(cdnUrl, game.AppId, cancellationToken);
-						if (string.IsNullOrEmpty(cover))
-						{
-							_selectedCdnFailCount++;
-							if (_selectedCdnFailCount >= 3)
-								AutoSwitchCdn();
-						}
-						else
-						{
-							_selectedCdnFailCount = 0;
-						}
+						_selectedCdnFailCount++;
+						if (_selectedCdnFailCount >= 3)
+							AutoSwitchCdn();
+					}
+					else
+					{
+						_selectedCdnFailCount = 0;
 					}
 				}
 
@@ -507,7 +512,7 @@ public class SteamApiService : ISteamApiService
 				"steam-api-cover",
 				TimeSpan.FromSeconds(15),
 				client => client.GetAsync(url, cancellationToken),
-				ConfigureCoverHeaders);
+				ConfigureBasicHeaders);
 			if (!response.IsSuccessStatusCode) return null;
 
 			var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
@@ -529,19 +534,7 @@ public class SteamApiService : ISteamApiService
 		if (File.Exists(localPath))
 			DeleteInvalidCover(localPath);
 
-		var endpoints = CdnEndpoint.Defaults.ToList();
-		var ordered = new List<string>();
-		if (_selectedCdnIndex >= 0 && _selectedCdnIndex < endpoints.Count)
-		{
-			var selected = endpoints[_selectedCdnIndex];
-			if (selected.IsImageEndpoint)
-				ordered.Add(string.Format(selected.UrlTemplate, appId));
-		}
-		for (int i = 0; i < endpoints.Count; i++)
-		{
-			if (i != _selectedCdnIndex && endpoints[i].IsImageEndpoint)
-				ordered.Add(string.Format(endpoints[i].UrlTemplate, appId));
-		}
+		var ordered = BuildCdnUrlChain(appId);
 
 		for (int attempt = 0; attempt < 2; attempt++)
 		{
@@ -553,7 +546,7 @@ public class SteamApiService : ISteamApiService
 						"steam-api-cover",
 						TimeSpan.FromSeconds(15),
 						client => client.GetAsync(url, cancellationToken),
-						ConfigureCoverHeaders);
+						ConfigureBasicHeaders);
 					if (!response.IsSuccessStatusCode) continue;
 
 					var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);

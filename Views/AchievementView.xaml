@@ -15,7 +15,6 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <!-- 标题行 -->
@@ -85,7 +84,7 @@
                 <ComboBox x:Name="SortComboBox" ItemsSource="{Binding SortOptions}"
                           SelectedItem="{Binding SelectedSortOption, Mode=TwoWay}"
                           SelectionChanged="SortComboBox_SelectionChanged"
-                          Width="132" Padding="12,6" HorizontalContentAlignment="Center">
+                          MinWidth="132" Padding="12,6" HorizontalContentAlignment="Center">
                     <ComboBox.Background>
                         <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                     </ComboBox.Background>
@@ -209,21 +208,25 @@
                 <TextBlock Text="{Binding StatusMessage}" FontSize="12" Margin="0,6,0,0" HorizontalAlignment="Center"
                            Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
             </StackPanel>
-        </Grid>
 
-        <ui:InfoBar Grid.Row="3"
-                    IsOpen="{Binding StatusMessage, Converter={StaticResource StringNotEmptyToBoolConverter}}"
-                    Message="{Binding StatusMessage}"
-                    Severity="Informational"
-                    IsClosable="False"
-                    HorizontalAlignment="Left"
-                    Margin="0,12,0,0"
-                    ui:ControlHelper.CornerRadius="8">
-            <ui:InfoBar.Resources>
-                <Style TargetType="TextBlock">
-                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
-                </Style>
-            </ui:InfoBar.Resources>
-        </ui:InfoBar>
+            <ui:InfoBar VerticalAlignment="Bottom"
+                        HorizontalAlignment="Left"
+                        Margin="0,12,0,0"
+                        Panel.ZIndex="10"
+                        Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
+                        BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}"
+                        BorderThickness="1"
+                        IsOpen="{Binding StatusMessage, Converter={StaticResource StringNotEmptyToBoolConverter}}"
+                        Message="{Binding StatusMessage}"
+                        Severity="Informational"
+                        IsClosable="False"
+                        ui:ControlHelper.CornerRadius="8">
+                <ui:InfoBar.Resources>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                    </Style>
+                </ui:InfoBar.Resources>
+            </ui:InfoBar>
+        </Grid>
     </Grid>
 </UserControl>

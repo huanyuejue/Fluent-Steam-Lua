@@ -98,6 +98,7 @@ namespace SteamLuaManager.ViewModels;
 		_statusMessageTimer?.Dispose();
 		if (!string.IsNullOrEmpty(value))
 		{
+			LogService.Info("主页", value);
 			_statusMessageTimer = new Timer(_ => Application.Current.Dispatcher.Invoke(() => StatusMessage = string.Empty),
 				null, 3000, Timeout.Infinite);
 		}
