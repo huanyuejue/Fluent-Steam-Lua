@@ -93,12 +93,24 @@ public sealed class HttpClientProvider : IHttpClientProvider, IDisposable
         {
             UseProxy = proxy.UseProxy,
             Proxy = proxy.Proxy,
-            PooledConnectionLifetime = TimeSpan.FromMinutes(2)
+            PooledConnectionLifetime = TimeSpan.FromMinutes(2),
+            AutomaticDecompression = DecompressionMethods.All,
+            ConnectTimeout = TimeSpan.FromSeconds(10)
         };
         if (handler.Proxy != null)
             handler.Proxy.Credentials = CredentialCache.DefaultCredentials;
 
-        return new HttpClient(handler, disposeHandler: true) { Timeout = timeout };
+        var client = new HttpClient(handler, disposeHandler: true) { Timeout = timeout };
+
+        // 带浏览器指纹头，避免 Cloudflare 等 CDN 将空 User-Agent 的无头请求判为 bot，
+        // 向其下发"5 秒 JS 托管挑战"，导致请求从 ~2s 恶化到 5~6s 且响应无有效内容
+        if (!client.DefaultRequestHeaders.UserAgent.Any())
+            client.DefaultRequestHeaders.UserAgent.ParseAdd(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36");
+        client.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8");
+        client.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN,zh;q=0.9,en;q=0.8");
+
+        return client;
     }
 
     private static ProxySnapshot GetProxySnapshot()

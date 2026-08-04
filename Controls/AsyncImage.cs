@@ -17,7 +17,20 @@ namespace SteamLuaManager.Controls;
 /// </summary>
 public class AsyncImage : Image
 {
-    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(15) };
+    private static readonly HttpClient Http = CreateHttp();
+
+    private static HttpClient CreateHttp()
+    {
+        var client = new HttpClient(new SocketsHttpHandler { ConnectTimeout = TimeSpan.FromSeconds(10) })
+        {
+            Timeout = TimeSpan.FromSeconds(15)
+        };
+        // 带浏览器指纹头，避免 CDN 将空 User-Agent 请求判为 bot 而限速/下发挑战页
+        client.DefaultRequestHeaders.UserAgent.ParseAdd(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36");
+        return client;
+    }
+
     private static readonly ConcurrentDictionary<string, BitmapImage> Cache = new();
     private static readonly SemaphoreSlim Throttle = new(4);
 
