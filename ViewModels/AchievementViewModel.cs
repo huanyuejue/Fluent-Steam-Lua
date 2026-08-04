@@ -14,10 +14,16 @@ namespace SteamLuaManager.ViewModels;
 /// <summary>成就管理页 VM：游戏列表展示、搜索、排序筛选；成就编辑在独立窗口（AchievementEditWindow）中进行。</summary>
 public partial class AchievementViewModel : ObservableObject
 {
+    /// <summary>游戏列表增量渲染页大小：初始只填一页，触底后每页追加。</summary>
+    private const int PageSize = 70;
+
     private readonly ISteamAchievementService _achievementService;
     private readonly ISteamApiService _steamApiService;
     private readonly ISettingsService _settingsService;
     private List<AchievementGameInfo> _allGames = new();
+    private List<AchievementGameInfo> _filtered = new();
+    private int _visibleCount;
+    private bool _isLoadingMore;
     private int _fillVersion;
 
     public ObservableCollection<AchievementGameInfo> Games { get; } = new();
@@ -68,14 +74,18 @@ public partial class AchievementViewModel : ObservableObject
         return LoadGamesAsync();
     }
 
-    async partial void OnSelectedSortOptionChanged(string value) => await ApplyFilterAndSortAsync();
+    partial void OnSelectedSortOptionChanged(string value) => ApplyFilterAndSort();
 
     [RelayCommand]
-    private async Task SearchAsync() => await ApplyFilterAndSortAsync();
-
-    private async Task ApplyFilterAndSortAsync()
+    private void Search()
     {
-        var version = ++_fillVersion;
+        ApplyFilterAndSort();
+    }
+
+    private void ApplyFilterAndSort()
+    {
+        // 使进行中的 LoadMoreAsync 旧批次失效
+        _fillVersion++;
 
         IEnumerable<AchievementGameInfo> items = _allGames;
 
@@ -95,24 +105,43 @@ public partial class AchievementViewModel : ObservableObject
             _ => items.OrderBy(g => g.Name, StringComparer.OrdinalIgnoreCase)
         };
 
-        // 分批填充，避免一次实例化全部卡片导致 UI 卡顿
+        // 只填充首页（PageSize 张卡片），其余在滚动接近底部时由 LoadMoreAsync 增量追加，
+        // 避免游戏数量较多（数百款）时一次性实例化全部卡片导致 UI 卡顿
         var list = items.ToList();
-        Games.Clear();
-        const int chunk = 40;
-        for (int i = 0; i < list.Count; i += chunk)
-        {
-            if (version != _fillVersion) return;
-            for (int j = i; j < Math.Min(i + chunk, list.Count); j++)
-            {
-                Games.Add(list[j]);
-            }
-            if (i + chunk < list.Count)
-            {
-                await Dispatcher.Yield(DispatcherPriority.Background);
-            }
-        }
+        _filtered = list;
+        _visibleCount = Math.Min(PageSize, list.Count);
 
-        GameCountText = $"共 {Games.Count} 款游戏";
+        Games.Clear();
+        for (var i = 0; i < _visibleCount; i++) Games.Add(list[i]);
+
+        GameCountText = $"共 {list.Count} 款游戏";
+    }
+
+    /// <summary>滚动接近底部时增量追加一页（PageSize 张）卡片；搜索/排序后 _fillVersion 变化会自动中止旧批次。</summary>
+    public async Task LoadMoreAsync()
+    {
+        if (_isLoadingMore || _visibleCount >= _filtered.Count) return;
+        _isLoadingMore = true;
+        try
+        {
+            var version = _fillVersion;
+            var start = _visibleCount;
+            var target = Math.Min(start + PageSize, _filtered.Count);
+            for (var i = start; i < target; i++)
+            {
+                if (version != _fillVersion) return;
+                Games.Add(_filtered[i]);
+                if ((i - start + 1) % 20 == 0)
+                {
+                    await Dispatcher.Yield(DispatcherPriority.Background);
+                }
+            }
+            _visibleCount = target;
+        }
+        finally
+        {
+            _isLoadingMore = false;
+        }
     }
 
     [RelayCommand]
@@ -140,7 +169,7 @@ public partial class AchievementViewModel : ObservableObject
             foreach (var game in _allGames)
                 game.CoverUrl = string.Join("|", _steamApiService.GetCoverUrls((int)game.AppId));
 
-            await ApplyFilterAndSortAsync();
+            ApplyFilterAndSort();
 
             if (Games.Count == 0)
             {

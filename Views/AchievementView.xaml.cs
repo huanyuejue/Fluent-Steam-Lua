@@ -20,6 +20,7 @@ public partial class AchievementView : UserControl
 
     private void SearchBox_QuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
     {
+        ScrollToTop();
         if (DataContext is AchievementViewModel vm)
         {
             vm.SearchCommand.Execute(null);
@@ -31,6 +32,7 @@ public partial class AchievementView : UserControl
         sender.ItemsSource = null;
         if (string.IsNullOrEmpty(sender.Text) && DataContext is AchievementViewModel vm)
         {
+            ScrollToTop();
             vm.SearchCommand.Execute(null);
         }
     }
@@ -40,10 +42,32 @@ public partial class AchievementView : UserControl
         CheckVisibleCovers();
     }
 
-    /// <summary>滚动到哪加载到哪：同步检查，避免延迟调度在滚动停止后仍批量加载。</summary>
-    private void CardsScrollViewer_ScrollChanged(object sender, ScrollChangedEventArgs e)
+    /// <summary>滚动到哪加载到哪：同步检查，避免延迟调度在滚动停止后仍批量加载；接近底部时增量渲染下一页。</summary>
+    private void GamesScrollViewer_ScrollChanged(object sender, ScrollChangedEventArgs e)
     {
-        CheckVisibleCovers();
+        if (ReferenceEquals(sender, CardsScrollViewer))
+        {
+            CheckVisibleCovers();
+        }
+        TryLoadMore((ScrollViewer)sender);
+    }
+
+    /// <summary>接近底部（还剩 1.5 屏内）时触发增量渲染；LoadMoreAsync 内部有防重入与版本校验。</summary>
+    private void TryLoadMore(ScrollViewer scrollViewer)
+    {
+        if (scrollViewer.ScrollableHeight <= 0) return;
+        if (scrollViewer.ScrollableHeight - scrollViewer.VerticalOffset >= scrollViewer.ViewportHeight * 1.5) return;
+        if (DataContext is AchievementViewModel vm)
+        {
+            _ = vm.LoadMoreAsync();
+        }
+    }
+
+    /// <summary>搜索/排序/切视图后列表重建，回到顶部重新浏览，避免残留偏移直接触发增量加载。</summary>
+    private void ScrollToTop()
+    {
+        CardsScrollViewer?.ScrollToTop();
+        ListScrollViewer?.ScrollToTop();
     }
 
     /// <summary>首次变为可见（数据加载完成）时的兜底触发。</summary>
@@ -126,6 +150,8 @@ public partial class AchievementView : UserControl
         CardsScrollViewer.Visibility = isCardMode ? Visibility.Visible : Visibility.Collapsed;
         ListScrollViewer.Visibility = isCardMode ? Visibility.Collapsed : Visibility.Visible;
 
+        ScrollToTop();
+
         // 仅在卡片模式下触发封面加载（列表模式不加载封面）
         if (isCardMode)
         {
@@ -135,9 +161,10 @@ public partial class AchievementView : UserControl
         }
     }
 
-    /// <summary>排序重排后容器可能复用（AsyncImage 已重置），等列表重建完成后兜底触发视口封面加载。</summary>
+    /// <summary>排序重排后容器可能复用（AsyncImage 已重置），回顶并等列表重建完成后兜底触发视口封面加载。</summary>
     private void SortComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        ScrollToTop();
         Dispatcher.BeginInvoke(DispatcherPriority.Background, CheckVisibleCovers);
         Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, CheckVisibleCovers);
     }
