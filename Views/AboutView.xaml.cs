@@ -55,14 +55,15 @@ public partial class AboutView : UserControl
                     {
                         Text = result.ReleaseNotes,
                         TextWrapping = TextWrapping.Wrap,
-                        Margin = new Thickness(0, 8, 0, 0)
+                        Margin = new Thickness(0, 8, 0, 0),
+                        // 右侧预留空间，避免 overlay 滚动条遮住日志文字
+                        Padding = new Thickness(0, 0, 16, 0)
                     };
                     content.Children.Add(new ScrollViewer
                     {
                         MaxHeight = 300,
                         VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                         HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                        Padding = new Thickness(0, 0, 4, 0),
                         Content = notes
                     });
                 }
