@@ -109,11 +109,14 @@ public partial class ScriptDownloadViewModel : ObservableObject
         {
             if (int.TryParse(query, out int appId))
             {
-                var name = await GetAppNameAsync(appId, cts.Token);
+                var (name, headerImage) = await GetAppNameAsync(appId, cts.Token);
                 if (name != null)
                 {
-                    SearchResults.Add(new FoundGame(appId, name,
-                        $"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/header.jpg"));
+                    // header_image 为哈希 CDN 完整 URL；缺失时回退老模板（对早期游戏仍有效）
+                    var coverUrl = !string.IsNullOrWhiteSpace(headerImage)
+                        ? headerImage
+                        : $"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/header.jpg";
+                    SearchResults.Add(new FoundGame(appId, name, coverUrl));
                     AddLog($"✅ 找到：{name} (ID: {appId})");
                     StatusMessage = $"找到：{name}";
                 }
@@ -145,7 +148,7 @@ public partial class ScriptDownloadViewModel : ObservableObject
         }
     }
 
-    private async Task<string?> GetAppNameAsync(int appId, CancellationToken ct = default)
+    private async Task<(string? Name, string? HeaderImage)> GetAppNameAsync(int appId, CancellationToken ct = default)
     {
         try
         {
@@ -160,7 +163,10 @@ public partial class ScriptDownloadViewModel : ObservableObject
             var root = doc.RootElement.GetProperty(appId.ToString());
             if (root.TryGetProperty("data", out var data) && data.TryGetProperty("name", out var name))
             {
-                return name.GetString();
+                var headerImage = data.TryGetProperty("header_image", out var img)
+                    ? img.GetString()
+                    : null;
+                return (name.GetString(), headerImage);
             }
         }
         catch (OperationCanceledException)
@@ -171,7 +177,7 @@ public partial class ScriptDownloadViewModel : ObservableObject
         {
             // Silently fail, fallback to "App {appId}"
         }
-        return null;
+        return (null, null);
     }
 
     private async Task SearchByNameAsync(string name, CancellationToken ct)
@@ -214,7 +220,12 @@ public partial class ScriptDownloadViewModel : ObservableObject
                 var gameName = item.GetProperty("name").GetString() ?? name;
 
                 string coverUrl;
-                if (item.TryGetProperty("large_image", out var largeImg) && !string.IsNullOrEmpty(largeImg.GetString()))
+                // tiny_image 为哈希 CDN 完整 URL（storesearch 实际返回的封面字段，新游戏必需）
+                if (item.TryGetProperty("tiny_image", out var tinyImg) && !string.IsNullOrEmpty(tinyImg.GetString()))
+                {
+                    coverUrl = tinyImg.GetString()!;
+                }
+                else if (item.TryGetProperty("large_image", out var largeImg) && !string.IsNullOrEmpty(largeImg.GetString()))
                 {
                     coverUrl = largeImg.GetString()!;
                 }
@@ -230,7 +241,7 @@ public partial class ScriptDownloadViewModel : ObservableObject
                 SearchResults.Add(new FoundGame(appId, gameName, coverUrl));
             }
 
-            AddLog($"✅ 找到 {count} 个匹配结果 (cc={cc}, l={lang})");
+            AddLog($"✅ 找到 {count} 个匹配结果");
             StatusMessage = $"找到 {count} 个匹配结果";
             return;
         }
