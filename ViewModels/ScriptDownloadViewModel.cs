@@ -23,6 +23,13 @@ public partial class ScriptDownloadViewModel : ObservableObject
     private readonly DispatcherTimer _modeRefreshTimer;
     private string _currentDownloadMode = "DepotKey";
 
+    // 商店搜索的地区/语言组合（按优先级）：schinese 索引含中文本地化名称，english 兜底英文/外区
+    private static readonly (string Cc, string Lang)[] StoreSearchLocales =
+    {
+        ("cn", "schinese"),
+        ("us", "english")
+    };
+
     [ObservableProperty]
     private string _gameId = string.Empty;
 
@@ -142,7 +149,7 @@ public partial class ScriptDownloadViewModel : ObservableObject
     {
         try
         {
-            var url = $"https://store.steampowered.com/api/appdetails?appids={appId}&l=zh-cn";
+            var url = $"https://store.steampowered.com/api/appdetails?appids={appId}&l=schinese";
             var json = await _httpClientProvider.SendWithProxyRetryAsync(
                 "script-steam-store",
                 TimeSpan.FromSeconds(10),
@@ -169,49 +176,67 @@ public partial class ScriptDownloadViewModel : ObservableObject
 
     private async Task SearchByNameAsync(string name, CancellationToken ct)
     {
-        var url = $"https://store.steampowered.com/api/storesearch/?term={Uri.EscapeDataString(name)}&cc=us&l=zh-cn";
-        var json = await _httpClientProvider.SendWithProxyRetryAsync(
-            "script-steam-store",
-            TimeSpan.FromSeconds(10),
-            client => client.GetStringAsync(url, ct),
-            ConfigureSteamStoreHeaders);
-
-        using var doc = JsonDocument.Parse(json);
-        var items = doc.RootElement.GetProperty("items");
-
-        if (items.GetArrayLength() == 0)
+        // 多组地区/语言降级重试：cc=cn&l=schinese 的索引含中文本地化名称（中文搜索必需），
+        // cc=us&l=english 兜底英文/外区匹配；命中即停
+        foreach (var (cc, lang) in StoreSearchLocales)
         {
-            AddLog("❌ 未找到匹配的游戏");
-            StatusMessage = "未找到匹配的游戏";
+            var url = $"https://store.steampowered.com/api/storesearch/?term={Uri.EscapeDataString(name)}&cc={cc}&l={lang}";
+            string json;
+            try
+            {
+                json = await _httpClientProvider.SendWithProxyRetryAsync(
+                    "script-steam-store",
+                    TimeSpan.FromSeconds(10),
+                    client => client.GetStringAsync(url, ct),
+                    ConfigureSteamStoreHeaders);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch
+            {
+                // 单组请求失败则尝试下一组参数
+                continue;
+            }
+
+            using var doc = JsonDocument.Parse(json);
+            var items = doc.RootElement.GetProperty("items");
+
+            if (items.GetArrayLength() == 0)
+                continue;
+
+            int count = Math.Min(items.GetArrayLength(), 10);
+            for (int i = 0; i < count; i++)
+            {
+                var item = items[i];
+                var appId = item.GetProperty("id").GetInt32();
+                var gameName = item.GetProperty("name").GetString() ?? name;
+
+                string coverUrl;
+                if (item.TryGetProperty("large_image", out var largeImg) && !string.IsNullOrEmpty(largeImg.GetString()))
+                {
+                    coverUrl = largeImg.GetString()!;
+                }
+                else if (item.TryGetProperty("small_image", out var smallImg) && !string.IsNullOrEmpty(smallImg.GetString()))
+                {
+                    coverUrl = smallImg.GetString()!;
+                }
+                else
+                {
+                    coverUrl = $"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/header.jpg";
+                }
+
+                SearchResults.Add(new FoundGame(appId, gameName, coverUrl));
+            }
+
+            AddLog($"✅ 找到 {count} 个匹配结果 (cc={cc}, l={lang})");
+            StatusMessage = $"找到 {count} 个匹配结果";
             return;
         }
 
-        int count = Math.Min(items.GetArrayLength(), 10);
-        for (int i = 0; i < count; i++)
-        {
-            var item = items[i];
-            var appId = item.GetProperty("id").GetInt32();
-            var gameName = item.GetProperty("name").GetString() ?? name;
-
-            string coverUrl;
-            if (item.TryGetProperty("large_image", out var largeImg) && !string.IsNullOrEmpty(largeImg.GetString()))
-            {
-                coverUrl = largeImg.GetString()!;
-            }
-            else if (item.TryGetProperty("small_image", out var smallImg) && !string.IsNullOrEmpty(smallImg.GetString()))
-            {
-                coverUrl = smallImg.GetString()!;
-            }
-            else
-            {
-                coverUrl = $"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/header.jpg";
-            }
-
-            SearchResults.Add(new FoundGame(appId, gameName, coverUrl));
-        }
-
-        AddLog($"✅ 找到 {count} 个匹配结果");
-        StatusMessage = $"找到 {count} 个匹配结果";
+        AddLog("❌ 未找到匹配的游戏");
+        StatusMessage = "未找到匹配的游戏";
     }
 
     [RelayCommand]
