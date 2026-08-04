@@ -23,7 +23,7 @@
                     <Run Text="{Binding CurrentDataSourceLabel, Mode=OneWay}"/>
                 </TextBlock>
             </StackPanel>
-            <TextBlock Text="支持通过游戏Steam ID和游戏名搜索（推荐使用英文名，中文名索引有问题容易搜不出来），支持模糊匹配，最多显示10条搜索结果"
+            <TextBlock Text="支持通过游戏AppID和游戏名搜索（中英文皆可），支持模糊匹配，最多显示10条搜索结果"
                        FontSize="12" Margin="0,0,0,2"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
             <TextBlock Text="如出现搜索不出结果可尝试开VPN或代理"
@@ -46,7 +46,7 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <ui:AutoSuggestBox x:Name="SearchBox" Grid.Column="0"
-                                       PlaceholderText="输入游戏名或Steam ID"
+                                       PlaceholderText="输入游戏名或AppID"
                                        Padding="8,6" Margin="0,0,8,0" Height="36"
                                        VerticalContentAlignment="Center"
                                        FontSize="14" MinWidth="200"
@@ -131,10 +131,15 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <Image Grid.Column="0" Source="{Binding CoverUrl}" Width="120" Height="52"
-                                       Stretch="UniformToFill" Margin="0,0,16,0"
-                                       RenderOptions.BitmapScalingMode="HighQuality"/>
-                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <Border Grid.Column="0" Width="120" Height="52"
+                                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
+                                    <Border.Clip>
+                                        <RectangleGeometry Rect="0,0,120,52" RadiusX="6" RadiusY="6"/>
+                                    </Border.Clip>
+                                    <Image Source="{Binding CoverUrl}" Stretch="UniformToFill"
+                                           RenderOptions.BitmapScalingMode="HighQuality"/>
+                                </Border>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="14,0,0,0">
                                     <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold"
                                                Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                                TextTrimming="CharacterEllipsis"/>
