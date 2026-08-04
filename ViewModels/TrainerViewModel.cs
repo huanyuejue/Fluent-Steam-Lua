@@ -134,14 +134,20 @@ public partial class TrainerViewModel : ObservableObject
     [RelayCommand]
     private async Task LoadSectionsAsync()
     {
-        if (!IsShowTrainerSections) return;
         var tasks = new List<Task>();
-        if (!_hotLoaded)
-            tasks.Add(LoadHotAsync());
-        if (!_newReleasesLoaded)
-            tasks.Add(LoadNewReleasesAsync());
+        if (IsShowTrainerSections)
+        {
+            if (!_hotLoaded)
+                tasks.Add(LoadHotAsync());
+            if (!_newReleasesLoaded)
+                tasks.Add(LoadNewReleasesAsync());
+        }
         if (tasks.Count > 0)
             await Task.WhenAll(tasks);
+
+        // 必须在热门/新作填充完成后再同步已下载状态，
+        // 否则同步发生在列表为空时（首次进入的竞态），已下载修改器仍显示"下载"
+        await LoadDownloadedTrainersAsync();
     }
 
     private async Task LoadHotAsync()
@@ -185,13 +191,12 @@ public partial class TrainerViewModel : ObservableObject
             var dir = CacheDir;
             if (!Directory.Exists(dir))
             {
-                SyncDownloadedStates(new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+                SyncDownloadedStates(new List<DownloadedTrainerItem>());
                 return Task.CompletedTask;
             }
 
             var files = Directory.GetFiles(dir, "*.exe")
                 .OrderByDescending(f => File.GetLastWriteTimeUtc(f));
-            var downloadedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var items = new List<DownloadedTrainerItem>();
 
             foreach (var file in files)
@@ -200,7 +205,6 @@ public partial class TrainerViewModel : ObservableObject
                 if (!string.IsNullOrWhiteSpace(name))
                 {
                     items.Add(new DownloadedTrainerItem { FileName = name, FilePath = file });
-                    downloadedNames.Add(name);
                 }
             }
 
@@ -213,7 +217,7 @@ public partial class TrainerViewModel : ObservableObject
             foreach (var item in items)
                 DownloadedTrainers.Add(item);
 
-            SyncDownloadedStates(downloadedNames);
+            SyncDownloadedStates(items);
 
         }
         catch (Exception ex) { LogService.Warn("修改器", $"加载已下载修改器列表失败: {ex.Message}"); }
@@ -647,6 +651,9 @@ public partial class TrainerViewModel : ObservableObject
             foreach (var r in results)
                 SearchResults.Add(r);
 
+            // 搜索结果填充后即时同步已下载状态与本地路径，避免显示"下载"或误触发下载
+            await LoadDownloadedTrainersAsync();
+
             HasSearched = true;
             OnPropertyChanged(nameof(HasNoResults));
             IsShowingHot = results.Count == 0;
@@ -839,14 +846,30 @@ public partial class TrainerViewModel : ObservableObject
         StatusMessage = string.Empty;
     }
 
-    private void SyncDownloadedStates(HashSet<string> downloadedNames)
+    private void SyncDownloadedStates(List<DownloadedTrainerItem> items)
     {
-        var normalizedFiles = downloadedNames.Select(n => NormalizeForMatch(n)).ToHashSet();
+        var byFileName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in items)
+        {
+            var key = NormalizeForMatch(item.FileName);
+            if (!string.IsNullOrWhiteSpace(key))
+                byFileName.TryAdd(key, item.FilePath);
+        }
 
         foreach (var trainer in HotTrainers.Concat(NewReleases).Concat(SearchResults))
         {
             var normalized = NormalizeForMatch(trainer.GameName);
-            trainer.IsDownloaded = normalizedFiles.Any(n => n.Contains(normalized));
+            var match = byFileName.FirstOrDefault(kv => kv.Key.Contains(normalized));
+            if (match.Key != null)
+            {
+                // 同时记录本地文件路径，使"打开"按钮直接启动已下载的修改器（不再走下载逻辑）
+                trainer.IsDownloaded = true;
+                trainer.DownloadUrl = match.Value;
+            }
+            else
+            {
+                trainer.IsDownloaded = false;
+            }
         }
     }
 

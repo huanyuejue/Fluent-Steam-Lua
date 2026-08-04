@@ -460,7 +460,6 @@ public partial class MainWindow : Window
         if (tag == "Trainer")
         {
             _ = _trainerViewModel.LoadSectionsCommand.ExecuteAsync(null);
-            _trainerViewModel.LoadDownloadedTrainersCommand.Execute(null);
         }
         else if (tag == "Achievement")
         {
