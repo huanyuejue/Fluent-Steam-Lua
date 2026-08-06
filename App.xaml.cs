@@ -2,6 +2,8 @@
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Threading;
 using iNKORE.UI.WPF.Modern;
 using iNKORE.UI.WPF.Modern.Controls;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,6 +17,20 @@ namespace SteamLuaManager;
 public partial class App : Application
 {
     public static IServiceProvider? ServiceProvider { get; private set; }
+
+    private Mutex? _singleInstanceMutex;
+
+    /// <summary>单实例互斥量名称（fix 在 worker 子进程逻辑之后）。</summary>
+    private const string SingleInstanceMutexName = "FluentSteamLuaManager_SingleInstance";
+
+    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    private static extern IntPtr FindWindow(string? lpClassName, string lpWindowName);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 
     private static ApplicationTheme GetSystemTheme()
     {
@@ -47,6 +63,20 @@ public partial class App : Application
             Shutdown(code);
             return;
         }
+
+        // 单实例限制：已有实例时激活其窗口并退出（worker 子进程不参与）
+        var mutex = new Mutex(true, SingleInstanceMutexName, out var createdNew);
+        if (!createdNew)
+        {
+            ActivateExistingInstance();
+            System.Windows.MessageBox.Show("程序已在运行，重复启动失败。",
+                "Fluent Steam Lua 管理工具",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            Shutdown(0);
+            return;
+        }
+        _singleInstanceMutex = mutex;
 
         var services = new ServiceCollection();
         ConfigureServices(services);
@@ -98,10 +128,28 @@ public partial class App : Application
         base.OnStartup(e);
     }
 
+    private static void ActivateExistingInstance()
+    {
+        try
+        {
+            var hwnd = FindWindow(null, "Fluent Steam Lua 管理工具");
+            if (hwnd == IntPtr.Zero) return;
+            ShowWindow(hwnd, 9); // SW_RESTORE
+            SetForegroundWindow(hwnd);
+        }
+        catch { }
+    }
+
     protected override void OnExit(ExitEventArgs e)
     {
         LogService.Info("系统", "程序退出");
         LogService.Shutdown();
+        if (_singleInstanceMutex != null)
+        {
+            try { _singleInstanceMutex.ReleaseMutex(); } catch { }
+            _singleInstanceMutex.Dispose();
+            _singleInstanceMutex = null;
+        }
         base.OnExit(e);
     }
 

@@ -21,6 +21,7 @@ public class AppSettings
     public bool ShowTrainerSections { get; set; } = true;
     public bool ShowCopyLogButton { get; set; }
     public bool EnableLogging { get; set; }
+    public bool MinimizeToTray { get; set; }
     public List<TrainerBinding> TrainerBindings { get; set; } = new();
 }
 

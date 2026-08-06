@@ -141,23 +141,23 @@
                             </StackPanel>
                         </ui:SettingsCard>
 
-                        <ui:SettingsCard Header="自动监控" Margin="0,0,0,8"
-                                         Description="文件变更时自动刷新游戏列表"
-                                         ui:ControlHelper.CornerRadius="8">
-                            <ui:SettingsCard.Background>
-                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
-                            </ui:SettingsCard.Background>
-                            <ui:ToggleSwitch IsOn="{Binding IsAutoRefreshEnabled}"
-                                             OnContent="开" OffContent="关"/>
-                        </ui:SettingsCard>
-
                         <ui:SettingsCard Header="自动检查更新" Margin="0,0,0,8"
-                                         Description="启动软件时自动检查是否有新版本"
-                                         ui:ControlHelper.CornerRadius="8">
+                                 Description="启动软件时自动检查是否有新版本"
+                                 ui:ControlHelper.CornerRadius="8">
                             <ui:SettingsCard.Background>
                                 <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
                             </ui:SettingsCard.Background>
                             <ui:ToggleSwitch IsOn="{Binding AutoCheckUpdateEnabled}"
+                                             OnContent="开" OffContent="关"/>
+                        </ui:SettingsCard>
+
+                        <ui:SettingsCard Header="关闭时最小化到系统托盘" Margin="0,0,0,8"
+                                         Description="点击关闭按钮时不退出程序，而是隐藏到系统托盘"
+                                         ui:ControlHelper.CornerRadius="8">
+                            <ui:SettingsCard.Background>
+                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
+                            </ui:SettingsCard.Background>
+                            <ui:ToggleSwitch IsOn="{Binding MinimizeToTray}"
                                              OnContent="开" OffContent="关"/>
                         </ui:SettingsCard>
 
@@ -303,16 +303,6 @@
                               Background="Transparent" Padding="0,0,20,0">
                     <StackPanel Margin="0,8,0,16">
 
-                        <ui:SettingsCard Header="日志记录" Margin="0,0,0,8"
-                                         Description="记录用户操作和运行错误，输出到软件目录的 app.log 文件"
-                                         ui:ControlHelper.CornerRadius="8">
-                            <ui:SettingsCard.Background>
-                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
-                            </ui:SettingsCard.Background>
-                            <ui:ToggleSwitch IsOn="{Binding EnableLogging}"
-                                             OnContent="开" OffContent="关"/>
-                        </ui:SettingsCard>
-
                         <ui:SettingsCard Header="入库接口" Margin="0,0,0,8"
                                          Description="选择游戏入库方式"
                                          ui:ControlHelper.CornerRadius="8">
@@ -367,7 +357,7 @@
                         </ui:SettingsCard>
 
                         <Border CornerRadius="8" Background="{DynamicResource LayerFillColorDefaultBrush}"
-                                Margin="0,8,0,0" Padding="12,8"
+                                Margin="0,0,0,8" Padding="12,8"
                                 Visibility="{Binding SpeedTestResults.Count, Converter={StaticResource NonZeroToVisibilityConverter}}">
                             <ItemsControl ItemsSource="{Binding SpeedTestResults}">
                                 <ItemsControl.ItemTemplate>
@@ -390,6 +380,26 @@
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
                         </Border>
+
+                        <ui:SettingsCard Header="日志记录" Margin="0,0,0,8"
+                                         Description="记录用户操作和运行错误，输出到软件目录的 app.log 文件"
+                                         ui:ControlHelper.CornerRadius="8">
+                            <ui:SettingsCard.Background>
+                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
+                            </ui:SettingsCard.Background>
+                            <ui:ToggleSwitch IsOn="{Binding EnableLogging}"
+                                             OnContent="开" OffContent="关"/>
+                        </ui:SettingsCard>
+
+                        <ui:SettingsCard Header="自动监控" Margin="0,0,0,0"
+                                         Description="文件变更时自动刷新游戏列表"
+                                         ui:ControlHelper.CornerRadius="8">
+                            <ui:SettingsCard.Background>
+                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
+                            </ui:SettingsCard.Background>
+                            <ui:ToggleSwitch IsOn="{Binding IsAutoRefreshEnabled}"
+                                             OnContent="开" OffContent="关"/>
+                        </ui:SettingsCard>
 
                     </StackPanel>
                 </ScrollViewer>

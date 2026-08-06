@@ -46,6 +46,8 @@ public partial class MainWindow : Window
     private readonly AboutView _aboutView;
     private readonly IOpenSteamToolService _openSteamToolService;
     private CancellationTokenSource? _kernelCts;
+    private TrayIconManager? _trayIcon;
+    private bool _exitRequested;
 
     // 拖拽状态
     private bool _isDragging;
@@ -101,6 +103,65 @@ public partial class MainWindow : Window
 
         settingsViewModel.PropertyChanged += SettingsViewModel_PropertyChanged;
         Closed += MainWindow_Closed;
+    }
+
+    protected override void OnClosing(CancelEventArgs e)
+    {
+        base.OnClosing(e);
+        if (e.Cancel) return;
+
+        // 用户选择最小化到托盘：拦截关闭并隐藏到系统托盘
+        if (!_exitRequested && _settingsService.Load().MinimizeToTray)
+        {
+            e.Cancel = true;
+            EnsureTrayIcon();
+            _trayIcon!.Visible = true;
+            Hide();
+            _trayIcon.ShowBalloonOnce("Fluent Steam Lua 管理工具", "程序已最小化到系统托盘，单击托盘图标恢复");
+            return;
+        }
+
+        DisposeTrayIcon();
+    }
+
+    private void EnsureTrayIcon()
+    {
+        if (_trayIcon != null) return;
+        _trayIcon = new TrayIconManager();
+        _trayIcon.RestoreRequested += RestoreFromTray;
+        _trayIcon.OpenSettingsRequested += OpenSettingsFromTray;
+        _trayIcon.ExitRequested += () =>
+        {
+            _exitRequested = true;
+            DisposeTrayIcon();
+            Application.Current.Shutdown();
+        };
+    }
+
+    private void OpenSettingsFromTray()
+    {
+        Show();
+        if (WindowState == WindowState.Minimized)
+            WindowState = WindowState.Normal;
+        Activate();
+        NavView.SelectedItem = SettingsItem;
+    }
+
+    private void RestoreFromTray()
+    {
+        Show();
+        if (WindowState == WindowState.Minimized)
+            WindowState = WindowState.Normal;
+        Activate();
+    }
+
+    private void DisposeTrayIcon()
+    {
+        if (_trayIcon == null) return;
+        _trayIcon.RestoreRequested -= RestoreFromTray;
+        _trayIcon.OpenSettingsRequested -= OpenSettingsFromTray;
+        _trayIcon.Dispose();
+        _trayIcon = null;
     }
 
     private void SettingsViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)

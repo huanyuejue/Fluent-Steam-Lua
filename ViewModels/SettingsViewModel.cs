@@ -31,6 +31,9 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     private bool _isAutoRefreshEnabled = true;
 
     [ObservableProperty]
+    private bool _minimizeToTray;
+
+    [ObservableProperty]
     private string _statusMessage = string.Empty;
 
     [ObservableProperty]
@@ -91,6 +94,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         IsShowTrainerSections = _settings.ShowTrainerSections;
         IsShowCopyLogButton = _settings.ShowCopyLogButton;
         EnableLogging = _settings.EnableLogging;
+        MinimizeToTray = _settings.MinimizeToTray;
 
         SelectedTheme = _settings.SelectedTheme;
         SelectedCdnIndex = Math.Clamp(_settings.SelectedCdnIndex, 0, CdnEndpoints.Count - 1);
@@ -238,6 +242,14 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         _settingsService.Save(_settings);
         StatusMessage = value ? "启动时自动检查更新已开启" : "启动时自动检查更新已关闭";
         LogService.Info("设置", value ? "启动时自动检查更新已开启" : "启动时自动检查更新已关闭");
+    }
+
+    partial void OnMinimizeToTrayChanged(bool value)
+    {
+        _settings.MinimizeToTray = value;
+        _settingsService.Save(_settings);
+        StatusMessage = value ? "关闭时最小化到系统托盘已开启" : "关闭时最小化到系统托盘已关闭";
+        LogService.Info("设置", value ? "关闭时最小化到系统托盘已开启" : "关闭时最小化到系统托盘已关闭");
     }
 
     partial void OnSelectedBackdropChanged(string value)
