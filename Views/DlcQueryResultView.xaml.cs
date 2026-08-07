@@ -385,7 +385,7 @@ public class DlcQueryResultView : Window
                 Content = dlc.IsFetching ? "获取中..." : "获取DLC",
                 FontSize = 12,
                 Padding = new Thickness(12, 5, 12, 5),
-                Margin = new Thickness(8, 0, 0, 0),
+                Margin = new Thickness(8, 0, 8, 0),
                 VerticalAlignment = VerticalAlignment.Center,
                 IsEnabled = !dlc.IsFetching
             };

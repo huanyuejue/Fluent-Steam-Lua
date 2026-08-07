@@ -244,69 +244,75 @@
                                             <RowDefinition Height="Auto"/>
                                         </Grid.RowDefinitions>
 
-                                        <Rectangle Grid.Row="0" Fill="{DynamicResource ControlFillColorDefaultBrush}"/>
-                                        <Image Grid.Row="0"
-                                               Source="{Binding CoverImagePath, Converter={StaticResource FilePathToImageConverter}}"
-                                               Stretch="UniformToFill"
-                                               HorizontalAlignment="Center"
-                                               VerticalAlignment="Center"
-                                               RenderOptions.BitmapScalingMode="HighQuality"
-                                               x:Name="CoverImage">
-                                            <Image.Style>
-                                                <Style TargetType="Image">
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsDisabled}" Value="True">
-                                                            <Setter Property="Opacity" Value="0.35"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </Image.Style>
-                                        </Image>
-                                        <Button Grid.Row="0"
-                                                Visibility="{Binding DataContext.IsCardRefreshVisible, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibilityConverter}}"
-                                                Command="{Binding DataContext.RefreshSingleGameCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                CommandParameter="{Binding}"
-                                                HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                                                Margin="0,0,6,6" Padding="0" Width="26" Height="26"
-                                                Background="#AA000000" BorderThickness="0"
-                                                ToolTip="重新获取封面和名称">
-                                            <Button.Template>
-                                                <ControlTemplate TargetType="Button">
-                                                    <Grid>
-                                                        <Ellipse Fill="{TemplateBinding Background}"/>
-                                                        <Ellipse Name="Overlay" Fill="Transparent"/>
-                                                        <ContentPresenter HorizontalAlignment="Center"
-                                                                          VerticalAlignment="Center"/>
-                                                    </Grid>
-                                                    <ControlTemplate.Triggers>
-                                                        <Trigger Property="IsMouseOver" Value="True">
-                                                            <Setter TargetName="Overlay" Property="Fill" Value="#22FFFFFF"/>
-                                                        </Trigger>
-                                                        <Trigger Property="IsPressed" Value="True">
-                                                            <Setter TargetName="Overlay" Property="Fill" Value="#44FFFFFF"/>
-                                                        </Trigger>
-                                                    </ControlTemplate.Triggers>
-                                                </ControlTemplate>
-                                            </Button.Template>
-                                            <TextBlock Text="&#xE72C;" FontFamily="Segoe MDL2 Assets"
-                                                       FontSize="12" Foreground="White"
-                                                       TextOptions.TextFormattingMode="Display"
-                                                       TextOptions.TextRenderingMode="ClearType"
-                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                        </Button>
-                                        <Rectangle Grid.Row="0" Fill="#60000000"
-                                                   x:Name="DisabledCoverOverlay">
-                                            <Rectangle.Style>
-                                                <Style TargetType="Rectangle">
-                                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsDisabled}" Value="True">
-                                                            <Setter Property="Visibility" Value="Visible"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </Rectangle.Style>
-                                        </Rectangle>
+                                        <controls:ClippingBorder Grid.Row="0" CornerRadius="12">
+                                            <Grid>
+                                                <Image Source="{Binding CoverImagePath, Converter={StaticResource FilePathToImageConverter}}"
+                                                       Stretch="UniformToFill"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center"
+                                                       RenderOptions.BitmapScalingMode="HighQuality">
+                                                    <Image.OpacityMask>
+                                                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                                            <GradientStop Color="Black" Offset="0"/>
+                                                            <GradientStop Color="Black" Offset="0.6"/>
+                                                            <GradientStop Color="Transparent" Offset="1"/>
+                                                        </LinearGradientBrush>
+                                                    </Image.OpacityMask>
+                                                    <Image.Style>
+                                                        <Style TargetType="Image">
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsDisabled}" Value="True">
+                                                                    <Setter Property="Opacity" Value="0.35"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Image.Style>
+                                                </Image>
+                                                <Button Visibility="{Binding DataContext.IsCardRefreshVisible, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                        Command="{Binding DataContext.RefreshSingleGameCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding}"
+                                                        HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                                        Margin="0,0,6,6" Padding="0" Width="26" Height="26"
+                                                        Background="#AA000000" BorderThickness="0"
+                                                        ToolTip="重新获取封面和名称">
+                                                    <Button.Template>
+                                                        <ControlTemplate TargetType="Button">
+                                                            <Grid>
+                                                                <Ellipse Fill="{TemplateBinding Background}"/>
+                                                                <Ellipse Name="Overlay" Fill="Transparent"/>
+                                                                <ContentPresenter HorizontalAlignment="Center"
+                                                                                  VerticalAlignment="Center"/>
+                                                            </Grid>
+                                                            <ControlTemplate.Triggers>
+                                                                <Trigger Property="IsMouseOver" Value="True">
+                                                                    <Setter TargetName="Overlay" Property="Fill" Value="#22FFFFFF"/>
+                                                                </Trigger>
+                                                                <Trigger Property="IsPressed" Value="True">
+                                                                    <Setter TargetName="Overlay" Property="Fill" Value="#44FFFFFF"/>
+                                                                </Trigger>
+                                                            </ControlTemplate.Triggers>
+                                                        </ControlTemplate>
+                                                    </Button.Template>
+                                                    <TextBlock Text="&#xE72C;" FontFamily="Segoe MDL2 Assets"
+                                                               FontSize="12" Foreground="White"
+                                                               TextOptions.TextFormattingMode="Display"
+                                                               TextOptions.TextRenderingMode="ClearType"
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Button>
+                                                <Rectangle Fill="#60000000">
+                                                    <Rectangle.Style>
+                                                        <Style TargetType="Rectangle">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsDisabled}" Value="True">
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Rectangle.Style>
+                                                </Rectangle>
+                                            </Grid>
+                                        </controls:ClippingBorder>
                                         <CheckBox Grid.Row="0" Width="20" Height="20" MinWidth="20" MinHeight="20" Padding="0"
                                                   FocusVisualStyle="{x:Null}"
                                                   IsChecked="{Binding IsSelected}"
@@ -335,12 +341,11 @@
                                             </TextBlock.Style>
                                         </TextBlock>
 
-                                        <TextBlock Grid.Row="2" FontSize="12" Margin="12,0,12,8"
+                                        <TextBlock Grid.Row="2" FontSize="12" Margin="12,0,12,4"
                                                    Cursor="Hand" ToolTip="点击复制 AppID"
                                                    MouseEnter="CopyableText_MouseEnter"
                                                    MouseLeave="CopyableText_MouseLeave"
-                                                   MouseLeftButtonDown="AppIdText_MouseLeftButtonDown"
-                                                   x:Name="AppIdText">
+                                                   MouseLeftButtonDown="AppIdText_MouseLeftButtonDown">
                                             <Run Text="AppID: "/>
                                             <Run Text="{Binding AppId, Mode=OneWay}"/>
                                             <TextBlock.Style>
@@ -356,7 +361,7 @@
                                             </TextBlock.Style>
                                         </TextBlock>
 
-                                        <Grid Grid.Row="3" Margin="12,0,8,8">
+                                        <Grid Grid.Row="3" Margin="12,-2,8,4">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
@@ -379,7 +384,7 @@
                                             </TextBlock>
 
                                             <Button Grid.Column="1" Tag="{Binding}" Click="MoreButton_Click"
-                                                    Padding="6,4" FontSize="12" Background="Transparent" BorderThickness="0">
+                                                    Padding="6,2" FontSize="12" Background="Transparent" BorderThickness="0">
                                                 <ui:FontIcon Glyph="&#xE712;" FontSize="16"/>
                                             </Button>
                                         </Grid>
@@ -420,7 +425,7 @@
                                                   Visibility="{Binding DataContext.IsSelectionMode, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibilityConverter}}"
                                                   Checked="CheckBox_Checked" Unchecked="CheckBox_Unchecked"/>
 
-<controls:ClippingBorder Grid.Column="1" CornerRadius="8" ClipToBounds="True"
+                                        <controls:ClippingBorder Grid.Column="1" CornerRadius="8" ClipToBounds="True"
                                                  Margin="10,0,0,0"
                                                  Width="150" Height="64" Background="{DynamicResource ControlFillColorDefaultBrush}"
                                                  BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1">
