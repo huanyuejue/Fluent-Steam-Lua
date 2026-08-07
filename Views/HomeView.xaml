@@ -420,9 +420,9 @@
                                                   Visibility="{Binding DataContext.IsSelectionMode, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibilityConverter}}"
                                                   Checked="CheckBox_Checked" Unchecked="CheckBox_Unchecked"/>
 
-                                        <controls:ClippingBorder Grid.Column="1" CornerRadius="6" ClipToBounds="True"
+<controls:ClippingBorder Grid.Column="1" CornerRadius="8" ClipToBounds="True"
                                                  Margin="10,0,0,0"
-                                                 Width="120" Height="52" Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                                 Width="150" Height="64" Background="{DynamicResource ControlFillColorDefaultBrush}"
                                                  BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1">
                                             <Grid>
                                                 <Image Source="{Binding CoverImagePath, Converter={StaticResource FilePathToImageConverter}}"

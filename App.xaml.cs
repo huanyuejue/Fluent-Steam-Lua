@@ -208,50 +208,122 @@ public partial class App : Application
             LogService.Info("更新", $"检查更新完成: 当前版本 {result.CurrentVersion}, 最新版本 {result.TagName}, 有更新={result.HasUpdate}");
             if (!result.HasUpdate) return;
 
-            await owner.Dispatcher.InvokeAsync(async () =>
-            {
-                var content = new StackPanel
-                {
-                    MaxWidth = 420
-                };
-                content.Children.Add(new TextBlock
-                {
-                    Text = $"当前版本：{result.CurrentVersion}\n最新版本：{result.TagName}",
-                    TextWrapping = TextWrapping.Wrap
-                });
-
-                if (!string.IsNullOrWhiteSpace(result.ReleaseNotes))
-                {
-                    var notes = new TextBlock
-                    {
-                        Text = result.ReleaseNotes,
-                        TextWrapping = TextWrapping.Wrap,
-                        Margin = new Thickness(0, 8, 0, 0)
-                    };
-                    content.Children.Add(new ScrollViewer
-                    {
-                        MaxHeight = 300,
-                        VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                        HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                        Padding = new Thickness(0, 0, 4, 0),
-                        Content = notes
-                    });
-                }
-
-                var dialog = new ContentDialog
-                {
-                    Title = "发现新版本",
-                    Content = content,
-                    PrimaryButtonText = "打开下载页",
-                    CloseButtonText = "稍后再说",
-                    DefaultButton = ContentDialogButton.Primary
-                };
-
-                if (await dialog.ShowAsync() == ContentDialogResult.Primary)
-                    Process.Start(new ProcessStartInfo(result.ReleaseUrl) { UseShellExecute = true });
-            });
+            await owner.Dispatcher.InvokeAsync(() => ShowUpdateLogDialogAsync(result));
         }
         catch { }
+    }
+
+    /// <summary>弹出更新日志对话框（forceShow 时忽略版本比较，始终显示，供调试/查看更新日志用）。</summary>
+    public static async Task ShowUpdateLogDialogAsync(bool forceShow = false)
+    {
+        if (ServiceProvider == null) return;
+        try
+        {
+            var updateService = ServiceProvider.GetRequiredService<IUpdateService>();
+            var result = await updateService.CheckForUpdateAsync();
+            if (!forceShow && !result.HasUpdate) return;
+
+            var dispatcher = Application.Current?.Dispatcher;
+            if (dispatcher == null) return;
+            await dispatcher.InvokeAsync(() => ShowUpdateLogDialogAsync(result));
+        }
+        catch { }
+    }
+
+    private static async Task ShowUpdateLogDialogAsync(UpdateCheckResult result)
+    {
+        var content = new StackPanel
+        {
+            MaxWidth = 440
+        };
+
+        // 版本信息卡片
+        var versionCard = new Border
+        {
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(16, 12, 16, 12),
+            Margin = new Thickness(0, 0, 0, 16)
+        };
+        versionCard.SetResourceReference(Border.BackgroundProperty, "ControlFillColorDefaultBrush");
+        versionCard.SetResourceReference(Border.BorderBrushProperty, "SurfaceStrokeColorDefaultBrush");
+        versionCard.BorderThickness = new Thickness(1);
+        var versionStack = new StackPanel();
+        versionStack.Children.Add(BuildVersionRow("当前版本", result.CurrentVersion.ToString()));
+        versionStack.Children.Add(BuildVersionRow("最新版本", result.TagName));
+        versionCard.Child = versionStack;
+        content.Children.Add(versionCard);
+
+        // 更新日志标题
+        var logTitle = new TextBlock
+        {
+            Text = "更新日志",
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+        logTitle.SetResourceReference(TextBlock.ForegroundProperty, "TextFillColorPrimaryBrush");
+        content.Children.Add(logTitle);
+
+        // 日志区域卡片
+        var logBorder = new Border
+        {
+            CornerRadius = new CornerRadius(8),
+            MaxHeight = 300
+        };
+        logBorder.SetResourceReference(Border.BackgroundProperty, "LayerFillColorDefaultBrush");
+        logBorder.SetResourceReference(Border.BorderBrushProperty, "SurfaceStrokeColorDefaultBrush");
+        logBorder.BorderThickness = new Thickness(1);
+        logBorder.Padding = new Thickness(16, 12, 16, 12);
+
+        if (!string.IsNullOrWhiteSpace(result.ReleaseNotes))
+        {
+            var notes = new TextBlock
+            {
+                Text = result.ReleaseNotes,
+                TextWrapping = TextWrapping.Wrap,
+                // 右侧预留空间，避免滚动条遮住日志文字
+                Padding = new Thickness(0, 0, 16, 0)
+            };
+            logBorder.Child = new ScrollViewer
+            {
+                MaxHeight = 280,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                Content = notes
+            };
+        }
+        else
+        {
+            logBorder.Child = new TextBlock
+            {
+                Text = "暂无更新日志",
+                Opacity = 0.6
+            };
+        }
+        content.Children.Add(logBorder);
+
+        var dialog = new ContentDialog
+        {
+            Title = result.HasUpdate ? "发现新版本" : "版本信息",
+            Content = content,
+            PrimaryButtonText = "打开下载页",
+            CloseButtonText = "稍后再说",
+            DefaultButton = ContentDialogButton.Primary
+        };
+
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+            Process.Start(new ProcessStartInfo(result.ReleaseUrl) { UseShellExecute = true });
+    }
+
+    private static TextBlock BuildVersionRow(string label, string value)
+    {
+        var row = new TextBlock
+        {
+            FontSize = 14,
+            Margin = new Thickness(0, 2, 0, 2),
+            Text = $"{label}：{value}"
+        };
+        row.SetResourceReference(TextBlock.ForegroundProperty, "TextFillColorPrimaryBrush");
+        return row;
     }
 
     private static void ConfigureServices(IServiceCollection services)
