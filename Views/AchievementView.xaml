@@ -84,7 +84,7 @@
                 <ComboBox x:Name="SortComboBox" ItemsSource="{Binding SortOptions}"
                           SelectedItem="{Binding SelectedSortOption, Mode=TwoWay}"
                           SelectionChanged="SortComboBox_SelectionChanged"
-                          MinWidth="132" Padding="12,6" HorizontalContentAlignment="Center">
+                          MinWidth="90" Padding="12,6" HorizontalContentAlignment="Center">
                     <ComboBox.Background>
                         <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                     </ComboBox.Background>

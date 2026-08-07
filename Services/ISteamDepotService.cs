@@ -8,9 +8,17 @@ public interface ISteamDepotService
     Task<DepotQueryResult?> QueryAppAsync(int appId, CancellationToken ct = default);
     Task<string?> GenerateLuaAsync(int appId, string? keyFolderPath = null, CancellationToken ct = default);
     Task<string?> GenerateLuaWithDlcAsync(int appId, string? keyFolderPath = null, CancellationToken ct = default);
+    Task<DlcFetchResult> FetchDlcAsync(string luaPath, int dlcAppId, bool hasOwnDepot, CancellationToken ct = default);
     Task<bool> EnsureKeyFilesAsync(CancellationToken ct = default);
     Task<KeyFileUpdateResult> UpdateKeyFilesAsync(CancellationToken ct = default);
     Task EnsureAllSourcesAsync(CancellationToken ct = default);
+}
+
+public class DlcFetchResult
+{
+    public bool Success { get; set; }
+    public bool NeedKey { get; set; }
+    public string Message { get; set; } = string.Empty;
 }
 
 public class KeyFileUpdateResult

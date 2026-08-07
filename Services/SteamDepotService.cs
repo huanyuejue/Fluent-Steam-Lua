@@ -2,6 +2,7 @@ using System.IO;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using SteamLuaManager.Models;
 
 namespace SteamLuaManager.Services;
@@ -476,5 +477,108 @@ public class SteamDepotService : ISteamDepotService
         }
         catch (InvalidOperationException) { throw; }
         catch (Exception ex) { LogService.Error("入库", $"生成入库文件失败 (AppID {appId}, DLC): {ex.Message}"); return null; }
+    }
+
+    public async Task<DlcFetchResult> FetchDlcAsync(string luaPath, int dlcAppId, bool hasOwnDepot, CancellationToken ct = default)
+    {
+        var result = new DlcFetchResult();
+        try
+        {
+            // 1. 无独立 depot → 无需密钥，直接写入
+            if (!hasOwnDepot)
+            {
+                result.NeedKey = false;
+                await AppendLinesToLuaAsync(luaPath, new List<string> { $"addappid({dlcAppId})" }, ct);
+                result.Success = true;
+                result.Message = $"DLC {dlcAppId} 无独立 depot，无需密钥，已写入";
+                return result;
+            }
+
+            // 2. 有独立 depot → 需要密钥，从本地密钥仓库 v1 搜索
+            result.NeedKey = true;
+
+            var prevSource = _currentSource;
+            UseDataSource("DepotKey");
+            try
+            {
+                if (!await EnsureKeyFilesAsync(ct))
+                {
+                    result.Message = "无法获取密钥仓库文件";
+                    return result;
+                }
+
+                Dictionary<string, string> depotKeys;
+                try
+                {
+                    depotKeys = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(GetDepotKeysPath()))
+                        ?? new Dictionary<string, string>();
+                }
+                catch (Exception ex)
+                {
+                    LogService.Warn("获取DLC", $"读取密钥文件失败: {ex.Message}");
+                    result.Message = "读取密钥仓库文件失败";
+                    return result;
+                }
+
+                // 查找 DLC 自身主 AppID 的密钥
+                if (depotKeys.TryGetValue(dlcAppId.ToString(), out var dlcMainKey))
+                {
+                    var lines = new List<string> { $"addappid({dlcAppId}, 1, \"{dlcMainKey}\")" };
+                    await AppendLinesToLuaAsync(luaPath, lines, ct);
+                    result.Success = true;
+                    result.Message = $"DLC {dlcAppId} 密钥获取成功，已写入";
+                }
+                else
+                {
+                    result.Message = $"无法获取 DLC {dlcAppId} 的密钥信息（本地密钥仓库 v1 中未找到），获取失败";
+                }
+            }
+            finally
+            {
+                UseDataSource(prevSource);
+            }
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            LogService.Error("获取DLC", $"获取 DLC {dlcAppId} 失败: {ex.Message}");
+            result.Message = $"获取失败：{ex.Message}";
+            return result;
+        }
+    }
+
+    private static async Task AppendLinesToLuaAsync(string luaPath, List<string> lines, CancellationToken ct = default)
+    {
+        if (lines == null || lines.Count == 0) return;
+
+        var dir = Path.GetDirectoryName(luaPath);
+        if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+            Directory.CreateDirectory(dir);
+
+        var existing = File.Exists(luaPath) ? await File.ReadAllTextAsync(luaPath, ct) : string.Empty;
+        var newLines = new List<string>();
+
+        foreach (var line in lines)
+        {
+            var match = Regex.Match(line, @"addappid\((\d+)");
+            if (match.Success && Regex.IsMatch(existing, $@"\baddappid\(\s*{match.Groups[1].Value}\s*[,\)]"))
+                continue; // 已存在则跳过
+            newLines.Add(line);
+        }
+
+        if (newLines.Count == 0)
+        {
+            LogService.Info("获取DLC", "所有行已存在于 Lua 文件中，跳过写入");
+            return;
+        }
+
+        var sb = new StringBuilder(existing.TrimEnd());
+        if (sb.Length > 0)
+            sb.AppendLine();
+        sb.AppendLine(string.Join(Environment.NewLine, newLines));
+
+        await File.WriteAllTextAsync(luaPath, sb.ToString(), ct);
+        LogService.Info("获取DLC", $"已写入 {newLines.Count} 行到 {luaPath}");
     }
 }

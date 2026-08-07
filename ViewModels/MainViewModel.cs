@@ -813,10 +813,13 @@ namespace SteamLuaManager.ViewModels;
 					System.Text.RegularExpressions.Regex.IsMatch(gameLuaContent,
 						$@"\badd(?:app|token)id\(\s*{dlcId}\s*[,\)]");
 
+				var hasOwnDepot = result.GameDepots.Any(d => d.DepotId == dlcId);
+
 				dlcList.Add(new DlcInfo
 				{
 					AppId = dlcId,
-					IsImported = isImported
+					IsImported = isImported,
+					HasDepot = hasOwnDepot
 				});
 			}
 
@@ -868,7 +871,7 @@ namespace SteamLuaManager.ViewModels;
 			var imported = dlcList.Count(d => d.IsImported);
 			IsDlcQueryOverlayVisible = false;
 
-			var view = new Views.DlcQueryResultView(game.GameName, new ObservableCollection<DlcInfo>(dlcList), _settingsService.Load().SelectedBackdrop);
+			var view = new Views.DlcQueryResultView(game.GameName, new ObservableCollection<DlcInfo>(dlcList), gameLuaPath, _steamDepotService, _settingsService.Load().SelectedBackdrop);
 			view.ShowDialog();
 		}
 		catch (OperationCanceledException)

@@ -94,7 +94,7 @@
                 <ComboBox x:Name="DisableFilterComboBox"
                           SelectedValuePath="Content"
                           SelectedValue="{Binding SelectedDisableFilter, Mode=TwoWay}"
-                          Width="140" Padding="12,6"
+                          MinWidth="100" Padding="12,6"
                           HorizontalContentAlignment="Center">
                     <ComboBox.Background>
                         <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
@@ -111,7 +111,7 @@
                 <ComboBox x:Name="ViewModeComboBox"
                           SelectedValuePath="Content"
                           SelectedValue="{Binding SelectedViewMode, Mode=TwoWay}"
-                          Width="100" Padding="12,6"
+                          MinWidth="70" Padding="12,6"
                           HorizontalContentAlignment="Center">
                     <ComboBox.Background>
                         <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
@@ -128,7 +128,7 @@
                 <ComboBox x:Name="SortComboBox"
                           SelectedValuePath="Content"
                           SelectedValue="{Binding SelectedSortOption, Mode=TwoWay}"
-                          Width="150" Padding="12,6"
+                          MinWidth="110" Padding="12,6"
                           HorizontalContentAlignment="Center">
                     <ComboBox.Background>
                         <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>

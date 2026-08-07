@@ -15,4 +15,13 @@ public partial class DlcInfo : ObservableObject
 
     [ObservableProperty]
     private bool _isImported;
+
+    [ObservableProperty]
+    private bool _hasDepot;
+
+    [ObservableProperty]
+    private bool _isFetching;
+
+    [ObservableProperty]
+    private string _fetchMessage = string.Empty;
 }
