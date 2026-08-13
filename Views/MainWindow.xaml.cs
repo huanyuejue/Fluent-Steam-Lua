@@ -1,6 +1,8 @@
 ﻿using System.Diagnostics;
 using System.ComponentModel;
+using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
@@ -23,7 +25,7 @@ namespace SteamLuaManager.Views;
 
 public partial class MainWindow : Window
 {
-    private readonly string[] _navOrder = ["Home", "ScriptDownload", "Extraction", "Trainer", "Achievement", "Settings", "About"];
+    private readonly string[] _navOrder = ["Home", "ScriptDownload", "Extraction", "Authorization", "Trainer", "Achievement", "Settings", "About"];
     private string _prevTag = "Home";
 
     /// <summary>当前页面 tag，供全局操作日志标注上下文。</summary>
@@ -37,12 +39,14 @@ public partial class MainWindow : Window
     private readonly ExtractionViewModel _extractionViewModel;
     private readonly TrainerViewModel _trainerViewModel;
     private readonly AchievementViewModel _achievementViewModel;
+    private readonly AuthorizationViewModel _authorizationViewModel;
     private readonly HomeView _homeView;
     private readonly SettingsView _settingsView;
     private readonly ScriptDownloadView _scriptDownloadView;
     private readonly ExtractionView _extractionView;
     private readonly TrainerView _trainerView;
     private readonly AchievementView _achievementView;
+    private readonly AuthorizationView _authorizationView;
     private readonly AboutView _aboutView;
     private readonly IOpenSteamToolService _openSteamToolService;
     private CancellationTokenSource? _kernelCts;
@@ -61,7 +65,7 @@ public partial class MainWindow : Window
     private const double FabSize = 44;
     private const double FabPanelGap = 8;
 
-    public MainWindow(MainViewModel viewModel, SettingsViewModel settingsViewModel, ScriptDownloadViewModel scriptDownloadViewModel, ExtractionViewModel extractionViewModel, TrainerViewModel trainerViewModel, AchievementViewModel achievementViewModel, ISettingsService settingsService, ISteamPathService steamPathService, IOpenSteamToolService openSteamToolService)
+    public MainWindow(MainViewModel viewModel, SettingsViewModel settingsViewModel, ScriptDownloadViewModel scriptDownloadViewModel, ExtractionViewModel extractionViewModel, TrainerViewModel trainerViewModel, AchievementViewModel achievementViewModel, AuthorizationViewModel authorizationViewModel, ISettingsService settingsService, ISteamPathService steamPathService, IOpenSteamToolService openSteamToolService)
     {
         InitializeComponent();
         CurrentPage = "Home";
@@ -73,6 +77,7 @@ public partial class MainWindow : Window
         _extractionViewModel = extractionViewModel;
         _trainerViewModel = trainerViewModel;
         _achievementViewModel = achievementViewModel;
+        _authorizationViewModel = authorizationViewModel;
         _settingsService = settingsService;
         _steamPathService = steamPathService;
         DataContext = _viewModel;
@@ -88,6 +93,7 @@ public partial class MainWindow : Window
         _extractionView = new ExtractionView { DataContext = extractionViewModel };
         _trainerView = new TrainerView { DataContext = trainerViewModel };
         _achievementView = new AchievementView { DataContext = achievementViewModel };
+        _authorizationView = new AuthorizationView { DataContext = authorizationViewModel };
         _aboutView = new AboutView();
         ContentTransition.Content = _homeView;
         SteamMenuList.ItemsSource = new[]
@@ -509,6 +515,7 @@ public partial class MainWindow : Window
             "Extraction" => _extractionView,
             "Trainer" => _trainerView,
             "Achievement" => _achievementView,
+            "Authorization" => _authorizationView,
             "About" => _aboutView,
             _ => null
         };
@@ -530,6 +537,37 @@ public partial class MainWindow : Window
 
     private readonly DispatcherTimer _dropHintHideTimer = new() { Interval = TimeSpan.FromMilliseconds(120) };
 
+    /// <summary>判断文件是否为授权票据文件（tickets.txt，或内容含票据标记的 .txt）。</summary>
+    private static bool IsTicketFile(string path)
+    {
+        try
+        {
+            if (!path.EndsWith(".txt", StringComparison.OrdinalIgnoreCase)) return false;
+            if (string.Equals(Path.GetFileNameWithoutExtension(path), "tickets",
+                    StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            var buf = new byte[1024];
+            var n = fs.Read(buf, 0, buf.Length);
+            if (n <= 0) return false;
+            var head = Encoding.UTF8.GetString(buf, 0, n);
+            return head.Contains("appid:", StringComparison.OrdinalIgnoreCase) ||
+                   head.Contains("appticket", StringComparison.OrdinalIgnoreCase) ||
+                   head.Contains("eticket", StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool IsTicketDrop(IDataObject data)
+    {
+        if (!data.GetDataPresent(DataFormats.FileDrop)) return false;
+        return data.GetData(DataFormats.FileDrop) is string[] files && files.Any(IsTicketFile);
+    }
+
     private void Window_DragOver(object sender, DragEventArgs e)
     {
         if (!e.Data.GetDataPresent(DataFormats.FileDrop))
@@ -537,21 +575,53 @@ public partial class MainWindow : Window
             e.Effects = DragDropEffects.None;
             return;
         }
+        var isTicket = IsTicketDrop(e.Data);
+        if (isTicket && CurrentPage != "Authorization")
+        {
+            // 授权票据仅在授权页支持拖拽导入：其他页面不显示遮罩、不响应
+            e.Effects = DragDropEffects.None;
+            DropAuthHintGrid.Visibility = Visibility.Collapsed;
+            DropHintGrid.Visibility = Visibility.Collapsed;
+            _dropHintHideTimer.Stop();
+            return;
+        }
         e.Effects = DragDropEffects.Copy;
-        DropHintGrid.Visibility = Visibility.Visible;
+        DropAuthHintGrid.Visibility = isTicket ? Visibility.Visible : Visibility.Collapsed;
+        DropHintGrid.Visibility = isTicket ? Visibility.Collapsed : Visibility.Visible;
         _dropHintHideTimer.Stop();
         _dropHintHideTimer.Start();
+    }
+
+    private void Window_DragLeave(object sender, DragEventArgs e)
+    {
+        _dropHintHideTimer.Stop();
+        DropHintGrid.Visibility = Visibility.Collapsed;
+        DropAuthHintGrid.Visibility = Visibility.Collapsed;
     }
 
     private async void Window_Drop(object sender, DragEventArgs e)
     {
         _dropHintHideTimer.Stop();
         DropHintGrid.Visibility = Visibility.Collapsed;
-        if (e.Data.GetDataPresent(DataFormats.FileDrop))
+        DropAuthHintGrid.Visibility = Visibility.Collapsed;
+        if (!e.Data.GetDataPresent(DataFormats.FileDrop)) return;
+        var files = (string[])e.Data.GetData(DataFormats.FileDrop)!;
+
+        var tickets = CurrentPage == "Authorization"
+            ? files.Where(IsTicketFile).ToArray()
+            : Array.Empty<string>();
+        var others = files.Where(f => !IsTicketFile(f)).ToArray();
+
+        if (tickets.Length > 0)
         {
-            var files = (string[])e.Data.GetData(DataFormats.FileDrop)!;
-            LogService.Info("操作", $"拖拽入库 {files.Length} 个文件: {string.Join("; ", files)}");
-            await _viewModel.HandleDropAsync(files);
+            LogService.Info("操作", $"拖拽导入授权 {tickets.Length} 个文件: {string.Join("; ", tickets)}");
+            foreach (var ticket in tickets)
+                await _authorizationViewModel.ImportFileCommand.ExecuteAsync(ticket);
+        }
+        if (others.Length > 0)
+        {
+            LogService.Info("操作", $"拖拽入库 {others.Length} 个文件: {string.Join("; ", others)}");
+            await _viewModel.HandleDropAsync(others);
         }
     }
 

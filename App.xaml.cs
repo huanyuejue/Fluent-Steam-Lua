@@ -64,6 +64,31 @@ public partial class App : Application
             return;
         }
 
+        // 授权提取 worker 子进程：一次性提取 AppTicket / ETicket 并写入结果文件
+        if (e.Args.Length >= 3 && e.Args[0] == "--ticket-worker")
+        {
+            // 日志输出遵循用户设置：主进程传入第 4 个参数（1=开启）决定是否记录
+            if (e.Args.Length >= 4 && e.Args[3] == "1")
+            {
+                LogService.SetEnabled(true);
+                LogService.Info("提取", $"worker 启动 args=[{string.Join("|", e.Args)}]");
+            }
+            int code;
+            try
+            {
+                code = TicketWorker.Run(e.Args[1], e.Args[2]);
+            }
+            catch (Exception ex)
+            {
+                LogService.Error("提取", $"worker 未捕获异常: {ex}");
+                code = -1;
+            }
+            if (LogService.IsEnabled)
+                LogService.Info("提取", $"worker 结束 exit={code}");
+            Shutdown(code);
+            return;
+        }
+
         // 单实例限制：已有实例时激活其窗口并退出（worker 子进程不参与）
         var mutex = new Mutex(true, SingleInstanceMutexName, out var createdNew);
         if (!createdNew)
@@ -340,6 +365,8 @@ public partial class App : Application
         services.AddSingleton<ITrainerService, TrainerService>();
         services.AddSingleton<ITrainerAutoLaunchService, TrainerAutoLaunchService>();
         services.AddSingleton<ISteamAchievementService, SteamAchievementService>();
+        services.AddSingleton<SteamTicketExtractor>();
+        services.AddSingleton<IAuthorizationService, AuthorizationService>();
 
         services.AddTransient<MainViewModel>();
         services.AddTransient<SettingsViewModel>();
@@ -347,6 +374,7 @@ public partial class App : Application
         services.AddTransient<ExtractionViewModel>();
         services.AddTransient<TrainerViewModel>();
         services.AddTransient<AchievementViewModel>();
+        services.AddTransient<AuthorizationViewModel>();
         services.AddTransient<MainWindow>();
     }
 }

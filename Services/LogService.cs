@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Text;
 
 namespace SteamLuaManager.Services;
 
@@ -28,7 +29,10 @@ public static class LogService
             try
             {
                 RotateIfNeeded();
-                _writer = new StreamWriter(LogFilePath, append: true) { AutoFlush = true };
+                // FileShare.ReadWrite：提取 worker 子进程与主进程会同时追加写同一 app.log
+                _writer = new StreamWriter(
+                    new FileStream(LogFilePath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite),
+                    new UTF8Encoding(false)) { AutoFlush = true };
                 WriteCore("INFO", "日志系统", "日志记录已开启");
             }
             catch

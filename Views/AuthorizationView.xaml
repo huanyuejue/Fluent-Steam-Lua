@@ -1,0 +1,290 @@
+<UserControl x:Class="SteamLuaManager.Views.AuthorizationView"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.inkore.net/lib/ui/wpf/modern"
+        Background="Transparent"
+        AllowDrop="True"
+        DragEnter="Zone_DragEnter"
+        DragOver="Zone_DragOver"
+        Drop="Zone_Drop"
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="ClearType"
+        RenderOptions.ClearTypeHint="Enabled"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True">
+
+    <UserControl.Resources>
+        <Style x:Key="AuthCardStyle" TargetType="Border">
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="20,16"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource SurfaceStrokeColorDefaultBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Background">
+                <Setter.Value>
+                    <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="ResultBoxStyle" TargetType="Border">
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="12,10"/>
+            <Setter Property="Background">
+                <Setter.Value>
+                    <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.35"/>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Margin="36,24,36,24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- 标题 -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,16">
+            <TextBlock Text="授权" FontSize="28" FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+            <TextBlock FontSize="12" Margin="0,2,0,0" TextWrapping="Wrap" LineHeight="20"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                <Run Text="为游戏提取或导入Denuvo授权票据（有效期30分钟，提取后请尽快使用）"/><LineBreak/>
+                <Run Text="该功能使用OpenSteamTool官方的提取工具开发而成，仅支持同类工具提取的授权文件（明文ticket），不支持市面上的cw，liubang等使用了额外加密壳的授权文件和授权码"/><LineBreak/>
+                <Run Text="该工具授权流程不会再把ticket信息写入lua，而是直接跳过lua验证步骤直接写入注册表，只需要拖入授权并启动游戏即可"/>
+            </TextBlock>
+        </StackPanel>
+
+        <!-- 内容区 -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="16"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- ===== 卡片一：提取授权 ===== -->
+                <Border Grid.Column="0" Style="{StaticResource AuthCardStyle}">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Width="36" Height="36" CornerRadius="8" VerticalAlignment="Center"
+                                    Background="{DynamicResource ControlFillColorDefaultBrush}">
+                                <ui:FontIcon Glyph="&#xE896;" FontSize="16" HorizontalAlignment="Center"
+                                             VerticalAlignment="Center"/>
+                            </Border>
+                            <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                                <TextBlock Text="提取授权" FontSize="16" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                <TextBlock Text="提取当前 Steam 账号拥有的游戏票据" FontSize="11"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid Grid.Column="0">
+                                <TextBox x:Name="ExtractAppIdBox"
+                                         ToolTip="输入需要提取票据的 AppID，如 3357650"
+                                         Text="{Binding ExtractAppIdText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                         Height="34" VerticalContentAlignment="Center"
+                                         Padding="10,0"
+                                         KeyDown="ExtractAppIdBox_KeyDown"
+                                         IsEnabled="{Binding IsBusy, Converter={StaticResource BoolInvertConverter}}">
+                                    <TextBox.Background>
+                                        <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                                    </TextBox.Background>
+                                </TextBox>
+                                <TextBlock Text="输入游戏的 APPID"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           IsHitTestVisible="False"
+                                           VerticalAlignment="Center"
+                                           Margin="10,0,0,0">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Text.Length, ElementName=ExtractAppIdBox}" Value="0">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Grid>
+                            <Button Grid.Column="1" Margin="10,0,0,0" Height="34" Padding="18,0"
+                                    Content="{Binding IsExtracting, Converter={StaticResource BoolToRunStopConverter}}"
+                                    Command="{Binding ExtractCommand}"
+                                    IsEnabled="{Binding IsImporting, Converter={StaticResource BoolInvertConverter}}"/>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,8"
+                              Visibility="{Binding IsExtracting, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <ui:ProgressRing IsActive="True" Width="18" Height="18" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="1" Margin="8,0,0,0" FontSize="12" TextWrapping="Wrap"
+                                       VerticalAlignment="Center"
+                                       Text="正在提取…请确认 Steam 已运行并登录拥有该游戏的账号"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                        </Grid>
+
+                        <!-- 提取结果 -->
+                        <Border Margin="0,8,0,0">
+                            <Border.Style>
+                                <Style TargetType="Border" BasedOn="{StaticResource ResultBoxStyle}">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding LastExtractSummary}" Value="">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <StackPanel>
+                                <TextBlock Text="{Binding LastExtractSummary}" FontSize="12" LineHeight="20"
+                                           TextWrapping="Wrap"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                    <StackPanel.Style>
+                                        <Style TargetType="StackPanel">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding LastExtractPath}" Value="">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </StackPanel.Style>
+                                    <Button Content="复制路径" Height="34" Padding="18,0"
+                                            Command="{Binding CopyExtractPathCommand}"/>
+                                    <Button Content="打开目录" Height="34" Padding="18,0" Margin="8,0,0,0"
+                                            Command="{Binding OpenExtractFolderCommand}"/>
+                                </StackPanel>
+                                <TextBlock Margin="0,12,0,0" FontSize="12" TextWrapping="Wrap" LineHeight="20"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           Text="已提取授权票据并保存。授权文件有效期为 30 分钟，请尽快使用。"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <!-- ===== 卡片二：导入授权 ===== -->
+                <Border Grid.Column="2" Style="{StaticResource AuthCardStyle}">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Width="36" Height="36" CornerRadius="8" VerticalAlignment="Center"
+                                    Background="{DynamicResource ControlFillColorDefaultBrush}">
+                                <ui:FontIcon Glyph="&#xE8B5;" FontSize="16" HorizontalAlignment="Center"
+                                             VerticalAlignment="Center"/>
+                            </Border>
+                            <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                                <TextBlock Text="导入授权" FontSize="16" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                <TextBlock Text="将 tickets.txt 的票据写入 Steam 凭据存储" FontSize="11"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- 拖放区（虚线框） -->
+                        <Grid Height="120" Cursor="Hand" Background="Transparent"
+                              IsEnabled="{Binding IsBusy, Converter={StaticResource BoolInvertConverter}}"
+                              MouseLeftButtonDown="DropZone_MouseLeftButtonDown">
+                            <Rectangle RadiusX="10" RadiusY="10" Fill="Transparent"
+                                       StrokeDashArray="4,3">
+                                <Rectangle.Style>
+                                    <Style TargetType="Rectangle">
+                                        <Setter Property="Stroke" Value="{DynamicResource SystemAccentColorBrush}"/>
+                                        <Setter Property="StrokeThickness" Value="1.5"/>
+                                        <Style.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Stroke" Value="{DynamicResource SystemAccentColorSecondaryBrush}"/>
+                                                <Setter Property="StrokeThickness" Value="2.5"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Rectangle.Style>
+                            </Rectangle>
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <ui:FontIcon Glyph="&#xE896;" FontSize="30" HorizontalAlignment="Center"
+                                             Foreground="{DynamicResource SystemAccentColorBrush}"/>
+                                <TextBlock Text="拖入 tickets.txt 到此" FontSize="14" Margin="0,10,0,0"
+                                           HorizontalAlignment="Center" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                <TextBlock Text="或点击选择文件" FontSize="11" Margin="0,4,0,0"
+                                           HorizontalAlignment="Center"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid Margin="0,10,0,0"
+                              Visibility="{Binding IsImporting, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <ui:ProgressRing IsActive="True" Width="18" Height="18" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="1" Margin="8,0,0,0" FontSize="12" TextWrapping="Wrap"
+                                       VerticalAlignment="Center"
+                                       Text="正在解析并写入注册表…"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                        </Grid>
+
+                        <!-- 导入结果 -->
+                        <Border Margin="0,8,0,0">
+                            <Border.Style>
+                                <Style TargetType="Border" BasedOn="{StaticResource ResultBoxStyle}">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding LastImportSummary}" Value="">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <StackPanel>
+                                <TextBlock Text="{Binding LastImportSummary}" FontSize="12" LineHeight="20"
+                                           TextWrapping="Wrap"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                <TextBlock Margin="0,12,0,0" FontSize="12" TextWrapping="Wrap" LineHeight="20"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           Text="授权有效期约 30 分钟，请尽快启动游戏完成授权。"/>
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock FontSize="13" Margin="0,12,0,0" TextWrapping="Wrap" LineHeight="20"
+                                   TextAlignment="Center" HorizontalAlignment="Center"
+                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}">
+                            <Run Text="导入前请确定该游戏已通过Lua清单入库，票据仅写入注册表提供给内核进行读取授权"/><LineBreak/>
+                            <Run Text="不支持CW , Liubang和授权码等使用额外加密壳的授权文件"/>
+                        </TextBlock>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </ScrollViewer>
+
+        <!-- 状态条 -->
+        <ui:InfoBar Grid.Row="2" Margin="0,14,0,0"
+                    IsOpen="{Binding StatusOpen, Mode=TwoWay}"
+                    Severity="{Binding StatusSeverity}"
+                    Title="{Binding StatusTitle}"
+                    Message="{Binding StatusMessage}"
+                    IsClosable="False"
+                    HorizontalAlignment="Left"
+                    ui:ControlHelper.CornerRadius="8"/>
+    </Grid>
+</UserControl>

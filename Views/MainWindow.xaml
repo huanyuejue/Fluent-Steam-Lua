@@ -16,6 +16,7 @@
         AllowDrop="True"
         DragEnter="Window_DragOver"
         DragOver="Window_DragOver"
+        DragLeave="Window_DragLeave"
         Drop="Window_Drop"
         Loaded="Window_Loaded"
         SizeChanged="Window_SizeChanged"
@@ -73,6 +74,11 @@
                 <ui:NavigationViewItem x:Name="ExtractionItem" Content="提取" Tag="Extraction" Padding="12,0">
                     <ui:NavigationViewItem.Icon>
                         <ui:FontIcon Glyph="&#xE8B7;" FontSize="16"/>
+                    </ui:NavigationViewItem.Icon>
+                </ui:NavigationViewItem>
+                <ui:NavigationViewItem x:Name="AuthorizationItem" Content="授权" Tag="Authorization" Padding="12,0">
+                    <ui:NavigationViewItem.Icon>
+                        <ui:FontIcon Glyph="&#xE72D;" FontSize="16"/>
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
                 <ui:NavigationViewItem x:Name="TrainerItem" Content="修改器" Tag="Trainer" Padding="12,0">
@@ -439,6 +445,30 @@
                                    Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                    HorizontalAlignment="Center" Margin="0,16,0,0"/>
                         <TextBlock Text="支持 .lua（游戏清单）和 .bin（成就数据）文件" FontSize="13"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   HorizontalAlignment="Center" Margin="0,6,0,0"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- 授权票据拖拽导入提示层 -->
+        <Grid x:Name="DropAuthHintGrid" Panel.ZIndex="221"
+              Visibility="Collapsed" Background="#A0000000" IsHitTestVisible="False">
+            <Border HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Width="420" MinHeight="180" CornerRadius="16"
+                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
+                <Grid>
+                    <Rectangle RadiusX="16" RadiusY="16"
+                               Stroke="{DynamicResource SystemAccentColorBrush}"
+                               StrokeThickness="2" StrokeDashArray="4,3"/>
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="32,24">
+                        <ui:FontIcon Glyph="&#xE8B5;" FontSize="48" HorizontalAlignment="Center"
+                                     Foreground="{DynamicResource SystemAccentColorBrush}"/>
+                        <TextBlock Text="拖拽到此处导入授权" FontSize="18" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                   HorizontalAlignment="Center" Margin="0,16,0,0"/>
+                        <TextBlock Text="支持 tickets.txt（appticket / eticket 票据文件）" FontSize="13"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                    HorizontalAlignment="Center" Margin="0,6,0,0"/>
                     </StackPanel>
