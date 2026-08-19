@@ -24,7 +24,7 @@ public partial class SettingsView : UserControl
         if (sender is TabControl tc &&
             tc.Template.FindName("ContentArea", tc) is UIElement content)
         {
-            var fadeIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(600))
+            var fadeIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(250))
             {
                 EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
             };

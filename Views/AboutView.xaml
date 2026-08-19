@@ -24,7 +24,7 @@
                            Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
 
                 <!-- 描述 -->
-                <Border CornerRadius="8" Padding="24,16"
+                <Border CornerRadius="10" Padding="24,16"
                         BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1" MaxWidth="480"
                         HorizontalAlignment="Center" Margin="0,0,0,8">
                     <Border.Background>

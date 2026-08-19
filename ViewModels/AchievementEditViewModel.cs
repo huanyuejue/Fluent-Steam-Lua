@@ -2,6 +2,7 @@ using System;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using SteamLuaManager.Models;
@@ -30,6 +31,25 @@ public partial class AchievementEditViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private string _emptyHintText = "";
+
+    private DispatcherTimer? _statusTimer;
+
+    /// <summary>统一 3 秒后自动清除底部通知（与全局各页一致）。</summary>
+    partial void OnStatusMessageChanged(string value)
+    {
+        _statusTimer?.Stop();
+        if (string.IsNullOrEmpty(value)) return;
+        _statusTimer ??= new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+        _statusTimer.Tick -= StatusTimer_Tick;
+        _statusTimer.Tick += StatusTimer_Tick;
+        _statusTimer.Start();
+    }
+
+    private void StatusTimer_Tick(object? sender, EventArgs e)
+    {
+        _statusTimer?.Stop();
+        StatusMessage = string.Empty;
+    }
 
     public AchievementEditViewModel(uint appId, string gameName)
     {

@@ -70,7 +70,9 @@ public partial class MainWindow : Window
         InitializeComponent();
         CurrentPage = "Home";
         _openSteamToolService = openSteamToolService;
-        _dropHintHideTimer.Tick += (_, _) => { _dropHintHideTimer.Stop(); DropHintGrid.Visibility = Visibility.Collapsed; };
+        _dropHintHideTimer.Tick += (_, _) => { _dropHintHideTimer.Stop(); HideDropHint(DropHintGrid); HideDropHint(DropAuthHintGrid); };
+        HookOverlayFade(RefreshOverlayBorder);
+        HookOverlayFade(SlowOverlayBorder);
         _viewModel = viewModel;
         _settingsViewModel = settingsViewModel;
         _scriptDownloadViewModel = scriptDownloadViewModel;
@@ -562,10 +564,49 @@ public partial class MainWindow : Window
         }
     }
 
+    // 遮罩层淡入淡出：显示 150ms EaseOut，隐藏即时复位
+    private static void HookOverlayFade(FrameworkElement element)
+    {
+        element.IsVisibleChanged += (_, args) =>
+        {
+            element.BeginAnimation(OpacityProperty, null);
+            element.Opacity = (bool)args.NewValue ? 0 : 1;
+            if ((bool)args.NewValue)
+            {
+                var fade = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(150))
+                {
+                    EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+                };
+                element.BeginAnimation(OpacityProperty, fade);
+            }
+        };
+    }
+
     private static bool IsTicketDrop(IDataObject data)
     {
         if (!data.GetDataPresent(DataFormats.FileDrop)) return false;
         return data.GetData(DataFormats.FileDrop) is string[] files && files.Any(IsTicketFile);
+    }
+
+    // 拖拽遮罩显示：快速淡入（100ms EaseOut），连续 DragOver 不重启动画
+    private static void ShowDropHint(Grid grid)
+    {
+        if (grid.Visibility == Visibility.Visible) return;
+        grid.Opacity = 0;
+        grid.Visibility = Visibility.Visible;
+        var fade = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(100))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+        };
+        grid.BeginAnimation(OpacityProperty, fade);
+    }
+
+    // 拖拽遮罩隐藏：即时收起并复位动画状态
+    private static void HideDropHint(Grid grid)
+    {
+        grid.Visibility = Visibility.Collapsed;
+        grid.BeginAnimation(OpacityProperty, null);
+        grid.Opacity = 1;
     }
 
     private void Window_DragOver(object sender, DragEventArgs e)
@@ -580,14 +621,22 @@ public partial class MainWindow : Window
         {
             // 授权票据仅在授权页支持拖拽导入：其他页面不显示遮罩、不响应
             e.Effects = DragDropEffects.None;
-            DropAuthHintGrid.Visibility = Visibility.Collapsed;
-            DropHintGrid.Visibility = Visibility.Collapsed;
+            HideDropHint(DropAuthHintGrid);
+            HideDropHint(DropHintGrid);
             _dropHintHideTimer.Stop();
             return;
         }
         e.Effects = DragDropEffects.Copy;
-        DropAuthHintGrid.Visibility = isTicket ? Visibility.Visible : Visibility.Collapsed;
-        DropHintGrid.Visibility = isTicket ? Visibility.Collapsed : Visibility.Visible;
+        if (isTicket)
+        {
+            HideDropHint(DropHintGrid);
+            ShowDropHint(DropAuthHintGrid);
+        }
+        else
+        {
+            HideDropHint(DropAuthHintGrid);
+            ShowDropHint(DropHintGrid);
+        }
         _dropHintHideTimer.Stop();
         _dropHintHideTimer.Start();
     }
@@ -595,15 +644,15 @@ public partial class MainWindow : Window
     private void Window_DragLeave(object sender, DragEventArgs e)
     {
         _dropHintHideTimer.Stop();
-        DropHintGrid.Visibility = Visibility.Collapsed;
-        DropAuthHintGrid.Visibility = Visibility.Collapsed;
+        HideDropHint(DropHintGrid);
+        HideDropHint(DropAuthHintGrid);
     }
 
     private async void Window_Drop(object sender, DragEventArgs e)
     {
         _dropHintHideTimer.Stop();
-        DropHintGrid.Visibility = Visibility.Collapsed;
-        DropAuthHintGrid.Visibility = Visibility.Collapsed;
+        HideDropHint(DropHintGrid);
+        HideDropHint(DropAuthHintGrid);
         if (!e.Data.GetDataPresent(DataFormats.FileDrop)) return;
         var files = (string[])e.Data.GetData(DataFormats.FileDrop)!;
 
@@ -1230,6 +1279,9 @@ public partial class MainWindow : Window
                 subTop = canvasH - subH - 8;
         }
         subTop = Math.Max(8, subTop);
+
+        // 展开原点跟随实际位置：右侧展开从左边缘长出，左侧展开从右边缘长出
+        submenu.RenderTransformOrigin = subLeft > panelLeft ? new Point(0, 0.5) : new Point(1, 0.5);
 
         Canvas.SetLeft(submenu, Math.Max(8, subLeft));
         Canvas.SetTop(submenu, subTop);

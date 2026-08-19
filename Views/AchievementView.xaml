@@ -15,6 +15,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <!-- 标题行 -->
@@ -58,6 +59,7 @@
                                Text="{Binding SearchText, Mode=TwoWay}"
                                QuerySubmitted="SearchBox_QuerySubmitted"
                                TextChanged="SearchBox_TextChanged"
+                               Height="36"
                                Margin="0,0,12,0" HorizontalAlignment="Stretch">
                 <ui:AutoSuggestBox.Background>
                     <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
@@ -208,25 +210,12 @@
                 <TextBlock Text="{Binding StatusMessage}" FontSize="12" Margin="0,6,0,0" HorizontalAlignment="Center"
                            Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
             </StackPanel>
-
-            <ui:InfoBar VerticalAlignment="Bottom"
-                        HorizontalAlignment="Left"
-                        Margin="0,12,0,0"
-                        Panel.ZIndex="10"
-                        Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
-                        BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}"
-                        BorderThickness="1"
-                        IsOpen="{Binding StatusMessage, Converter={StaticResource StringNotEmptyToBoolConverter}}"
-                        Message="{Binding StatusMessage}"
-                        Severity="Informational"
-                        IsClosable="False"
-                        ui:ControlHelper.CornerRadius="8">
-                <ui:InfoBar.Resources>
-                    <Style TargetType="TextBlock">
-                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
-                    </Style>
-                </ui:InfoBar.Resources>
-            </ui:InfoBar>
         </Grid>
+
+        <ui:InfoBar Grid.Row="3" Style="{StaticResource InfoBarStyle}"
+                    IsOpen="{Binding StatusMessage, Converter={StaticResource StringNotEmptyToBoolConverter}}"
+                    Message="{Binding StatusMessage}"
+                    HorizontalAlignment="Left"
+                    Margin="0,12,0,0"/>
     </Grid>
 </UserControl>

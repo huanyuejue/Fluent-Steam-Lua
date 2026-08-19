@@ -5,6 +5,7 @@
         Title="成就编辑"
         Height="720" Width="840"
         MinHeight="480" MinWidth="640"
+        MaxHeight="1600" MaxWidth="1600"
         WindowStartupLocation="CenterOwner"
         ui:WindowHelper.UseModernWindowStyle="True"
         ui:WindowHelper.CornerStyle="Round"
@@ -38,11 +39,11 @@
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                <Button Content="重新加载" Command="{Binding ReloadCommand}" Margin="0,0,6,0"/>
-                <Button Content="全部解锁" Command="{Binding UnlockAllCommand}" Margin="0,0,6,0"/>
-                <Button Content="全部锁定" Command="{Binding LockAllCommand}" Margin="0,0,6,0"/>
-                <Button Content="反选" Command="{Binding InvertAllCommand}" Margin="0,0,6,0"/>
-                <Button Content="保存到 Steam" Command="{Binding SaveCommand}"
+                <Button Content="重新加载" Command="{Binding ReloadCommand}" Margin="0,0,6,0" Height="36" Padding="16,6"/>
+                <Button Content="全部解锁" Command="{Binding UnlockAllCommand}" Margin="0,0,6,0" Height="36" Padding="16,6"/>
+                <Button Content="全部锁定" Command="{Binding LockAllCommand}" Margin="0,0,6,0" Height="36" Padding="16,6"/>
+                <Button Content="反选" Command="{Binding InvertAllCommand}" Margin="0,0,6,0" Height="36" Padding="16,6"/>
+                <Button Content="保存到 Steam" Command="{Binding SaveCommand}" Height="36" Padding="16,6"
                         Style="{StaticResource AccentButtonStyle}"/>
             </StackPanel>
         </Grid>
@@ -157,19 +158,10 @@
             </Border>
         </Grid>
 
-        <ui:InfoBar Grid.Row="2"
+        <ui:InfoBar Grid.Row="2" Style="{StaticResource InfoBarStyle}"
                     IsOpen="{Binding StatusMessage, Converter={StaticResource StringNotEmptyToBoolConverter}}"
                     Message="{Binding StatusMessage}"
-                    Severity="Informational"
-                    IsClosable="False"
                     HorizontalAlignment="Left"
-                    Margin="0,12,0,0"
-                    ui:ControlHelper.CornerRadius="8">
-            <ui:InfoBar.Resources>
-                <Style TargetType="TextBlock">
-                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
-                </Style>
-            </ui:InfoBar.Resources>
-        </ui:InfoBar>
+                    Margin="0,12,0,0"/>
     </Grid>
 </Window>

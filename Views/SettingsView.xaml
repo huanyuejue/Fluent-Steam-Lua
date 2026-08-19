@@ -1,4 +1,4 @@
-﻿<UserControl x:Class="SteamLuaManager.Views.SettingsView"
+<UserControl x:Class="SteamLuaManager.Views.SettingsView"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.inkore.net/lib/ui/wpf/modern"
@@ -87,10 +87,7 @@
 
                         <ui:SettingsCard Header="Steam 路径" Margin="0,0,0,8"
                                          Description="选择Steam安装路径，留空则自动检测"
-                                         ui:ControlHelper.CornerRadius="8">
-                            <ui:SettingsCard.Background>
-                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
-                            </ui:SettingsCard.Background>
+Style="{StaticResource SettingsCardStyle}">
                             <StackPanel Orientation="Horizontal">
                                 <TextBox Text="{Binding SteamPath, Mode=OneWay}"
                                          IsReadOnly="True" Width="240" Padding="8,6" Margin="0,0,4,0">
@@ -115,10 +112,7 @@
 
                         <ui:SettingsCard Header="Lua 清单路径" Margin="0,0,0,8"
                                          Description="OpenSteamTool 内核所读取的 Lua 清单文件所在路径"
-                                         ui:ControlHelper.CornerRadius="8">
-                            <ui:SettingsCard.Background>
-                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
-                            </ui:SettingsCard.Background>
+Style="{StaticResource SettingsCardStyle}">
                             <StackPanel Orientation="Horizontal">
                                 <TextBox Text="{Binding LuaFolderPath, Mode=OneWay}"
                                          IsReadOnly="True" Width="240" Padding="8,6" Margin="0,0,4,0">
@@ -143,30 +137,21 @@
 
                         <ui:SettingsCard Header="自动检查更新" Margin="0,0,0,8"
                                  Description="启动软件时自动检查是否有新版本"
-                                 ui:ControlHelper.CornerRadius="8">
-                            <ui:SettingsCard.Background>
-                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
-                            </ui:SettingsCard.Background>
+Style="{StaticResource SettingsCardStyle}">
                             <ui:ToggleSwitch IsOn="{Binding AutoCheckUpdateEnabled}"
                                              OnContent="开" OffContent="关"/>
                         </ui:SettingsCard>
 
                         <ui:SettingsCard Header="关闭时最小化到系统托盘" Margin="0,0,0,8"
                                          Description="点击关闭按钮时不退出程序，而是隐藏到系统托盘"
-                                         ui:ControlHelper.CornerRadius="8">
-                            <ui:SettingsCard.Background>
-                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
-                            </ui:SettingsCard.Background>
+Style="{StaticResource SettingsCardStyle}">
                             <ui:ToggleSwitch IsOn="{Binding MinimizeToTray}"
                                              OnContent="开" OffContent="关"/>
                         </ui:SettingsCard>
 
                         <ui:SettingsCard Header="Bin 成就文件夹" Margin="0,0,0,8"
                                          Description="打开Steam成就数据目录"
-                                         ui:ControlHelper.CornerRadius="8">
-                            <ui:SettingsCard.Background>
-                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
-                            </ui:SettingsCard.Background>
+Style="{StaticResource SettingsCardStyle}">
                             <Button Content="打开目录" Command="{Binding OpenBinStatsFolderCommand}"
                                     Padding="12,6" Margin="4,0">
                                 <Button.Background>
@@ -177,10 +162,7 @@
 
                         <ui:SettingsCard Header="Steam 文件夹" Margin="0,0,0,8"
                                          Description="打开Steam安装目录"
-                                         ui:ControlHelper.CornerRadius="8">
-                            <ui:SettingsCard.Background>
-                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
-                            </ui:SettingsCard.Background>
+Style="{StaticResource SettingsCardStyle}">
                             <Button Content="打开目录" Command="{Binding OpenSteamFolderCommand}"
                                     Padding="12,6" Margin="4,0">
                                 <Button.Background>
@@ -191,10 +173,7 @@
 
                         <ui:SettingsCard Header="缓存管理" Margin="0,0,0,8"
                                          Description="清理软件运行的本地缓存文件（游戏名称 封面 修改器 本地缓存密钥）"
-                                         ui:ControlHelper.CornerRadius="8">
-                            <ui:SettingsCard.Background>
-                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
-                            </ui:SettingsCard.Background>
+Style="{StaticResource SettingsCardStyle}">
                             <StackPanel Orientation="Horizontal">
                                 <Button Content="清理缓存" Command="{Binding ClearCacheCommand}"
                                         Padding="12,6" Margin="4,0">
@@ -223,10 +202,7 @@
 
                         <ui:SettingsCard Header="主题模式" Margin="0,0,0,8"
                                          Description="选择深色、浅色或跟随系统主题"
-                                         ui:ControlHelper.CornerRadius="8">
-                            <ui:SettingsCard.Background>
-                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
-                            </ui:SettingsCard.Background>
+Style="{StaticResource SettingsCardStyle}">
                               <ComboBox ItemsSource="{Binding ThemeOptions}"
                                        SelectedValue="{Binding SelectedTheme}"
                                        SelectedValuePath="Value" DisplayMemberPath="Display"
@@ -239,10 +215,7 @@
 
                         <ui:SettingsCard Header="背景效果" Margin="0,0,0,8"
                                          Description="选择窗口背景效果"
-                                         ui:ControlHelper.CornerRadius="8">
-                            <ui:SettingsCard.Background>
-                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
-                            </ui:SettingsCard.Background>
+Style="{StaticResource SettingsCardStyle}">
                               <ComboBox ItemsSource="{Binding BackdropOptions}"
                                        SelectedValue="{Binding SelectedBackdrop}"
                                        SelectedValuePath="Value" DisplayMemberPath="Display"
@@ -255,40 +228,28 @@
 
                         <ui:SettingsCard Header="悬浮按钮" Margin="0,0,0,8"
                                          Description="右下角悬浮功能按钮的显示开关"
-                                         ui:ControlHelper.CornerRadius="8">
-                            <ui:SettingsCard.Background>
-                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
-                            </ui:SettingsCard.Background>
+Style="{StaticResource SettingsCardStyle}">
                             <ui:ToggleSwitch IsOn="{Binding IsFabVisible}"
                                              OnContent="开" OffContent="关"/>
                         </ui:SettingsCard>
 
                         <ui:SettingsCard Header="卡片刷新按钮" Margin="0,0,0,8"
                                          Description="每个游戏卡片上的刷新获取封面名字按钮"
-                                         ui:ControlHelper.CornerRadius="8">
-                            <ui:SettingsCard.Background>
-                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
-                            </ui:SettingsCard.Background>
+Style="{StaticResource SettingsCardStyle}">
                             <ui:ToggleSwitch IsOn="{Binding IsCardRefreshVisible}"
                                              OnContent="开" OffContent="关"/>
                         </ui:SettingsCard>
 
                         <ui:SettingsCard Header="修改器推荐栏目" Margin="0,0,0,8"
                                          Description="修改器界面的热门推荐和最新发布栏目"
-                                         ui:ControlHelper.CornerRadius="8">
-                            <ui:SettingsCard.Background>
-                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
-                            </ui:SettingsCard.Background>
+Style="{StaticResource SettingsCardStyle}">
                             <ui:ToggleSwitch IsOn="{Binding IsShowTrainerSections}"
                                              OnContent="开" OffContent="关"/>
                         </ui:SettingsCard>
 
                         <ui:SettingsCard Header="日志复制按钮" Margin="0,0,0,8"
                                          Description="在提取和入库页的日志输出框右上角显示复制按钮"
-                                         ui:ControlHelper.CornerRadius="8">
-                            <ui:SettingsCard.Background>
-                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
-                            </ui:SettingsCard.Background>
+Style="{StaticResource SettingsCardStyle}">
                             <ui:ToggleSwitch IsOn="{Binding IsShowCopyLogButton}"
                                              OnContent="开" OffContent="关"/>
                         </ui:SettingsCard>
@@ -305,10 +266,7 @@
 
                         <ui:SettingsCard Header="入库接口" Margin="0,0,0,8"
                                          Description="选择游戏入库方式"
-                                         ui:ControlHelper.CornerRadius="8">
-                            <ui:SettingsCard.Background>
-                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
-                            </ui:SettingsCard.Background>
+Style="{StaticResource SettingsCardStyle}">
                             <ComboBox SelectedValue="{Binding DownloadMode, Mode=TwoWay}"
                                        SelectedValuePath="Tag" HorizontalAlignment="Left" Padding="8,4">
                                 <ComboBox.Background>
@@ -322,10 +280,7 @@
 
                         <ui:SettingsCard Header="封面CDN节点" Margin="0,0,0,8"
                                          Description="选择优先使用的封面下载节点"
-                                         ui:ControlHelper.CornerRadius="8">
-                            <ui:SettingsCard.Background>
-                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
-                            </ui:SettingsCard.Background>
+Style="{StaticResource SettingsCardStyle}">
                             <StackPanel>
                                 <StackPanel Orientation="Horizontal">
                                     <Button Content="测速" Command="{Binding TestCdnSpeedCommand}"
@@ -383,20 +338,14 @@
 
                         <ui:SettingsCard Header="日志记录" Margin="0,0,0,8"
                                          Description="记录用户操作和运行错误，输出到软件目录的 app.log 文件"
-                                         ui:ControlHelper.CornerRadius="8">
-                            <ui:SettingsCard.Background>
-                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
-                            </ui:SettingsCard.Background>
+Style="{StaticResource SettingsCardStyle}">
                             <ui:ToggleSwitch IsOn="{Binding EnableLogging}"
                                              OnContent="开" OffContent="关"/>
                         </ui:SettingsCard>
 
-                        <ui:SettingsCard Header="自动监控" Margin="0,0,0,0"
+                        <ui:SettingsCard Header="自动监控" 
                                          Description="文件变更时自动刷新游戏列表"
-                                         ui:ControlHelper.CornerRadius="8">
-                            <ui:SettingsCard.Background>
-                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
-                            </ui:SettingsCard.Background>
+Style="{StaticResource SettingsCardStyle}">
                             <ui:ToggleSwitch IsOn="{Binding IsAutoRefreshEnabled}"
                                              OnContent="开" OffContent="关"/>
                         </ui:SettingsCard>
@@ -407,14 +356,13 @@
 
         </TabControl>
 
-        <ui:InfoBar Grid.Row="2"
+        <ui:InfoBar Grid.Row="2" Style="{StaticResource InfoBarStyle}"
                     IsOpen="{Binding StatusMessage, Converter={StaticResource StringNotEmptyToBoolConverter}}"
                     Message="{Binding StatusMessage}"
                     Severity="Informational"
                     IsClosable="False"
                     HorizontalAlignment="Left"
-                    Margin="0,12,0,0"
-                    ui:ControlHelper.CornerRadius="8"/>
+                    Margin="0,12,0,0"/>
 
     </Grid>
 </UserControl>

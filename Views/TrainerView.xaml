@@ -118,7 +118,7 @@
         </Border>
 
         <!-- 固定：搜索框（仅搜索视图） -->
-        <Border Grid.Row="2" CornerRadius="8" Padding="12" Margin="0,0,0,12"
+        <Border Grid.Row="2" CornerRadius="10" Padding="12" Margin="0,0,0,12"
                 BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1"
                 Visibility="{Binding IsShowingSearch, Converter={StaticResource BoolToVisibilityConverter}}">
             <Border.Background>
@@ -133,6 +133,7 @@
                                    Text="{Binding SearchQuery, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                    PlaceholderText="输入游戏名搜索修改器..."
                                    QuerySubmitted="SearchBox_QuerySubmitted"
+                                   Height="36"
                                    Margin="0,0,8,0" HorizontalAlignment="Stretch">
                     <ui:AutoSuggestBox.Background>
                         <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
@@ -236,7 +237,7 @@
                     </ItemsControl>
 
                     <!-- 搜索无结果提示 -->
-                    <Border CornerRadius="8" Padding="24,16" Margin="0,0,0,8"
+                    <Border CornerRadius="10" Padding="24,16" Margin="0,0,0,8"
                             BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1"
                             Visibility="{Binding HasNoResults, Converter={StaticResource BoolToVisibilityConverter}}">
                         <Border.Background>
@@ -477,7 +478,7 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
 
-                    <Border CornerRadius="8" Padding="24,16" Margin="0,0,0,8"
+                    <Border CornerRadius="10" Padding="24,16" Margin="0,0,0,8"
                             BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1"
                             Visibility="{Binding DownloadedTrainers.Count, Converter={StaticResource ZeroToVisibilityConverter}}">
                         <Border.Background>
@@ -654,7 +655,7 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
 
-                    <Border CornerRadius="8" Padding="24,16" Margin="0,0,0,8"
+                    <Border CornerRadius="10" Padding="24,16" Margin="0,0,0,8"
                             BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1"
                             Visibility="{Binding TrainerBindings.Count, Converter={StaticResource ZeroToVisibilityConverter}}">
                         <Border.Background>
@@ -673,13 +674,10 @@
             </StackPanel>
         </ScrollViewer>
 
-        <ui:InfoBar Grid.Row="4"
+        <ui:InfoBar Grid.Row="4" Style="{StaticResource InfoBarStyle}"
                     IsOpen="{Binding StatusMessage, Converter={StaticResource StringNotEmptyToBoolConverter}}"
                     Message="{Binding StatusMessage}"
-                    Severity="Informational"
-                    IsClosable="False"
                     HorizontalAlignment="Left"
-                    Margin="0,4,0,0"
-                    ui:ControlHelper.CornerRadius="8"/>
+                    Margin="0,4,0,0"/>
     </Grid>
 </UserControl>

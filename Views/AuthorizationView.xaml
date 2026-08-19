@@ -95,7 +95,7 @@
                                 <TextBox x:Name="ExtractAppIdBox"
                                          ToolTip="输入需要提取票据的 AppID，如 3357650"
                                          Text="{Binding ExtractAppIdText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                         Height="34" VerticalContentAlignment="Center"
+                                         Height="36" VerticalContentAlignment="Center"
                                          Padding="10,0"
                                          KeyDown="ExtractAppIdBox_KeyDown"
                                          IsEnabled="{Binding IsBusy, Converter={StaticResource BoolInvertConverter}}">
@@ -120,7 +120,7 @@
                                     </TextBlock.Style>
                                 </TextBlock>
                             </Grid>
-                            <Button Grid.Column="1" Margin="10,0,0,0" Height="34" Padding="18,0"
+                            <Button Grid.Column="1" Margin="10,0,0,0" Height="36" Padding="18,0"
                                     Content="{Binding IsExtracting, Converter={StaticResource BoolToRunStopConverter}}"
                                     Command="{Binding ExtractCommand}"
                                     IsEnabled="{Binding IsImporting, Converter={StaticResource BoolInvertConverter}}"/>
@@ -166,9 +166,9 @@
                                             </Style.Triggers>
                                         </Style>
                                     </StackPanel.Style>
-                                    <Button Content="复制路径" Height="34" Padding="18,0"
+                                    <Button Content="复制路径" Height="36" Padding="18,0"
                                             Command="{Binding CopyExtractPathCommand}"/>
-                                    <Button Content="打开目录" Height="34" Padding="18,0" Margin="8,0,0,0"
+                                    <Button Content="打开目录" Height="36" Padding="18,0" Margin="8,0,0,0"
                                             Command="{Binding OpenExtractFolderCommand}"/>
                                 </StackPanel>
                                 <TextBlock Margin="0,12,0,0" FontSize="12" TextWrapping="Wrap" LineHeight="20"
@@ -278,13 +278,11 @@
         </ScrollViewer>
 
         <!-- 状态条 -->
-        <ui:InfoBar Grid.Row="2" Margin="0,14,0,0"
+        <ui:InfoBar Grid.Row="2" Margin="0,14,0,0" Style="{StaticResource InfoBarStyle}"
                     IsOpen="{Binding StatusOpen, Mode=TwoWay}"
                     Severity="{Binding StatusSeverity}"
                     Title="{Binding StatusTitle}"
                     Message="{Binding StatusMessage}"
-                    IsClosable="False"
-                    HorizontalAlignment="Left"
-                    ui:ControlHelper.CornerRadius="8"/>
+                    HorizontalAlignment="Left"/>
     </Grid>
 </UserControl>

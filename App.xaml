@@ -8,6 +8,7 @@
                 <ui:ThemeResources RequestedTheme="Dark"/>
                 <ui:XamlControlsResources/>
                 <ResourceDictionary Source="Converters/ValueConverters.xaml"/>
+                <ResourceDictionary Source="Themes/UIStyles.xaml"/>
             </ResourceDictionary.MergedDictionaries>
             <Style TargetType="{x:Type Control}">
                 <Setter Property="FontFamily" Value="Microsoft YaHei"/>

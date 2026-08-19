@@ -11,6 +11,30 @@
         SnapsToDevicePixels="True">
 
     <Grid>
+        <Grid.Resources>
+            <!-- "版本已固定"角标：IsManifestPinned 为 True 时显示 -->
+            <Style x:Key="PinnedLabelStyle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="10"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="Foreground" Value="{DynamicResource SystemAccentColorBrush}"/>
+                <Setter Property="Visibility" Value="Collapsed"/>
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding IsManifestPinned}" Value="True">
+                        <Setter Property="Visibility" Value="Visible"/>
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+            <!-- 禁用游戏遮罩：IsDisabled 为 True 时覆盖封面 -->
+            <Style x:Key="DisabledOverlayRectStyle" TargetType="Rectangle">
+                <Setter Property="Fill" Value="{DynamicResource CardDisabledOverlayFill}"/>
+                <Setter Property="Visibility" Value="Collapsed"/>
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding IsDisabled}" Value="True">
+                        <Setter Property="Visibility" Value="Visible"/>
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </Grid.Resources>
 
         <Grid Margin="36,24,36,24">
         <Grid.RowDefinitions>
@@ -79,6 +103,7 @@
                                PlaceholderText="搜索游戏名称或 AppID"
                                QuerySubmitted="SearchBox_QuerySubmitted"
                                TextChanged="SearchBox_TextChanged"
+                               Height="36"
                                Margin="0,0,12,0" HorizontalAlignment="Stretch">
                 <ui:AutoSuggestBox.Background>
                     <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
@@ -151,57 +176,46 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                <Button Command="{Binding SelectAllCommand}" Padding="10,6" Margin="0,0,6,0"
-                        Background="Transparent" BorderThickness="1"
-                        BorderBrush="{DynamicResource ControlElevationBorderBrush}"
-                        Foreground="{DynamicResource TextFillColorSecondaryBrush}">
-                    <StackPanel Orientation="Horizontal">
+                <Button Command="{Binding SelectAllCommand}" Margin="0,0,6,0" Padding="16,6" Height="36" FontSize="14">
+                        <Button.Background>
+                            <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                        </Button.Background>
                         <TextBlock Text="全选" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </Button>
-                <Button Command="{Binding ClearSelectionCommand}" Padding="10,6" Margin="6,0,16,0"
-                        Background="Transparent" BorderThickness="1"
-                        BorderBrush="{DynamicResource ControlElevationBorderBrush}"
-                        Foreground="{DynamicResource TextFillColorSecondaryBrush}">
-                    <StackPanel Orientation="Horizontal">
+                    </Button>
+                    <Button Command="{Binding ClearSelectionCommand}" Margin="6,0,16,0" Padding="16,6" Height="36" FontSize="14">
+                        <Button.Background>
+                            <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                        </Button.Background>
                         <TextBlock Text="取消选择" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </Button>
+                    </Button>
                 <Rectangle Width="1" Fill="{DynamicResource DividerStrokeColorDefaultBrush}" Margin="0,4,16,4"/>
-                <Button Command="{Binding BatchEnableCommand}" Padding="10,6" Margin="0,0,6,0"
-                        Background="Transparent" BorderThickness="1"
-                        BorderBrush="{DynamicResource ControlElevationBorderBrush}"
-                        Foreground="{DynamicResource TextFillColorSecondaryBrush}">
-                    <StackPanel Orientation="Horizontal">
+                <Button Command="{Binding BatchEnableCommand}" Margin="0,0,6,0" Padding="16,6" Height="36" FontSize="14">
+                        <Button.Background>
+                            <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                        </Button.Background>
                         <TextBlock Text="批量启用" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </Button>
-                <Button Command="{Binding BatchDisableCommand}" Padding="10,6" Margin="6,0,6,0"
-                        Background="Transparent" BorderThickness="1"
-                        BorderBrush="{DynamicResource ControlElevationBorderBrush}"
-                        Foreground="{DynamicResource TextFillColorSecondaryBrush}">
-                    <StackPanel Orientation="Horizontal">
+                    </Button>
+                    <Button Command="{Binding BatchDisableCommand}" Margin="6,0,6,0" Padding="16,6" Height="36" FontSize="14">
+                        <Button.Background>
+                            <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                        </Button.Background>
                         <TextBlock Text="批量禁用" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </Button>
-                <Button Command="{Binding BatchDeleteCommand}" Padding="10,6" Margin="6,0,0,0"
-                        Background="Transparent" BorderThickness="1"
-                        BorderBrush="{DynamicResource ControlElevationBorderBrush}"
-                        Foreground="{DynamicResource SystemFillColorCriticalBrush}">
-                    <StackPanel Orientation="Horizontal">
+                    </Button>
+                    <Button Command="{Binding BatchDeleteCommand}" Margin="6,0,0,0" Padding="16,6" Height="36" FontSize="14"
+                            Foreground="{DynamicResource SystemFillColorCriticalBrush}">
+                        <Button.Background>
+                            <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                        </Button.Background>
                         <TextBlock Text="批量删除" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </Button>
+                    </Button>
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                <Button Command="{Binding ToggleSelectionModeCommand}" Padding="10,6" Margin="0,0,16,0"
-                        Background="Transparent" BorderThickness="1"
-                        BorderBrush="{DynamicResource ControlElevationBorderBrush}"
-                        Foreground="{DynamicResource TextFillColorSecondaryBrush}">
-                    <StackPanel Orientation="Horizontal">
+                <Button Command="{Binding ToggleSelectionModeCommand}" Margin="0,0,16,0" Padding="16,6" Height="36" FontSize="14">
+                        <Button.Background>
+                            <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                        </Button.Background>
                         <TextBlock Text="退出批量管理" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </Button>
+                    </Button>
                 <TextBlock VerticalAlignment="Center" FontSize="13"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}">
                     <Run Text="已选择 "/>
@@ -273,11 +287,11 @@
                                                         CommandParameter="{Binding}"
                                                         HorizontalAlignment="Right" VerticalAlignment="Bottom"
                                                         Margin="0,0,6,6" Padding="0" Width="26" Height="26"
-                                                        Background="#AA000000" BorderThickness="0"
+                                                        Background="{DynamicResource CardRefreshButtonFill}" BorderThickness="0"
                                                         ToolTip="重新获取封面和名称">
                                                     <Button.Template>
                                                         <ControlTemplate TargetType="Button">
-                                                            <Grid>
+<Grid>
                                                                 <Ellipse Fill="{TemplateBinding Background}"/>
                                                                 <Ellipse Name="Overlay" Fill="Transparent"/>
                                                                 <ContentPresenter HorizontalAlignment="Center"
@@ -285,10 +299,10 @@
                                                             </Grid>
                                                             <ControlTemplate.Triggers>
                                                                 <Trigger Property="IsMouseOver" Value="True">
-                                                                    <Setter TargetName="Overlay" Property="Fill" Value="#22FFFFFF"/>
+                                                                    <Setter TargetName="Overlay" Property="Fill" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
                                                                 </Trigger>
                                                                 <Trigger Property="IsPressed" Value="True">
-                                                                    <Setter TargetName="Overlay" Property="Fill" Value="#44FFFFFF"/>
+                                                                    <Setter TargetName="Overlay" Property="Fill" Value="{DynamicResource SubtleFillColorTertiaryBrush}"/>
                                                                 </Trigger>
                                                             </ControlTemplate.Triggers>
                                                         </ControlTemplate>
@@ -299,18 +313,7 @@
                                                                TextOptions.TextRenderingMode="ClearType"
                                                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                 </Button>
-                                                <Rectangle Fill="#60000000">
-                                                    <Rectangle.Style>
-                                                        <Style TargetType="Rectangle">
-                                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding IsDisabled}" Value="True">
-                                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </Rectangle.Style>
-                                                </Rectangle>
+                                                <Rectangle Style="{StaticResource DisabledOverlayRectStyle}"/>
                                             </Grid>
                                         </controls:ClippingBorder>
                                         <CheckBox Grid.Row="0" Width="20" Height="20" MinWidth="20" MinHeight="20" Padding="0"
@@ -367,21 +370,7 @@
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
 
-                                            <TextBlock Grid.Column="0" FontSize="10"
-                                                       VerticalAlignment="Center"
-                                                       Foreground="{DynamicResource SystemAccentColorBrush}"
-                                                       Text="● 版本已固定">
-                                                <TextBlock.Style>
-                                                    <Style TargetType="TextBlock">
-                                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsManifestPinned}" Value="True">
-                                                                <Setter Property="Visibility" Value="Visible"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </TextBlock.Style>
-                                            </TextBlock>
+                                            <TextBlock Grid.Column="0" Text="● 版本已固定" Style="{StaticResource PinnedLabelStyle}"/>
 
                                             <Button Grid.Column="1" Tag="{Binding}" Click="MoreButton_Click"
                                                     Padding="6,2" FontSize="12" Background="Transparent" BorderThickness="0">
@@ -405,7 +394,7 @@
                     <ItemsControl ItemsSource="{Binding Games}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Border CornerRadius="8" Margin="0,0,0,6" Padding="12"
+                                <Border CornerRadius="8" Margin="0,0,0,6" Padding="8"
                                         BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1">
                                     <Border.Background>
                                         <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
@@ -427,7 +416,7 @@
 
                                         <controls:ClippingBorder Grid.Column="1" CornerRadius="8" ClipToBounds="True"
                                                  Margin="10,0,0,0"
-                                                 Width="150" Height="64" Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                                 Width="132" Height="56" Background="{DynamicResource ControlFillColorDefaultBrush}"
                                                  BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1">
                                             <Grid>
                                                 <Image Source="{Binding CoverImagePath, Converter={StaticResource FilePathToImageConverter}}"
@@ -443,18 +432,7 @@
                                                         </Style>
                                                     </Image.Style>
                                                 </Image>
-                                                <Rectangle Fill="#60000000">
-                                                    <Rectangle.Style>
-                                                        <Style TargetType="Rectangle">
-                                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding IsDisabled}" Value="True">
-                                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </Rectangle.Style>
-                                                </Rectangle>
+                                                <Rectangle Style="{StaticResource DisabledOverlayRectStyle}"/>
                                             </Grid>
                                         </controls:ClippingBorder>
 
@@ -499,19 +477,8 @@
                                                     </TextBlock.Style>
                                                 </TextBlock>
                                                 <TextBlock FontSize="10" Margin="10,0,0,0"
-                                                           Foreground="{DynamicResource SystemAccentColorBrush}"
-                                                           Text="● 版本已固定">
-                                                    <TextBlock.Style>
-                                                        <Style TargetType="TextBlock">
-                                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding IsManifestPinned}" Value="True">
-                                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </TextBlock.Style>
-                                                </TextBlock>
+                                                       Text="● 版本已固定"
+                                                       Style="{StaticResource PinnedLabelStyle}"/>
                                             </StackPanel>
                                         </StackPanel>
 
@@ -543,150 +510,153 @@
                           HorizontalScrollBarVisibility="Disabled"
                           Loaded="ViewModeContainer_Loaded"
                           Visibility="{Binding SelectedViewMode, Converter={StaticResource EqualityToVisibilityConverter}, ConverterParameter=表格}">
-                <Grid Margin="0,0,0,16">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                    </Grid.RowDefinitions>
-
-                     <Border Grid.Row="0" CornerRadius="8,8,0,0">
-                        <Border.Background>
+                <Grid VerticalAlignment="Top" Margin="0,0,0,16">
+                    <controls:ClippingBorder CornerRadius="8">
+                        <controls:ClippingBorder.Background>
                             <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
-                        </Border.Background>
+                        </controls:ClippingBorder.Background>
                         <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="80"/>
-                                <ColumnDefinition Width="80"/>
-                                <ColumnDefinition Width="80"/>
-                                <ColumnDefinition Width="100"/>
-                            </Grid.ColumnDefinitions>
-                            <Rectangle Grid.Column="0" Width="16"
-                                       Visibility="{Binding IsSelectionMode, Converter={StaticResource BoolToVisibilityConverter}}"
-                                       Fill="Transparent"/>
-                            <TextBlock Grid.Column="1" Text="游戏名称" FontWeight="SemiBold" FontSize="13" Padding="14,10"
-                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                            <TextBlock Grid.Column="2" Text="版本状态" FontWeight="SemiBold" FontSize="13" Padding="10,9"
-                                       VerticalAlignment="Center"
-                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                            <TextBlock Grid.Column="3" Text="入库状态" FontWeight="SemiBold" FontSize="13" Padding="10,9"
-                                       VerticalAlignment="Center"
-                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                            <TextBlock Grid.Column="4" Text="AppID" FontWeight="SemiBold" FontSize="13" Padding="14,10"
-                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                            <TextBlock Grid.Column="5" FontWeight="SemiBold" FontSize="13" Padding="12,10"/>
-                        </Grid>
-                    </Border>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
 
-                    <ItemsControl Grid.Row="1" ItemsSource="{Binding Games}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Border BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" BorderThickness="0,0,0,1" Padding="0">
-                                    <Border.Background>
-                                        <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
-                                    </Border.Background>
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="80"/>
-                                            <ColumnDefinition Width="80"/>
-                                            <ColumnDefinition Width="80"/>
-                                            <ColumnDefinition Width="100"/>
-                                        </Grid.ColumnDefinitions>
-                                        <CheckBox Grid.Column="0" Width="20" Height="20" MinWidth="20" MinHeight="20" Padding="0"
-                                                  Margin="14,0,0,0"
-                                                  FocusVisualStyle="{x:Null}"
-                                                  IsChecked="{Binding IsSelected}"
-                                                  HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                  Visibility="{Binding DataContext.IsSelectionMode, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibilityConverter}}"
-                                                  Checked="CheckBox_Checked" Unchecked="CheckBox_Unchecked"/>
-                                        <TextBlock Grid.Column="1" Text="{Binding GameName}" FontSize="13" Padding="14,9"
-                                                   HorizontalAlignment="Left"
-                                                   TextTrimming="CharacterEllipsis"
-                                                   Cursor="Hand" ToolTip="点击复制游戏名"
-                                                   MouseEnter="CopyableText_MouseEnter"
-                                                   MouseLeave="CopyableText_MouseLeave"
-                                                   MouseLeftButtonDown="GameNameText_MouseLeftButtonDown">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
-                                                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsDisabled}" Value="True">
-                                                            <Setter Property="TextDecorations" Value="Strikethrough"/>
-                                                            <Setter Property="Opacity" Value="0.5"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
-                                        <TextBlock Grid.Column="2" FontSize="13" Padding="10,9"
-                                                   VerticalAlignment="Center"
-                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
-                                                    <Setter Property="Text" Value="未固定"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsManifestPinned}" Value="True">
-                                                            <Setter Property="Text" Value="已固定"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
-                                        <TextBlock Grid.Column="3" FontSize="13" Padding="10,9"
-                                                   VerticalAlignment="Center">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
-                                                    <Setter Property="Text" Value="已启用"/>
-                                                    <Setter Property="Foreground" Value="{DynamicResource SystemAccentColorBrush}"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsDisabled}" Value="True">
-                                                            <Setter Property="Text" Value="已禁用"/>
-                                                            <Setter Property="Foreground" Value="{DynamicResource TextFillColorDisabledBrush}"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
-                                        <TextBlock Grid.Column="4" Text="{Binding AppId}" FontSize="13" Padding="14,9"
-                                                   Cursor="Hand" ToolTip="点击复制 AppID"
-                                                   MouseEnter="CopyableText_MouseEnter"
-                                                   MouseLeave="CopyableText_MouseLeave"
-                                                   MouseLeftButtonDown="AppIdText_MouseLeftButtonDown">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
-                                                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsDisabled}" Value="True">
-                                                            <Setter Property="TextDecorations" Value="Strikethrough"/>
-                                                            <Setter Property="Opacity" Value="0.5"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
-                                        <StackPanel Grid.Column="5" Orientation="Horizontal" HorizontalAlignment="Center">
-                                            <Button Visibility="{Binding DataContext.IsCardRefreshVisible, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibilityConverter}}"
-                                                    Command="{Binding DataContext.RefreshSingleGameCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                    CommandParameter="{Binding}"
-                                                    Padding="4,4" Background="Transparent" BorderThickness="0"
-                                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                    ToolTip="重新获取封面和名称">
-                                                <ui:FontIcon Glyph="&#xE72C;" FontSize="12"/>
-                                            </Button>
-                                            <Button Tag="{Binding}" Click="MoreButton_Click"
-                                                    Padding="6,4" Background="Transparent" BorderThickness="0"
-                                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}">
-                                                <ui:FontIcon Glyph="&#xE712;" FontSize="14"/>
-                                            </Button>
-                                        </StackPanel>
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+                        <!-- 表头 -->
+                        <Border Grid.Row="0" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="80"/>
+                                    <ColumnDefinition Width="80"/>
+                                    <ColumnDefinition Width="80"/>
+                                    <ColumnDefinition Width="100"/>
+                                </Grid.ColumnDefinitions>
+                                <Rectangle Grid.Column="0" Width="20" Margin="14,0,0,0"
+                                           Visibility="{Binding IsSelectionMode, Converter={StaticResource BoolToVisibilityConverter}}"
+                                           Fill="Transparent"/>
+                                <TextBlock Grid.Column="1" Text="游戏名称" FontWeight="SemiBold" FontSize="13" Padding="14,10"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                <TextBlock Grid.Column="2" Text="版本状态" FontWeight="SemiBold" FontSize="13" Padding="10,9"
+                                           VerticalAlignment="Center"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                <TextBlock Grid.Column="3" Text="入库状态" FontWeight="SemiBold" FontSize="13" Padding="10,9"
+                                           VerticalAlignment="Center"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                <TextBlock Grid.Column="4" Text="AppID" FontWeight="SemiBold" FontSize="13" Padding="14,10"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                <TextBlock Grid.Column="5" FontWeight="SemiBold" FontSize="13" Padding="12,10"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- 游戏行 -->
+                        <ItemsControl Grid.Row="1" ItemsSource="{Binding Games}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="80"/>
+                                                <ColumnDefinition Width="80"/>
+                                                <ColumnDefinition Width="80"/>
+                                                <ColumnDefinition Width="100"/>
+                                            </Grid.ColumnDefinitions>
+                                            <CheckBox Grid.Column="0" Width="20" Height="20" MinWidth="20" MinHeight="20" Padding="0"
+                                                      Margin="14,0,0,0"
+                                                      FocusVisualStyle="{x:Null}"
+                                                      IsChecked="{Binding IsSelected}"
+                                                      HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                      Visibility="{Binding DataContext.IsSelectionMode, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                      Checked="CheckBox_Checked" Unchecked="CheckBox_Unchecked"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding GameName}" FontSize="13" Padding="14,9"
+                                                       HorizontalAlignment="Left"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Cursor="Hand" ToolTip="点击复制游戏名"
+                                                       MouseEnter="CopyableText_MouseEnter"
+                                                       MouseLeave="CopyableText_MouseLeave"
+                                                       MouseLeftButtonDown="GameNameText_MouseLeftButtonDown">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsDisabled}" Value="True">
+                                                                <Setter Property="TextDecorations" Value="Strikethrough"/>
+                                                                <Setter Property="Opacity" Value="0.5"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <TextBlock Grid.Column="2" FontSize="13" Padding="10,9"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Text" Value="未固定"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsManifestPinned}" Value="True">
+                                                                <Setter Property="Text" Value="已固定"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <TextBlock Grid.Column="3" FontSize="13" Padding="10,9"
+                                                       VerticalAlignment="Center">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Text" Value="已启用"/>
+                                                        <Setter Property="Foreground" Value="{DynamicResource SystemAccentColorBrush}"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsDisabled}" Value="True">
+                                                                <Setter Property="Text" Value="已禁用"/>
+                                                                <Setter Property="Foreground" Value="{DynamicResource TextFillColorDisabledBrush}"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <TextBlock Grid.Column="4" Text="{Binding AppId}" FontSize="13" Padding="14,9"
+                                                       Cursor="Hand" ToolTip="点击复制 AppID"
+                                                       MouseEnter="CopyableText_MouseEnter"
+                                                       MouseLeave="CopyableText_MouseLeave"
+                                                       MouseLeftButtonDown="AppIdText_MouseLeftButtonDown">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsDisabled}" Value="True">
+                                                                <Setter Property="TextDecorations" Value="Strikethrough"/>
+                                                                <Setter Property="Opacity" Value="0.5"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <StackPanel Grid.Column="5" Orientation="Horizontal" HorizontalAlignment="Center">
+                                                <Button Visibility="{Binding DataContext.IsCardRefreshVisible, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                        Command="{Binding DataContext.RefreshSingleGameCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding}"
+                                                        Padding="4,4" Background="Transparent" BorderThickness="0"
+                                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                        ToolTip="重新获取封面和名称">
+                                                    <ui:FontIcon Glyph="&#xE72C;" FontSize="12"/>
+                                                </Button>
+                                                <Button Tag="{Binding}" Click="MoreButton_Click"
+                                                        Padding="6,4" Background="Transparent" BorderThickness="0"
+                                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                                                    <ui:FontIcon Glyph="&#xE712;" FontSize="14"/>
+                                                </Button>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        </Grid>
+                    </controls:ClippingBorder>
                 </Grid>
             </ScrollViewer>
         </Grid>
@@ -710,6 +680,7 @@
             <Border x:Name="CardMenuPanel" Canvas.Left="0" Canvas.Top="0"
                     MinWidth="128" MaxWidth="172" Padding="6" CornerRadius="10"
                     BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1"
+                    Effect="{StaticResource FloatingShadow}"
                     Visibility="Collapsed"
                     RenderTransformOrigin="0.5,0"
                     MouseLeave="CardMenuPanel_MouseLeave">
@@ -757,6 +728,7 @@
             <Border x:Name="CardSubmenuPanel" Canvas.Left="0" Canvas.Top="0"
                     MinWidth="170" MaxWidth="240" Padding="6" CornerRadius="10"
                     BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1"
+                    Effect="{StaticResource FloatingShadow}"
                     Visibility="Collapsed"
                     RenderTransformOrigin="0.5,0"
                     MouseEnter="CardSubmenuPanel_MouseEnter"
@@ -797,11 +769,9 @@
                     HorizontalAlignment="Left"
                     Margin="36,0,36,24"
                     Panel.ZIndex="10"
+                    Style="{StaticResource InfoBarStyle}"
                     IsOpen="{Binding StatusMessage, Converter={StaticResource StringNotEmptyToBoolConverter}}"
-                    Message="{Binding StatusMessage}"
-                    Severity="Informational"
-                    IsClosable="False"
-                    ui:ControlHelper.CornerRadius="8"/>
+                    Message="{Binding StatusMessage}"/>
 
     </Grid>
 </UserControl>

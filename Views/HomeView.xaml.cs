@@ -51,7 +51,10 @@ public partial class HomeView : UserControl
                 if (args.NewValue is true)
                 {
                     fe.Opacity = 0;
-                    var animation = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200));
+                    var animation = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(250))
+                    {
+                        EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+                    };
                     fe.BeginAnimation(OpacityProperty, animation);
                 }
             };

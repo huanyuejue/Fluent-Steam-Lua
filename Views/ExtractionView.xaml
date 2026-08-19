@@ -24,7 +24,7 @@
             </StackPanel>
 
             <!-- AppID 输入 + 选项 -->
-            <Border CornerRadius="8" Padding="16" Margin="0,0,0,8"
+            <Border CornerRadius="10" Padding="16" Margin="0,0,0,8"
                     BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1">
                 <Border.Background>
                     <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
@@ -117,7 +117,7 @@
             </Border>
 
             <!-- 日志区域 -->
-            <Border CornerRadius="8" Padding="0"
+            <Border CornerRadius="10" Padding="0"
                     BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1" MinHeight="200">
                 <Border.Background>
                     <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>

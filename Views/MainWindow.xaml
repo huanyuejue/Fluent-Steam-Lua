@@ -28,19 +28,6 @@
         SnapsToDevicePixels="True">
 
     <Grid Background="Transparent">
-        <Grid.Resources>
-            <Style x:Key="OverlayCardStyle" TargetType="Border">
-                <Setter Property="CornerRadius" Value="12"/>
-                <Setter Property="Padding" Value="32"/>
-                <Setter Property="BorderBrush" Value="{DynamicResource SurfaceStrokeColorDefaultBrush}"/>
-                <Setter Property="BorderThickness" Value="1"/>
-                <Setter Property="Background">
-                    <Setter.Value>
-                        <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
-                    </Setter.Value>
-                </Setter>
-            </Style>
-        </Grid.Resources>
         <ui:NavigationView x:Name="NavView"
                            PaneDisplayMode="Left"
                            IsPaneOpen="False"
@@ -123,6 +110,7 @@
             <Border x:Name="SteamPanel" Canvas.Left="0" Canvas.Top="0"
                     MinWidth="130" MaxWidth="200" Padding="6" CornerRadius="10"
                     BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1"
+                    Effect="{StaticResource FloatingShadow}"
                     Visibility="Collapsed" SizeChanged="SteamPanel_SizeChanged">
                 <Border.RenderTransform>
                     <ScaleTransform ScaleY="1"/>
@@ -130,7 +118,11 @@
                 <Border.RenderTransformOrigin>0.5,1</Border.RenderTransformOrigin>
                 <Border.Resources>
                     <Storyboard x:Key="OpenPanel">
-                        <DoubleAnimation Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.15"/>
+                        <DoubleAnimation Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.15">
+                            <DoubleAnimation.EasingFunction>
+                                <CubicEase EasingMode="EaseOut"/>
+                            </DoubleAnimation.EasingFunction>
+                        </DoubleAnimation>
                         <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY" From="0.85" To="1" Duration="0:0:0.15">
                             <DoubleAnimation.EasingFunction>
                                 <CubicEase EasingMode="EaseOut"/>
@@ -138,7 +130,11 @@
                         </DoubleAnimation>
                     </Storyboard>
                     <Storyboard x:Key="ClosePanel">
-                        <DoubleAnimation Storyboard.TargetProperty="Opacity" From="1" To="0" Duration="0:0:0.1"/>
+                        <DoubleAnimation Storyboard.TargetProperty="Opacity" From="1" To="0" Duration="0:0:0.1">
+                            <DoubleAnimation.EasingFunction>
+                                <CubicEase EasingMode="EaseIn"/>
+                            </DoubleAnimation.EasingFunction>
+                        </DoubleAnimation>
                         <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY" From="1" To="0.85" Duration="0:0:0.1">
                             <DoubleAnimation.EasingFunction>
                                 <CubicEase EasingMode="EaseIn"/>
@@ -192,6 +188,7 @@
             <Border x:Name="AccountSubmenu" Canvas.Left="0" Canvas.Top="0"
                     Width="160" Padding="4" CornerRadius="8"
                     BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1"
+                    Effect="{StaticResource FloatingShadow}"
                     Visibility="Collapsed"
                     MouseEnter="AccountSubmenu_MouseEnter"
                     MouseLeave="AccountSubmenu_MouseLeave">
@@ -201,7 +198,11 @@
                 <Border.RenderTransformOrigin>0.5,0.5</Border.RenderTransformOrigin>
                 <Border.Resources>
                     <Storyboard x:Key="OpenSubmenu">
-                        <DoubleAnimation Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.12"/>
+                        <DoubleAnimation Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.12">
+                            <DoubleAnimation.EasingFunction>
+                                <CubicEase EasingMode="EaseOut"/>
+                            </DoubleAnimation.EasingFunction>
+                        </DoubleAnimation>
                         <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX" From="0.9" To="1" Duration="0:0:0.12">
                             <DoubleAnimation.EasingFunction>
                                 <CubicEase EasingMode="EaseOut"/>
@@ -214,7 +215,11 @@
                         </DoubleAnimation>
                     </Storyboard>
                     <Storyboard x:Key="CloseSubmenu">
-                        <DoubleAnimation Storyboard.TargetProperty="Opacity" From="1" To="0" Duration="0:0:0.08"/>
+                        <DoubleAnimation Storyboard.TargetProperty="Opacity" From="1" To="0" Duration="0:0:0.08">
+                            <DoubleAnimation.EasingFunction>
+                                <CubicEase EasingMode="EaseIn"/>
+                            </DoubleAnimation.EasingFunction>
+                        </DoubleAnimation>
                         <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX" From="1" To="0.9" Duration="0:0:0.08">
                             <DoubleAnimation.EasingFunction>
                                 <CubicEase EasingMode="EaseIn"/>
@@ -277,6 +282,7 @@
             <Border x:Name="KernelSubmenu" Canvas.Left="0" Canvas.Top="0"
                     Width="180" Padding="4" CornerRadius="8"
                     BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1"
+                    Effect="{StaticResource FloatingShadow}"
                     Visibility="Collapsed"
                     MouseEnter="KernelSubmenu_MouseEnter"
                     MouseLeave="KernelSubmenu_MouseLeave">
@@ -286,7 +292,11 @@
                 <Border.RenderTransformOrigin>0.5,0.5</Border.RenderTransformOrigin>
                 <Border.Resources>
                     <Storyboard x:Key="OpenSubmenu">
-                        <DoubleAnimation Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.12"/>
+                        <DoubleAnimation Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.12">
+                            <DoubleAnimation.EasingFunction>
+                                <CubicEase EasingMode="EaseOut"/>
+                            </DoubleAnimation.EasingFunction>
+                        </DoubleAnimation>
                         <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX" From="0.9" To="1" Duration="0:0:0.12">
                             <DoubleAnimation.EasingFunction>
                                 <CubicEase EasingMode="EaseOut"/>
@@ -299,7 +309,11 @@
                         </DoubleAnimation>
                     </Storyboard>
                     <Storyboard x:Key="CloseSubmenu">
-                        <DoubleAnimation Storyboard.TargetProperty="Opacity" From="1" To="0" Duration="0:0:0.08"/>
+                        <DoubleAnimation Storyboard.TargetProperty="Opacity" From="1" To="0" Duration="0:0:0.08">
+                            <DoubleAnimation.EasingFunction>
+                                <CubicEase EasingMode="EaseIn"/>
+                            </DoubleAnimation.EasingFunction>
+                        </DoubleAnimation>
                         <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX" From="1" To="0.9" Duration="0:0:0.08">
                             <DoubleAnimation.EasingFunction>
                                 <CubicEase EasingMode="EaseIn"/>
@@ -360,6 +374,7 @@
             <Border x:Name="SteamFab" Canvas.Left="0" Canvas.Top="0"
                     Width="44" Height="44" CornerRadius="22"
                     BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1" Cursor="Hand"
+                    Effect="{StaticResource FabShadow}"
                     MouseLeftButtonDown="SteamFab_MouseLeftButtonDown"
                     MouseLeftButtonUp="SteamFab_MouseLeftButtonUp"
                     MouseMove="SteamFab_MouseMove"
@@ -432,10 +447,11 @@
         <Grid x:Name="DropHintGrid" Panel.ZIndex="220"
               Visibility="Collapsed" Background="#A0000000" IsHitTestVisible="False">
             <Border HorizontalAlignment="Center" VerticalAlignment="Center"
-                    Width="420" MinHeight="180" CornerRadius="16"
+                    Width="420" MinHeight="180" CornerRadius="12"
+                    Effect="{StaticResource FloatingShadow}"
                     Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
                 <Grid>
-                    <Rectangle RadiusX="16" RadiusY="16"
+                    <Rectangle RadiusX="12" RadiusY="12"
                                Stroke="{DynamicResource SystemAccentColorBrush}"
                                StrokeThickness="2" StrokeDashArray="4,3"/>
                     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="32,24">
@@ -456,10 +472,11 @@
         <Grid x:Name="DropAuthHintGrid" Panel.ZIndex="221"
               Visibility="Collapsed" Background="#A0000000" IsHitTestVisible="False">
             <Border HorizontalAlignment="Center" VerticalAlignment="Center"
-                    Width="420" MinHeight="180" CornerRadius="16"
+                    Width="420" MinHeight="180" CornerRadius="12"
+                    Effect="{StaticResource FloatingShadow}"
                     Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
                 <Grid>
-                    <Rectangle RadiusX="16" RadiusY="16"
+                    <Rectangle RadiusX="12" RadiusY="12"
                                Stroke="{DynamicResource SystemAccentColorBrush}"
                                StrokeThickness="2" StrokeDashArray="4,3"/>
                     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="32,24">
@@ -477,7 +494,7 @@
         </Grid>
 
         <!-- 窗口级加载遮罩：覆盖整个窗口（含导航栏），加载期间无法点击任何其他区域；深色遮罩与拖拽导入提示层一致 -->
-        <Border Panel.ZIndex="230" IsHitTestVisible="True" Background="#A0000000">
+        <Border x:Name="RefreshOverlayBorder" Panel.ZIndex="230" IsHitTestVisible="True" Background="#A0000000">
             <Border.Style>
                 <Style TargetType="Border">
                     <Setter Property="Visibility" Value="Collapsed"/>
@@ -493,7 +510,7 @@
                 </Style>
             </Border.Style>
             <Grid VerticalAlignment="Center" HorizontalAlignment="Center" Margin="32">
-                <Border Style="{StaticResource OverlayCardStyle}">
+                <Border Style="{StaticResource OverlayCardShadowStyle}">
                     <StackPanel HorizontalAlignment="Center" MinWidth="260">
                         <ui:ProgressRing IsActive="True" Width="34" Height="34" Margin="0,0,0,16"
                                          HorizontalAlignment="Center"/>
@@ -509,11 +526,11 @@
         </Border>
 
         <!-- 窗口级超时浮层：20秒后弹出，同样覆盖全窗口 -->
-        <Border Panel.ZIndex="231" IsHitTestVisible="True"
+        <Border x:Name="SlowOverlayBorder" Panel.ZIndex="231" IsHitTestVisible="True"
                 Visibility="{Binding IsRefreshSlow, Converter={StaticResource BoolToVisibilityConverter}}"
                 Background="#A0000000">
             <Grid VerticalAlignment="Center" HorizontalAlignment="Center" Margin="32">
-                <Border Style="{StaticResource OverlayCardStyle}" MaxWidth="400">
+                <Border Style="{StaticResource OverlayCardShadowStyle}" MaxWidth="400">
                     <StackPanel HorizontalAlignment="Center" Width="280">
 
                         <ui:FontIcon Glyph="&#xE7BA;" FontSize="36" HorizontalAlignment="Center"
