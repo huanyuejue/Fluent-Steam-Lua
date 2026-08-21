@@ -855,9 +855,7 @@ public partial class MainWindow : Window
         public string SteamId { get; set; } = "";
         public string AccountName { get; set; } = "";
         public string PersonaName { get; set; } = "";
-        public string AvatarHash { get; set; } = "";
         public string? AvatarPath { get; set; }
-        public bool MostRecent { get; set; }
         public bool IsSeparator { get; set; }
 
         public static SteamAccount Separator() => new() { IsSeparator = true };
@@ -991,8 +989,6 @@ public partial class MainWindow : Window
                     SteamId = blockMatch.Groups[1].Value,
                     AccountName = accountName,
                     PersonaName = string.IsNullOrEmpty(personaName) ? accountName : personaName,
-                    AvatarHash = GetVdfValue(body, "AvatarHash"),
-                    MostRecent = GetVdfValue(body, "MostRecent") == "1"
                 });
             }
             return accounts;
@@ -1118,26 +1114,8 @@ public partial class MainWindow : Window
                 return;
             }
 
-            ShowKernelOverlay("正在下载 OpenSteamTool...");
-            _kernelCts = new CancellationTokenSource();
-            try
-            {
-                var status = new Progress<string>(msg => KernelOverlayStatus.Text = msg);
-                var progress = new Progress<int>(pct => UpdateKernelOverlayProgress(pct));
-                ShowKernelDownloadHint();
-                await _openSteamToolService.InstallAsync(downloadUrl, status, progress, _kernelCts.Token);
-            }
-            catch (OperationCanceledException)
-            {
+            if (!await RunKernelDownloadAsync(downloadUrl))
                 return;
-            }
-            finally
-            {
-                _kernelCts?.Cancel();
-                _kernelCts?.Dispose();
-                _kernelCts = null;
-                HideKernelOverlay();
-            }
 
             await ShowModernDialogAsync("安装完成", $"OpenSteamTool {version} 安装成功！\n请重启 Steam 后生效。");
             RefreshTitle();
@@ -1146,6 +1124,32 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             await ShowModernDialogAsync("错误", $"安装失败：{ex.Message}");
+        }
+    }
+
+
+    // 统一的内核下载流程，Install/Update 共用；返回 false 表示已取消
+    private async Task<bool> RunKernelDownloadAsync(string downloadUrl)
+    {
+        ShowKernelOverlay("正在下载 OpenSteamTool...");
+        _kernelCts = new CancellationTokenSource();
+        try
+        {
+            var status = new Progress<string>(msg => KernelOverlayStatus.Text = msg);
+            var progress = new Progress<int>(pct => UpdateKernelOverlayProgress(pct));
+            ShowKernelDownloadHint();
+            await _openSteamToolService.InstallAsync(downloadUrl, status, progress, _kernelCts.Token);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
+        finally
+        {
+            _kernelCts?.Dispose();
+            _kernelCts = null;
+            HideKernelOverlay();
         }
     }
 
@@ -1202,26 +1206,8 @@ public partial class MainWindow : Window
             }
             if (dialogResult != ContentDialogResult.Primary) return;
 
-            ShowKernelOverlay("正在下载 OpenSteamTool...");
-            _kernelCts = new CancellationTokenSource();
-            try
-            {
-                var status = new Progress<string>(msg => KernelOverlayStatus.Text = msg);
-                var progress = new Progress<int>(pct => UpdateKernelOverlayProgress(pct));
-                ShowKernelDownloadHint();
-                await _openSteamToolService.InstallAsync(downloadUrl, status, progress, _kernelCts.Token);
-            }
-            catch (OperationCanceledException)
-            {
+            if (!await RunKernelDownloadAsync(downloadUrl))
                 return;
-            }
-            finally
-            {
-                _kernelCts?.Cancel();
-                _kernelCts?.Dispose();
-                _kernelCts = null;
-                HideKernelOverlay();
-            }
 
             await ShowModernDialogAsync("更新完成", $"已更新至 {remoteVersion}！\n请重启 Steam 后生效。");
             RefreshTitle();

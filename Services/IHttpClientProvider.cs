@@ -20,10 +20,14 @@ public sealed class HttpClientProvider : IHttpClientProvider, IDisposable
 
     private readonly object _lock = new();
     private readonly Dictionary<string, ClientEntry> _clients = new();
+    // 代理快照缓存：注册表/PAC 探测代价高，避免每次 GetClient 都执行
+    private ProxySnapshot? _proxySnapshot;
+    private DateTime _proxySnapshotTime = DateTime.MinValue;
+    private static readonly TimeSpan ProxySnapshotLifetime = TimeSpan.FromSeconds(30);
 
     public HttpClient GetClient(string name, TimeSpan timeout, Action<HttpClient>? configure = null)
     {
-        var proxy = GetProxySnapshot();
+        var proxy = GetProxySnapshotCached();
         lock (_lock)
         {
             if (_clients.TryGetValue(name, out var entry) && entry.ProxySignature == proxy.Signature)
@@ -79,7 +83,25 @@ public sealed class HttpClientProvider : IHttpClientProvider, IDisposable
             foreach (var entry in _clients.Values)
                 entry.Client.Dispose();
             _clients.Clear();
+            _proxySnapshot = null;
+            _proxySnapshotTime = DateTime.MinValue;
         }
+    }
+
+    private ProxySnapshot GetProxySnapshotCached()
+    {
+        lock (_lock)
+        {
+            if (_proxySnapshot != null && DateTime.UtcNow - _proxySnapshotTime < ProxySnapshotLifetime)
+                return _proxySnapshot;
+        }
+        var snapshot = GetProxySnapshot();
+        lock (_lock)
+        {
+            _proxySnapshot = snapshot;
+            _proxySnapshotTime = DateTime.UtcNow;
+        }
+        return snapshot;
     }
 
     public void Dispose()

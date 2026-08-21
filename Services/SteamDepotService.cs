@@ -50,6 +50,31 @@ public class SteamDepotService : ISteamDepotService
     private string GetSourceCacheDir() =>
         Path.Combine(_cacheFolder, _currentSource == "DepotKey2" ? "v2" : "v1");
 
+    // 轻量计数 JSON 顶层属性数，避免反序列化整个大字典
+    private static int CountJsonProps(byte[] data, string label)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(data);
+            return doc.RootElement.ValueKind == JsonValueKind.Object
+                ? doc.RootElement.EnumerateObject().Count() : 0;
+        }
+        catch (Exception ex) { LogService.Warn("入库", $"解析{label}文件失败: {ex.Message}"); return 0; }
+    }
+
+    private static async Task<int> CountFileJsonPropsAsync(string path, string label, CancellationToken ct)
+    {
+        if (!File.Exists(path)) return 0;
+        try
+        {
+            await using var fs = File.OpenRead(path);
+            using var doc = await JsonDocument.ParseAsync(fs, cancellationToken: ct);
+            return doc.RootElement.ValueKind == JsonValueKind.Object
+                ? doc.RootElement.EnumerateObject().Count() : 0;
+        }
+        catch (Exception ex) { LogService.Warn("入库", $"解析{label}文件失败: {ex.Message}"); return 0; }
+    }
+
     private string GetDepotKeysPath() =>
         Path.Combine(GetSourceCacheDir(), "depotkeys.json");
 
@@ -147,28 +172,8 @@ public class SteamDepotService : ISteamDepotService
             var tokenPath = GetTokenKeysPath();
 
             // 读取旧文件条目数（流式计数，避免全量字典）
-            if (File.Exists(depotPath))
-            {
-                try
-                {
-                    await using var fs = File.OpenRead(depotPath);
-                    using var doc = await JsonDocument.ParseAsync(fs, cancellationToken: ct);
-                    result.DepotKeysOldCount = doc.RootElement.ValueKind == JsonValueKind.Object
-                        ? doc.RootElement.EnumerateObject().Count() : 0;
-                }
-                catch (Exception ex) { LogService.Warn("入库", $"解析旧 depot 密钥文件失败: {ex.Message}"); result.DepotKeysOldCount = 0; }
-            }
-            if (File.Exists(tokenPath))
-            {
-                try
-                {
-                    await using var fs = File.OpenRead(tokenPath);
-                    using var doc = await JsonDocument.ParseAsync(fs, cancellationToken: ct);
-                    result.TokenKeysOldCount = doc.RootElement.ValueKind == JsonValueKind.Object
-                        ? doc.RootElement.EnumerateObject().Count() : 0;
-                }
-                catch (Exception ex) { LogService.Warn("入库", $"解析旧 token 密钥文件失败: {ex.Message}"); result.TokenKeysOldCount = 0; }
-            }
+            result.DepotKeysOldCount = await CountFileJsonPropsAsync(depotPath, "旧 depot 密钥", ct);
+            result.TokenKeysOldCount = await CountFileJsonPropsAsync(tokenPath, "旧 token 密钥", ct);
 
             // 下载新文件
             var clientName = $"steam-depot-{_currentSource}";
@@ -194,20 +199,8 @@ public class SteamDepotService : ISteamDepotService
             result.TokenKeysSizeBytes = tokenData.Length;
 
             // 解析新文件条目数（轻量计数，避免再建大字典）
-            try
-            {
-                using var doc = JsonDocument.Parse(depotData);
-                result.DepotKeysNewCount = doc.RootElement.ValueKind == JsonValueKind.Object
-                    ? doc.RootElement.EnumerateObject().Count() : 0;
-            }
-            catch (Exception ex) { LogService.Warn("入库", $"解析新 depot 密钥文件失败: {ex.Message}"); result.DepotKeysNewCount = 0; }
-            try
-            {
-                using var doc = JsonDocument.Parse(tokenData);
-                result.TokenKeysNewCount = doc.RootElement.ValueKind == JsonValueKind.Object
-                    ? doc.RootElement.EnumerateObject().Count() : 0;
-            }
-            catch (Exception ex) { LogService.Warn("入库", $"解析新 token 密钥文件失败: {ex.Message}"); result.TokenKeysNewCount = 0; }
+            result.DepotKeysNewCount = CountJsonProps(depotData, "新 depot 密钥");
+            result.TokenKeysNewCount = CountJsonProps(tokenData, "新 token 密钥");
 
             // 释放大对象引用，使旧缓存与下载缓冲尽快可回收
             depotData = null!;
@@ -362,10 +355,10 @@ public class SteamDepotService : ISteamDepotService
         return 0;
     }
 
-    public Task<string?> GenerateLuaAsync(int appId, string? keyFolderPath = null, CancellationToken ct = default)
+    public Task<string?> GenerateLuaAsync(int appId, CancellationToken ct = default)
         => BuildLuaCoreAsync(appId, withDlc: false, ct);
 
-    public Task<string?> GenerateLuaWithDlcAsync(int appId, string? keyFolderPath = null, CancellationToken ct = default)
+    public Task<string?> GenerateLuaWithDlcAsync(int appId, CancellationToken ct = default)
         => BuildLuaCoreAsync(appId, withDlc: true, ct);
 
     private async Task<string?> BuildLuaCoreAsync(int appId, bool withDlc, CancellationToken ct)

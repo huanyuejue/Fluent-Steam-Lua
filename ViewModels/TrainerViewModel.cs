@@ -208,7 +208,6 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
         catch (Exception ex) { LogService.Warn("修改器", $"加载最新发布失败: {ex.Message}"); }
     }
 
-    [RelayCommand]
     private Task LoadDownloadedTrainersAsync()
     {
         DownloadedTrainers.Clear();

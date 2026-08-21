@@ -68,9 +68,6 @@ namespace SteamLuaManager.ViewModels;
 	private bool _isRefreshSlow;
 
 	[ObservableProperty]
-	private bool _isBackgroundRefreshing;
-
-	[ObservableProperty]
 	private string _refreshProgressText = string.Empty;
 
 	[ObservableProperty]
@@ -175,6 +172,8 @@ namespace SteamLuaManager.ViewModels;
 		refreshCts?.Dispose();
 		_progressTimer?.Stop();
 		_progressTimer = null;
+		_statusMessageTimer?.Dispose();
+		_statusMessageTimer = null;
 		_searchDebounceTimer?.Stop();
 		_searchDebounceTimer = null;
 		_luaFileManager.FilesChanged -= OnFilesChanged;
@@ -250,7 +249,6 @@ namespace SteamLuaManager.ViewModels;
 		finally
 		{
 			IsRefreshing = false;
-			IsBackgroundRefreshing = false;
 			StopProgressTimer();
 			var wasCancelled = token.IsCancellationRequested;
 			if (_refreshCts != null)
@@ -280,7 +278,6 @@ namespace SteamLuaManager.ViewModels;
 	private void DismissSlowOverlay()
 	{
 		IsRefreshSlow = false;
-		IsBackgroundRefreshing = true;
 		IsRefreshing = false;
 	}
 

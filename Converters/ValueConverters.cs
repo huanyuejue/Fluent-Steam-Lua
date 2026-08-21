@@ -180,8 +180,11 @@ public class FilePathToImageConverter : IValueConverter
                 var bitmap = new BitmapImage();
                 bitmap.BeginInit();
                 bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                bitmap.StreamSource = new MemoryStream(File.ReadAllBytes(path));
-                bitmap.EndInit();
+                using (var stream = new MemoryStream(File.ReadAllBytes(path)))
+                {
+                    bitmap.StreamSource = stream;
+                    bitmap.EndInit();
+                }
                 bitmap.Freeze();
 
                 lock (CacheLock)

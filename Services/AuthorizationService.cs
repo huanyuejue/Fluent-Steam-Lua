@@ -310,7 +310,7 @@ public sealed class AuthorizationService : IAuthorizationService
         => _extractor.ExtractAsync(appId, ct);
 
     public string GetDefaultTicketsPath(uint appId)
-        => Path.Combine(AppContext.BaseDirectory, "cache", "denuvo", appId.ToString(CultureInfo.InvariantCulture), "tickets.txt");
+        => _extractor.GetDefaultTicketsPath(appId);
 
     private static void Log(string category, string message)
         => LogService.Info(category, message);

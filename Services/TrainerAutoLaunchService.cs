@@ -24,6 +24,8 @@ public class TrainerAutoLaunchService : ITrainerAutoLaunchService
     public void Start()
     {
         _bindings = _settingsService.Load().TrainerBindings ?? new();
+        _cts?.Cancel();
+        _cts?.Dispose();
         _cts = new CancellationTokenSource();
         _ = PollingLoopAsync(_cts.Token);
     }
@@ -124,8 +126,14 @@ public class TrainerAutoLaunchService : ITrainerAutoLaunchService
             {
                 if (!tracked.Contains(key))
                 {
-                    if (!_activeStates[key].TrainerProcess.HasExited)
-                        KillProcessTree(_activeStates[key].TrainerProcess);
+                    var state = _activeStates[key];
+                    try
+                    {
+                        if (!state.TrainerProcess.HasExited)
+                            KillProcessTree(state.TrainerProcess);
+                    }
+                    catch { }
+                    state.Dispose();
                     _activeStates.Remove(key);
                 }
             }
@@ -144,8 +152,7 @@ public class TrainerAutoLaunchService : ITrainerAutoLaunchService
 
             var procName = Path.GetFileNameWithoutExtension(binding.TrainerFilePath);
 
-            var existing = Process.GetProcessesByName(procName)
-                .FirstOrDefault(p => !p.HasExited);
+            var existing = FindProcess(procName, p => !p.HasExited);
             if (existing != null)
             {
                 lock (_lock) _pendingLaunches.Remove(binding.TrainerFilePath);
@@ -171,8 +178,7 @@ public class TrainerAutoLaunchService : ITrainerAutoLaunchService
                     for (int i = 0; i < 15; i++)
                     {
                         await Task.Delay(500);
-                        realProc = Process.GetProcessesByName(procName)
-                            .FirstOrDefault(p => !p.HasExited);
+                        realProc = FindProcess(procName, p => !p.HasExited);
                         if (realProc != null) break;
                     }
 
@@ -240,14 +246,27 @@ public class TrainerAutoLaunchService : ITrainerAutoLaunchService
         try
         {
             var name = Path.GetFileNameWithoutExtension(exePath);
-            return Process.GetProcessesByName(name)
-                .FirstOrDefault(p =>
-                {
-                    try { return p.MainModule?.FileName?.Equals(exePath, StringComparison.OrdinalIgnoreCase) == true; }
-                    catch { return false; }
-                });
+            return FindProcess(name, p =>
+            {
+                try { return p.MainModule?.FileName?.Equals(exePath, StringComparison.OrdinalIgnoreCase) == true; }
+                catch { return false; }
+            });
         }
         catch { return null; }
+    }
+
+    // 返回匹配的进程并释放其余 Process 句柄
+    private static Process? FindProcess(string name, Func<Process, bool> predicate)
+    {
+        Process? match = null;
+        foreach (var p in Process.GetProcessesByName(name))
+        {
+            if (match == null && predicate(p))
+                match = p;
+            else
+                try { p.Dispose(); } catch { }
+        }
+        return match;
     }
 
     private sealed class RunningState : IDisposable

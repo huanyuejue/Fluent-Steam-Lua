@@ -79,32 +79,12 @@ public class GameMonitorService : BackgroundService
         ["Delete"] = 0x2E, ["PageUp"] = 0x21, ["PageDown"] = 0x22,
     };
 
-    static readonly Dictionary<string, byte> ScanMap = new()
-    {
-        ["Num 1"] = 0x4F, ["Num 2"] = 0x50, ["Num 3"] = 0x51,
-        ["Num 4"] = 0x4B, ["Num 5"] = 0x4C, ["Num 6"] = 0x4D,
-        ["Num 7"] = 0x47, ["Num 8"] = 0x48, ["Num 9"] = 0x49,
-        ["Num 0"] = 0x52, ["Num +"] = 0x4E, ["Num -"] = 0x4A,
-        ["Num *"] = 0x37, ["Num /"] = 0x35,
-        ["F1"] = 0x3B, ["F2"] = 0x3C, ["F3"] = 0x3D, ["F4"] = 0x3E,
-        ["F5"] = 0x3F, ["F6"] = 0x40, ["F7"] = 0x41, ["F8"] = 0x42,
-        ["F9"] = 0x43, ["F10"] = 0x44, ["F11"] = 0x57, ["F12"] = 0x58,
-        ["Home"] = 0x47, ["End"] = 0x4F, ["Insert"] = 0x52,
-        ["Delete"] = 0x53, ["PageUp"] = 0x49, ["PageDown"] = 0x51,
-    };
-
     // ── Modifier keys ──
     static readonly Dictionary<string, (byte vk, byte scan)> ModifierMap = new()
     {
         ["Ctrl"] = (0x11, 0x1D),
         ["Alt"] = (0x12, 0x38),
         ["Shift"] = (0x10, 0x2A),
-    };
-
-    static readonly Dictionary<string, bool> ExtendedMap = new()
-    {
-        ["Home"] = true, ["End"] = true, ["Insert"] = true,
-        ["Delete"] = true, ["PageUp"] = true, ["PageDown"] = true,
     };
 
     private readonly ILogger<GameMonitorService> _logger;
@@ -311,30 +291,6 @@ public class GameMonitorService : BackgroundService
         }
 
         _logger.LogInformation("自动按键发送完成 ({Count} 个)", binding.AutoKeys.Count);
-    }
-
-    private static void SendInputKey(byte scan, bool extended, bool down)
-    {
-        uint flags = KEYEVENTF_SCANCODE;
-        if (extended) flags |= KEYEVENTF_EXTENDEDKEY;
-        if (!down) flags |= KEYEVENTF_KEYUP;
-
-        var input = new INPUT
-        {
-            type = INPUT_KEYBOARD,
-            u = new InputUnion
-            {
-                ki = new KEYBDINPUT
-                {
-                    wVk = 0,
-                    wScan = scan,
-                    dwFlags = flags,
-                    time = 0,
-                    dwExtraInfo = IntPtr.Zero
-                }
-            }
-        };
-        SendInput(1, new[] { input }, Marshal.SizeOf<INPUT>());
     }
 
     private static void SendInputVk(byte vk, bool down)

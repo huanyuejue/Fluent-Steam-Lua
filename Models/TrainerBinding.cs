@@ -12,9 +12,6 @@ public class TrainerBinding
     public bool IsEnabled { get; set; } = true;
 
     [JsonIgnore]
-    public string DisplayInfo => IsEnabled ? $"✅ {GameName} → {TrainerDisplayName}" : $"❌ {GameName} → {TrainerDisplayName}";
-
-    [JsonIgnore]
     public string TrainerFileName => Path.GetFileName(TrainerFilePath);
 
     [JsonIgnore]

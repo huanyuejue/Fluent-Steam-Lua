@@ -129,8 +129,9 @@ public static class StatsWorker
 
             return 0;
         }
-        catch
+        catch (Exception ex)
         {
+            LogService.Error("Worker", $"serve 循环异常退出: {ex.Message}");
             return -1;
         }
     }

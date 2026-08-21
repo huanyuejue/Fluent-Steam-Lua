@@ -38,6 +38,7 @@ public class DlcQueryResultView : Window
             _statusBar.IsOpen = false;
             if (_footer != null) _footer.Visibility = Visibility.Visible;
         };
+        Closed += (_, _) => _statusBarTimer.Stop();
 
         Title = "DLC 查询结果";
         Width = 560;

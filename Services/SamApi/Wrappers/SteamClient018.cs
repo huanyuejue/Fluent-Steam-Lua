@@ -203,13 +203,6 @@ namespace SAM.API.Wrappers
         }
         #endregion
 
-        #region GetSteamApps001
-        public SteamApps001 GetSteamApps001(int user, int pipe)
-        {
-            return this.GetISteamApps<SteamApps001>(user, pipe, "STEAMAPPS_INTERFACE_VERSION001");
-        }
-        #endregion
-
         #region GetSteamApps008
         public SteamApps008 GetSteamApps008(int user, int pipe)
         {

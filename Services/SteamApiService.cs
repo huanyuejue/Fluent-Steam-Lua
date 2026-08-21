@@ -91,7 +91,7 @@ public class SteamApiService : ISteamApiService
 			var sw = System.Diagnostics.Stopwatch.StartNew();
 			try
 			{
-				var response = await _httpClientProvider.SendWithProxyRetryAsync(
+				using var response = await _httpClientProvider.SendWithProxyRetryAsync(
 					"steam-api-test",
 					TimeSpan.FromSeconds(10),
 					client => client.GetAsync(url),
@@ -248,9 +248,11 @@ public class SteamApiService : ISteamApiService
 				if (needCover)
 					headerUrl = storeResult.HeaderUrl;
 
+				var triedEnglish = false;
 				if (needName && storeResult.Name == null)
 				{
 					storeResult = await TryStoreApi(game.AppId, "english", cancellationToken);
+					triedEnglish = true;
 					if (storeResult.Name != null)
 					{
 						game.GameName = storeResult.Name;
@@ -260,7 +262,7 @@ public class SteamApiService : ISteamApiService
 						headerUrl = storeResult.HeaderUrl;
 				}
 
-				if (needCover && headerUrl == null)
+				if (needCover && headerUrl == null && !triedEnglish)
 				{
 					storeResult = await TryStoreApi(game.AppId, "english", cancellationToken);
 					headerUrl = storeResult.HeaderUrl;
@@ -402,7 +404,7 @@ public class SteamApiService : ISteamApiService
 	private static void DeleteInvalidCover(string path, GameInfo? game = null)
 	{
 		try { File.Delete(path); }
-		catch { }
+		catch (Exception ex) { LogService.Warn("封面清理", $"删除无效封面失败 {path}: {ex.Message}"); }
 		if (game != null)
 			game.CoverImagePath = string.Empty;
 	}

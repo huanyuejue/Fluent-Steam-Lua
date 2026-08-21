@@ -76,9 +76,11 @@ public sealed class WorkerSession : IDisposable
 
             return session;
         }
-        catch
+        catch (Exception ex)
         {
-            process?.Kill();
+            LogService.Error("Worker", $"启动 worker 进程失败 (appId {appId}): {ex.Message}");
+            try { process?.Kill(); } catch { }
+            try { process?.Dispose(); } catch { }
             return null;
         }
     }

@@ -30,7 +30,7 @@ public class UpdateService : IUpdateService
             "app-update-check",
             TimeSpan.FromSeconds(20),
             client => client.GetStringAsync(LatestReleaseApiUrl, ct),
-            ConfigureHeaders);
+            HttpHeaderHelper.ConfigureApp);
 
         using var doc = JsonDocument.Parse(json);
         var tagName = doc.RootElement.GetProperty("tag_name").GetString() ?? string.Empty;
@@ -142,11 +142,7 @@ public class UpdateService : IUpdateService
         return true;
     }
 
-    private static void ConfigureHeaders(HttpClient client)
-    {
-        if (!client.DefaultRequestHeaders.UserAgent.Any())
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("FluentSteamLuaManager/1.0");
-    }
+
 
     private static Version? ParseReleaseVersion(string tagName)
     {

@@ -55,12 +55,13 @@ public class LuaFileManager : ILuaFileManager, IDisposable
             if (Directory.Exists(disableFolder))
             {
                 var disabledFiles = Directory.GetFiles(disableFolder, "*.lua");
+                var seenAppIds = new HashSet<int>();
                 foreach (var file in disabledFiles)
                 {
                     var fileName = Path.GetFileNameWithoutExtension(file);
                     if (int.TryParse(fileName, out var appId))
                     {
-                        if (result.Any(g => g.AppId == appId)) continue;
+                        if (seenAppIds.Add(appId) == false) continue;
 
                         var game = new GameInfo
                         {
@@ -203,9 +204,7 @@ public class LuaFileManager : ILuaFileManager, IDisposable
                 var match = ManifestPinRegex.Match(lines[i]);
                 if (match.Success && !lines[i].TrimStart().StartsWith("--"))
                 {
-                    lines[i] = "--" + (lines[i].Length > 0 && lines[i][0] == '\t' ? "" : "") + lines[i].TrimStart();
-                    if (!lines[i].StartsWith("--"))
-                        lines[i] = "--" + lines[i];
+                    lines[i] = "--" + lines[i].TrimStart();
                 }
             }
         }
@@ -351,6 +350,7 @@ public class LuaFileManager : ILuaFileManager, IDisposable
     private void OnFilesChanged(object sender, FileSystemEventArgs e)
     {
         _debounceCts?.Cancel();
+        _debounceCts?.Dispose();
         _debounceCts = new CancellationTokenSource();
         var token = _debounceCts.Token;
 

@@ -48,11 +48,7 @@ public class OpenSteamToolService : IOpenSteamToolService
         _httpClientProvider = httpClientProvider;
     }
 
-    private static void ConfigureHeaders(HttpClient client)
-    {
-        if (!client.DefaultRequestHeaders.UserAgent.Any())
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("FluentSteamLuaManager/1.0");
-    }
+
 
     public bool IsInstalled => _steamPathService.DetectSteamToolType() == SteamToolType.OpenSteamTool;
 
@@ -109,7 +105,7 @@ public class OpenSteamToolService : IOpenSteamToolService
             "open-steam-tool",
             TimeSpan.FromSeconds(120),
             client => client.GetStringAsync(GitHubLatestUrl),
-            ConfigureHeaders);
+            HttpHeaderHelper.ConfigureApp);
         using var doc = JsonDocument.Parse(json);
         var tag = doc.RootElement.GetProperty("tag_name").GetString() ?? "0.0.0";
         var releaseUrl = doc.RootElement.TryGetProperty("html_url", out var htmlUrl)
@@ -144,7 +140,7 @@ public class OpenSteamToolService : IOpenSteamToolService
                        "open-steam-tool",
                        TimeSpan.FromSeconds(120),
                        client => client.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead),
-                       ConfigureHeaders))
+                       HttpHeaderHelper.ConfigureApp))
             {
                 response.EnsureSuccessStatusCode();
                 var totalBytes = response.Content.Headers.ContentLength ?? -1;
