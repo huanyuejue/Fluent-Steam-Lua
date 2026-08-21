@@ -360,6 +360,7 @@ public partial class App : Application
         services.AddSingleton<ISettingsService, SettingsService>();
         services.AddSingleton<IHttpClientProvider, HttpClientProvider>();
         services.AddSingleton<ISteamDepotService, SteamDepotService>();
+        services.AddSingleton<ISteamAppInfoService, SteamAppInfoService>();
         services.AddSingleton<IOpenSteamToolService, OpenSteamToolService>();
         services.AddSingleton<IUpdateService, UpdateService>();
         services.AddSingleton<ITrainerService, TrainerService>();

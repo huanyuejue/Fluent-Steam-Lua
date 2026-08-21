@@ -11,6 +11,7 @@ public class SteamDepotService : ISteamDepotService
 {
     private readonly IHttpClientProvider _httpClientProvider;
     private readonly ISteamPathService _steamPathService;
+    private readonly ISteamAppInfoService _appInfoService;
     private readonly string _cacheFolder;
     private string _currentSource = "DepotKey";
     private readonly Dictionary<string, (string DepotKeysUrl, string TokenKeysUrl)> _resolvedUrls = new();
@@ -21,10 +22,11 @@ public class SteamDepotService : ISteamDepotService
 
     private static readonly string[] SourceNames = ["DepotKey", "DepotKey2"];
 
-    public SteamDepotService(ISteamPathService steamPathService, IHttpClientProvider httpClientProvider)
+    public SteamDepotService(ISteamPathService steamPathService, IHttpClientProvider httpClientProvider, ISteamAppInfoService appInfoService)
     {
         _steamPathService = steamPathService;
         _httpClientProvider = httpClientProvider;
+        _appInfoService = appInfoService;
 
         _cacheFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "cache");
         if (!Directory.Exists(_cacheFolder))
@@ -284,12 +286,62 @@ public class SteamDepotService : ISteamDepotService
                 }
             }
 
+            // 兜底：api.steamcmd.net 返回的 depots 为空（新游戏/受 token 保护）时，
+            // 用本地 appaccesstokens.json 里的 token 向 Steam 服务器查询完整 depots 与 DLC。
+            if (result.GameDepots.Count == 0)
+            {
+                LogService.Info("入库", $"AppID {appId} 主仓库为空，尝试 SteamKit2 兜底...");
+                var token = await LoadLocalAppTokenAsync(appId, ct);
+                if (token != 0)
+                {
+                    var full = await _appInfoService.QueryFullAppInfoAsync(appId, token, ct);
+                    if (full != null)
+                    {
+                        result.AppName = string.IsNullOrEmpty(result.AppName) ? full.AppName : result.AppName;
+                        foreach (var depotId in full.DepotIds)
+                            result.GameDepots.Add(new DepotKeyInfo { DepotId = depotId });
+                        foreach (var dlcId in full.DlcAppIds)
+                            if (!result.DlcAppIds.Contains(dlcId))
+                                result.DlcAppIds.Add(dlcId);
+                        LogService.Info("入库", $"AppID {appId} SteamKit2 兜底: depots={full.DepotIds.Count}, dlc={full.DlcAppIds.Count}");
+                    }
+                    else
+                    {
+                        LogService.Warn("入库", $"AppID {appId} SteamKit2 兜底查询返回 null");
+                    }
+                }
+                else
+                {
+                    LogService.Warn("入库", $"AppID {appId} 本地无 token，跳过兜底");
+                }
+            }
+
             return result;
         }
         catch (Exception ex)
         {
             throw new InvalidOperationException($"查询 AppID {appId} 失败：{ex.Message}", ex);
         }
+    }
+
+    /// <summary>从当前数据源缓存目录的 appaccesstokens.json 读取某 app 的 token，无则返回 0。</summary>
+    private async Task<ulong> LoadLocalAppTokenAsync(int appId, CancellationToken ct = default)
+    {
+        try
+        {
+            var tokenPath = GetTokenKeysPath();
+            if (!File.Exists(tokenPath)) return 0;
+            var json = await File.ReadAllTextAsync(tokenPath, ct);
+            var dict = JsonSerializer.Deserialize<Dictionary<string, string>>(json);
+            if (dict != null && dict.TryGetValue(appId.ToString(), out var tokenStr) &&
+                ulong.TryParse(tokenStr, out var token))
+                return token;
+        }
+        catch (Exception ex)
+        {
+            LogService.Warn("入库", $"读取本地 token 文件失败: {ex.Message}");
+        }
+        return 0;
     }
 
     public async Task<string?> GenerateLuaAsync(int appId, string? keyFolderPath = null, CancellationToken ct = default)
