@@ -22,14 +22,6 @@ public class SteamApiService : ISteamApiService
 
 	public int SelectedCdnIndex => _selectedCdnIndex;
 
-	private static void ConfigureBasicHeaders(HttpClient client)
-	{
-		if (!client.DefaultRequestHeaders.UserAgent.Any())
-			client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
-		if (!client.DefaultRequestHeaders.Accept.Any())
-			client.DefaultRequestHeaders.Add("Accept", "application/json");
-	}
-
 	public SteamApiService(ISettingsService settingsService, IHttpClientProvider httpClientProvider)
 	{
 		_settingsService = settingsService;
@@ -103,7 +95,7 @@ public class SteamApiService : ISteamApiService
 					"steam-api-test",
 					TimeSpan.FromSeconds(10),
 					client => client.GetAsync(url),
-					ConfigureBasicHeaders);
+					HttpHeaderHelper.ConfigureBrowserJson);
 				sw.Stop();
 				return (cdn.Name, sw.ElapsedMilliseconds, response.IsSuccessStatusCode);
 			}
@@ -426,7 +418,7 @@ public class SteamApiService : ISteamApiService
 				"steam-api-json",
 				TimeSpan.FromSeconds(8),
 				client => client.GetStreamAsync(url, cts.Token),
-				ConfigureBasicHeaders);
+				HttpHeaderHelper.ConfigureBrowserJson);
 			using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cts.Token);
 			var root = doc.RootElement;
 
@@ -456,7 +448,7 @@ public class SteamApiService : ISteamApiService
 				"steam-api-json",
 				TimeSpan.FromSeconds(8),
 				client => client.GetStreamAsync(url, cancellationToken),
-				ConfigureBasicHeaders);
+				HttpHeaderHelper.ConfigureBrowserJson);
 			using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
 			if (doc.RootElement.TryGetProperty("name", out var name))
 				return name.GetString();
@@ -474,7 +466,7 @@ public class SteamApiService : ISteamApiService
 				"steam-api-json",
 				TimeSpan.FromSeconds(8),
 				client => client.GetStringAsync(url, cancellationToken),
-				ConfigureBasicHeaders);
+				HttpHeaderHelper.ConfigureBrowserJson);
 
 			var tag = "<title>";
 			var start = html.IndexOf(tag, StringComparison.OrdinalIgnoreCase);
@@ -512,7 +504,7 @@ public class SteamApiService : ISteamApiService
 				"steam-api-cover",
 				TimeSpan.FromSeconds(15),
 				client => client.GetAsync(url, cancellationToken),
-				ConfigureBasicHeaders);
+				HttpHeaderHelper.ConfigureBrowserJson);
 			if (!response.IsSuccessStatusCode) return null;
 
 			var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
@@ -546,7 +538,7 @@ public class SteamApiService : ISteamApiService
 						"steam-api-cover",
 						TimeSpan.FromSeconds(15),
 						client => client.GetAsync(url, cancellationToken),
-						ConfigureBasicHeaders);
+						HttpHeaderHelper.ConfigureBrowserJson);
 					if (!response.IsSuccessStatusCode) continue;
 
 					var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);

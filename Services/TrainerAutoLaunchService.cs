@@ -31,13 +31,18 @@ public class TrainerAutoLaunchService : ITrainerAutoLaunchService
     public void Stop()
     {
         _cts?.Cancel();
-        _pendingLaunches.Clear();
         lock (_lock)
         {
+            _pendingLaunches.Clear();
             foreach (var state in _activeStates.Values)
             {
-                if (!state.TrainerProcess.HasExited)
-                    KillProcessTree(state.TrainerProcess);
+                try
+                {
+                    if (!state.TrainerProcess.HasExited)
+                        KillProcessTree(state.TrainerProcess);
+                }
+                catch { }
+                state.Dispose();
             }
             _activeStates.Clear();
         }
@@ -45,10 +50,18 @@ public class TrainerAutoLaunchService : ITrainerAutoLaunchService
 
     public void ReloadBindings()
     {
-        _bindings = _settingsService.Load().TrainerBindings ?? new();
+        lock (_lock)
+        {
+            _bindings = _settingsService.Load().TrainerBindings ?? new();
+        }
     }
 
-    public void Dispose() => Stop();
+    public void Dispose()
+    {
+        Stop();
+        _cts?.Dispose();
+        _cts = null;
+    }
 
     private async Task PollingLoopAsync(CancellationToken ct)
     {
@@ -93,7 +106,15 @@ public class TrainerAutoLaunchService : ITrainerAutoLaunchService
                 else if (gameProc == null && isActive)
                     StopTrainer(binding.TrainerFilePath);
                 else if (gameProc != null && _activeStates.TryGetValue(binding.TrainerFilePath, out var st))
+                {
+                    try { st.GameProcess?.Dispose(); } catch { }
                     st.GameProcess = gameProc;
+                }
+                else
+                {
+                    // 未匹配分支产生的临时 Process 需释放，避免句柄泄漏
+                    try { gameProc?.Dispose(); } catch { }
+                }
             }
         }
 
@@ -116,7 +137,10 @@ public class TrainerAutoLaunchService : ITrainerAutoLaunchService
         try
         {
             if (!File.Exists(binding.TrainerFilePath)) return;
-            if (!_pendingLaunches.Add(binding.TrainerFilePath)) return;
+            lock (_lock)
+            {
+                if (!_pendingLaunches.Add(binding.TrainerFilePath)) return;
+            }
 
             var procName = Path.GetFileNameWithoutExtension(binding.TrainerFilePath);
 
@@ -124,7 +148,7 @@ public class TrainerAutoLaunchService : ITrainerAutoLaunchService
                 .FirstOrDefault(p => !p.HasExited);
             if (existing != null)
             {
-                _pendingLaunches.Remove(binding.TrainerFilePath);
+                lock (_lock) _pendingLaunches.Remove(binding.TrainerFilePath);
                 ActivateTrainer(existing, gameProc, binding.TrainerFilePath);
                 return;
             }
@@ -152,7 +176,7 @@ public class TrainerAutoLaunchService : ITrainerAutoLaunchService
                         if (realProc != null) break;
                     }
 
-                    _pendingLaunches.Remove(binding.TrainerFilePath);
+                    lock (_lock) _pendingLaunches.Remove(binding.TrainerFilePath);
 
                     if (realProc == null)
                     {
@@ -164,14 +188,14 @@ public class TrainerAutoLaunchService : ITrainerAutoLaunchService
                 }
                 catch (Exception ex)
                 {
-                    _pendingLaunches.Remove(binding.TrainerFilePath);
+                    lock (_lock) _pendingLaunches.Remove(binding.TrainerFilePath);
                     StatusChanged?.Invoke($"启动修改器失败: {ex.Message}");
                 }
             });
         }
         catch (Exception ex)
         {
-            _pendingLaunches.Remove(binding.TrainerFilePath);
+            lock (_lock) _pendingLaunches.Remove(binding.TrainerFilePath);
             StatusChanged?.Invoke($"启动修改器失败: {ex.Message}");
         }
     }
@@ -189,7 +213,7 @@ public class TrainerAutoLaunchService : ITrainerAutoLaunchService
 
     private void StopTrainer(string filePath)
     {
-        _pendingLaunches.Remove(filePath);
+        lock (_lock) _pendingLaunches.Remove(filePath);
         if (!_activeStates.TryGetValue(filePath, out var state)) return;
         try
         {
@@ -197,6 +221,7 @@ public class TrainerAutoLaunchService : ITrainerAutoLaunchService
                 KillProcessTree(state.TrainerProcess);
         }
         catch { }
+        state.Dispose();
         _activeStates.Remove(filePath);
     }
 
@@ -225,9 +250,15 @@ public class TrainerAutoLaunchService : ITrainerAutoLaunchService
         catch { return null; }
     }
 
-    private class RunningState
+    private sealed class RunningState : IDisposable
     {
         public Process TrainerProcess { get; set; } = null!;
         public Process GameProcess { get; set; } = null!;
+
+        public void Dispose()
+        {
+            try { TrainerProcess?.Dispose(); } catch { }
+            try { GameProcess?.Dispose(); } catch { }
+        }
     }
 }

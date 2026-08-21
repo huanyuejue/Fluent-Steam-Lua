@@ -7,6 +7,7 @@ using System.Windows.Controls;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
 using iNKORE.UI.WPF.Modern.Controls;
 using SteamLuaManager.Models;
 using SteamLuaManager.Services;
@@ -14,20 +15,16 @@ using SteamLuaManager.Services;
 namespace SteamLuaManager.ViewModels;
 
 	public partial class MainViewModel : ObservableObject, IDisposable
-	{
-		/// <summary>Lua 目录变更后由设置页触发，主页据此重新扫描游戏。</summary>
-		public static event Action? RefreshRequested;
+{
 
-		/// <summary>请求主页重新扫描游戏（供设置页在 Lua 目录变更后调用）。</summary>
-		public static void RequestRefresh() => RefreshRequested?.Invoke();
-
-		private readonly ISteamPathService _steamPathService;
+	private readonly ISteamPathService _steamPathService;
 	private readonly ILuaFileManager _luaFileManager;
 	private readonly ISteamApiService _steamApiService;
 	private readonly ISettingsService _settingsService;
 	private readonly ISteamManifestService _steamManifestService;
 	private readonly ISteamDepotService _steamDepotService;
 	private readonly IHttpClientProvider _httpClientProvider;
+	private readonly IDialogService _dialogService;
 	private List<GameInfo> _allGames = new();
 	private CancellationTokenSource? _refreshCts;
 	private CancellationTokenSource? _dlcQueryCts;
@@ -147,7 +144,8 @@ namespace SteamLuaManager.ViewModels;
 		ISettingsService settingsService,
 		ISteamManifestService steamManifestService,
 		ISteamDepotService steamDepotService,
-		IHttpClientProvider httpClientProvider)
+		IHttpClientProvider httpClientProvider,
+		IDialogService dialogService)
 	{
 		_steamPathService = steamPathService;
 		_luaFileManager = luaFileManager;
@@ -157,8 +155,9 @@ namespace SteamLuaManager.ViewModels;
 		_steamDepotService = steamDepotService;
 		_httpClientProvider = httpClientProvider;
 
+		_dialogService = dialogService;
 		_luaFileManager.FilesChanged += OnFilesChanged;
-		RefreshRequested += OnRefreshRequested;
+		WeakReferenceMessenger.Default.Register<LuaFolderChangedMessage>(this, (_, _) => OnRefreshRequested());
 
 		var settings = settingsService.Load();
 		IsAutoRefreshEnabled = settings.AutoRefreshEnabled;
@@ -179,7 +178,7 @@ namespace SteamLuaManager.ViewModels;
 		_searchDebounceTimer?.Stop();
 		_searchDebounceTimer = null;
 		_luaFileManager.FilesChanged -= OnFilesChanged;
-		RefreshRequested -= OnRefreshRequested;
+		WeakReferenceMessenger.Default.Unregister<LuaFolderChangedMessage>(this);
 	}
 
 	private void OnRefreshRequested()
@@ -414,40 +413,11 @@ namespace SteamLuaManager.ViewModels;
 
 	private void UpdateStatus() => StatusText = $"共 {Games.Count} 个游戏";
 
-	private static async Task ShowModernDialogAsync(string title, string message)
-	{
-		var dialog = new ContentDialog
-		{
-			Title = title,
-			Content = new TextBlock
-			{
-				Text = message,
-				TextWrapping = TextWrapping.Wrap,
-				MaxWidth = 420
-			},
-			CloseButtonText = "确定",
-			DefaultButton = ContentDialogButton.Close
-		};
-		await dialog.ShowAsync();
-	}
+	private Task ShowModernDialogAsync(string title, string message)
+		=> _dialogService.ShowAlertAsync(title, message);
 
-	private static async Task<bool> ShowModernConfirmAsync(string title, string message, string primaryText = "确定", string closeText = "取消")
-	{
-		var dialog = new ContentDialog
-		{
-			Title = title,
-			Content = new TextBlock
-			{
-				Text = message,
-				TextWrapping = TextWrapping.Wrap,
-				MaxWidth = 420
-			},
-			PrimaryButtonText = primaryText,
-			CloseButtonText = closeText,
-			DefaultButton = ContentDialogButton.Primary
-		};
-		return await dialog.ShowAsync() == ContentDialogResult.Primary;
-	}
+	private Task<bool> ShowModernConfirmAsync(string title, string message, string primaryText = "确定", string closeText = "取消")
+		=> _dialogService.ShowConfirmAsync(title, message, primaryText, closeText);
 
 	private async void OnFilesChanged(object? sender, EventArgs e)
 	{

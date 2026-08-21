@@ -10,17 +10,33 @@ using SteamLuaManager.Services;
 
 namespace SteamLuaManager.ViewModels;
 
-public partial class AuthorizationViewModel : ObservableObject
+public partial class AuthorizationViewModel : ObservableObject, IDisposable
 {
     private readonly IAuthorizationService _authorizationService;
+    private readonly IDialogService _dialogService;
     private readonly DispatcherTimer _statusTimer;
     private CancellationTokenSource? _extractCts;
+    private bool _disposed;
 
-    public AuthorizationViewModel(IAuthorizationService authorizationService)
+    public AuthorizationViewModel(IAuthorizationService authorizationService, IDialogService dialogService)
     {
         _authorizationService = authorizationService;
+        _dialogService = dialogService;
         _statusTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
-        _statusTimer.Tick += (_, _) => StatusOpen = false;
+        _statusTimer.Tick += OnStatusTimerTick;
+    }
+
+    private void OnStatusTimerTick(object? sender, EventArgs e) => StatusOpen = false;
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _statusTimer.Stop();
+        _statusTimer.Tick -= OnStatusTimerTick;
+        _extractCts?.Cancel();
+        _extractCts?.Dispose();
+        _extractCts = null;
     }
 
     // ===== 状态区 =====
@@ -277,22 +293,12 @@ public partial class AuthorizationViewModel : ObservableObject
         }
     }
 
-    private static async Task<bool> ConfirmRemoveLegacyAsync(uint appId)
+    private async Task<bool> ConfirmRemoveLegacyAsync(uint appId)
     {
-        var dialog = new ContentDialog
-        {
-            Title = "检测到旧授权语句",
-            Content = new System.Windows.Controls.TextBlock
-            {
-                Text = $"Lua 清单中仍包含 AppID {appId} 的旧 setAppTicket/setETicket 语句。" +
-                       "继续使用注册表授权前需要移除这些语句，否则 Steam 重启或 Lua 热重载后会将其写回，覆盖刚导入的新授权。",
-                TextWrapping = TextWrapping.Wrap,
-                MaxWidth = 420
-            },
-            PrimaryButtonText = "移除并继续",
-            CloseButtonText = "取消",
-            DefaultButton = ContentDialogButton.Primary
-        };
-        return await dialog.ShowAsync() == ContentDialogResult.Primary;
+        return await _dialogService.ShowConfirmAsync(
+            "检测到旧授权语句",
+            $"Lua 清单中仍包含 AppID {appId} 的旧 setAppTicket/setETicket 语句。" +
+            "继续使用注册表授权前需要移除这些语句，否则 Steam 重启或 Lua 热重载后会将其写回，覆盖刚导入的新授权。",
+            "移除并继续", "取消");
     }
 }

@@ -6,7 +6,6 @@ using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Windows;
-using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using SteamLuaManager.Models;
@@ -14,14 +13,14 @@ using SteamLuaManager.Services;
 
 namespace SteamLuaManager.ViewModels;
 
-public partial class ScriptDownloadViewModel : ObservableObject
+public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
 {
     private readonly ISteamPathService _steamPathService;
     private readonly ISteamDepotService _depotService;
     private readonly ISettingsService _settingsService;
     private readonly IHttpClientProvider _httpClientProvider;
-    private readonly DispatcherTimer _modeRefreshTimer;
     private string _currentDownloadMode = "DepotKey";
+    private bool _disposed;
 
     // 商店搜索的地区/语言组合（按优先级）：schinese 索引含中文本地化名称，english 兜底英文/外区
     private static readonly (string Cc, string Lang)[] StoreSearchLocales =
@@ -61,20 +60,23 @@ public partial class ScriptDownloadViewModel : ObservableObject
         _settingsService = settingsService;
         _httpClientProvider = httpClientProvider;
         _currentDownloadMode = _settingsService.Load().DownloadMode;
+        _settingsService.SettingsChanged += OnSettingsChanged;
+    }
 
-        _modeRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-        _modeRefreshTimer.Tick += (s, e) =>
-        {
-            var mode = _settingsService.Load().DownloadMode;
-            if (_currentDownloadMode != mode)
-            {
-                _currentDownloadMode = mode;
-                OnPropertyChanged(nameof(IsDepotKeyMode));
-                OnPropertyChanged(nameof(IsLocalCacheMode));
-                OnPropertyChanged(nameof(CurrentDataSourceLabel));
-            }
-        };
-        _modeRefreshTimer.Start();
+    private void OnSettingsChanged(AppSettings settings)
+    {
+        if (_currentDownloadMode == settings.DownloadMode) return;
+        _currentDownloadMode = settings.DownloadMode;
+        OnPropertyChanged(nameof(IsDepotKeyMode));
+        OnPropertyChanged(nameof(IsLocalCacheMode));
+        OnPropertyChanged(nameof(CurrentDataSourceLabel));
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _settingsService.SettingsChanged -= OnSettingsChanged;
     }
 
     public record FoundGame(int AppId, string Name, string CoverUrl);
@@ -173,9 +175,9 @@ public partial class ScriptDownloadViewModel : ObservableObject
         {
             throw;
         }
-        catch
+        catch (Exception ex)
         {
-            // Silently fail, fallback to "App {appId}"
+            LogService.Warn("入库", $"GetAppNameAsync 失败 AppID {appId}: {ex.Message}");
         }
         return (null, null);
     }

@@ -1,10 +1,29 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-                    xmlns:ui="http://schemas.inkore.net/lib/ui/wpf/modern">
+                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                     xmlns:ui="http://schemas.inkore.net/lib/ui/wpf/modern">
 
     <!-- 浮层阴影：仅用于菜单面板 / 遮罩卡片 / FAB，静态卡片保持平面 -->
     <DropShadowEffect x:Key="FloatingShadow" BlurRadius="16" ShadowDepth="4" Direction="270" Opacity="0.3"/>
     <DropShadowEffect x:Key="FabShadow" BlurRadius="12" ShadowDepth="3" Direction="270" Opacity="0.32"/>
+
+    <!-- 通用页面布局 -->
+    <Thickness x:Key="PageMargin">36,24,36,24</Thickness>
+
+    <!-- 页面标题 -->
+    <Style x:Key="PageTitleStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="28"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+    </Style>
+    <Style x:Key="PageSubtitleStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+        <Setter Property="Margin" Value="0,4,0,0"/>
+    </Style>
+
+    <!-- 预置半透明填充（按需引用，暂未全量替换内联 Brush，避免主题切换回归） -->
+    <SolidColorBrush x:Key="CardBackgroundBrush" Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
+    <SolidColorBrush x:Key="ControlFillBrush" Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
 
     <!-- Home 卡片细节色：深色打底保证白色图标两主题可读 -->
     <SolidColorBrush x:Key="CardRefreshButtonFill" Color="#AA000000"/>

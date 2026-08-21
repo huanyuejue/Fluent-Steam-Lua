@@ -368,6 +368,7 @@ public partial class App : Application
         services.AddSingleton<ISteamAchievementService, SteamAchievementService>();
         services.AddSingleton<SteamTicketExtractor>();
         services.AddSingleton<IAuthorizationService, AuthorizationService>();
+        services.AddSingleton<IDialogService, DialogService>();
 
         services.AddTransient<MainViewModel>();
         services.AddTransient<SettingsViewModel>();

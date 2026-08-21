@@ -14,14 +14,6 @@ public class SteamManifestService : ISteamManifestService
         _httpClientProvider = httpClientProvider;
     }
 
-    private static void ConfigureHeaders(HttpClient client)
-    {
-        if (!client.DefaultRequestHeaders.UserAgent.Any())
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
-        if (!client.DefaultRequestHeaders.Accept.Any())
-            client.DefaultRequestHeaders.Add("Accept", "application/json");
-    }
-
     public Dictionary<int, string> ParseMountedDepots(string acfPath)
     {
         var result = new Dictionary<int, string>();
@@ -68,7 +60,7 @@ public class SteamManifestService : ISteamManifestService
                 "steam-manifest",
                 TimeSpan.FromSeconds(15),
                 client => client.GetStringAsync(url),
-                ConfigureHeaders);
+                HttpHeaderHelper.ConfigureBrowserJson);
             using var doc = JsonDocument.Parse(response);
             var root = doc.RootElement;
 

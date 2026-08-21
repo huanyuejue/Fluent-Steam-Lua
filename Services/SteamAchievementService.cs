@@ -26,6 +26,9 @@ public sealed class SteamAchievementService : ISteamAchievementService
         "Game", "Demo", "Mod"
     ];
 
+    private const int StatsReadyTimeoutMs = 15000;
+    private const int StatsPollIntervalMs = 20;
+
     public bool IsConnected => _client != null;
 
     public string? LastError { get; private set; }
@@ -133,7 +136,7 @@ public sealed class SteamAchievementService : ISteamAchievementService
 
     private void TryDisposeClient()
     {
-        _callbackTimer?.Stop();
+        try { _callbackTimer?.Stop(); } catch { }
         _callbackTimer = null;
         _client?.Dispose();
         _client = null;
@@ -177,10 +180,10 @@ public sealed class SteamAchievementService : ISteamAchievementService
         }
 
         var sw = Stopwatch.StartNew();
-        while (!tcs.Task.IsCompleted && sw.ElapsedMilliseconds < 15000)
+        while (!tcs.Task.IsCompleted && sw.ElapsedMilliseconds < StatsReadyTimeoutMs)
         {
             PumpCallbacks();
-            Thread.Sleep(20);
+            Thread.Sleep(StatsPollIntervalMs);
         }
         _pendingStatsTcs = null;
 

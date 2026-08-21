@@ -36,6 +36,7 @@ public class SettingsService : ISettingsService
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
     private readonly string _settingsFilePath;
+    private readonly object _saveLock = new();
 
     public SettingsService()
     {
@@ -66,15 +67,19 @@ public class SettingsService : ISettingsService
 
     public void Save(AppSettings settings)
     {
-        try
+        var json = JsonSerializer.Serialize(settings, JsonOptions);
+        lock (_saveLock)
         {
-            var json = JsonSerializer.Serialize(settings, JsonOptions);
-            File.WriteAllText(_settingsFilePath, json);
-            SettingsChanged?.Invoke(settings);
+            try
+            {
+                File.WriteAllText(_settingsFilePath, json);
+            }
+            catch (Exception ex)
+            {
+                LogService.Error("设置", $"保存配置失败: {ex.Message}");
+                return;
+            }
         }
-        catch (Exception ex)
-        {
-            LogService.Error("设置", $"保存配置失败: {ex.Message}");
-        }
+        SettingsChanged?.Invoke(settings);
     }
 }

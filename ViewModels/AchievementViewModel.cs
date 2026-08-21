@@ -13,7 +13,7 @@ using SteamLuaManager.Services;
 namespace SteamLuaManager.ViewModels;
 
 /// <summary>成就管理页 VM：游戏列表展示、搜索、排序筛选；成就编辑在独立窗口（AchievementEditWindow）中进行。</summary>
-public partial class AchievementViewModel : ObservableObject
+public partial class AchievementViewModel : ObservableObject, IDisposable
 {
     /// <summary>游戏列表增量渲染页大小：初始只填一页，触底后每页追加。</summary>
     private const int PageSize = 70;
@@ -84,6 +84,7 @@ public partial class AchievementViewModel : ObservableObject
     }
 
     private DispatcherTimer? _statusTimer;
+    private bool _disposed;
 
     /// <summary>统一 3 秒后自动清除底部通知（与全局各页一致）。</summary>
     partial void OnStatusMessageChanged(string value)
@@ -100,6 +101,18 @@ public partial class AchievementViewModel : ObservableObject
     {
         _statusTimer?.Stop();
         StatusMessage = string.Empty;
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        if (_statusTimer != null)
+        {
+            _statusTimer.Stop();
+            _statusTimer.Tick -= StatusTimer_Tick;
+            _statusTimer = null;
+        }
     }
 
     private void ApplyFilterAndSort()

@@ -221,8 +221,18 @@ public partial class AchievementEditViewModel : ObservableObject, IDisposable
         }
     }
 
+    private bool _disposed;
+
     public void Dispose()
     {
+        if (_disposed) return;
+        _disposed = true;
+        if (_statusTimer != null)
+        {
+            _statusTimer.Stop();
+            _statusTimer.Tick -= StatusTimer_Tick;
+            _statusTimer = null;
+        }
         _session?.Dispose();
         _session = null;
     }

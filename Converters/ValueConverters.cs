@@ -1,5 +1,6 @@
 ﻿using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Windows;
 using System.Windows.Data;
 using System.Windows.Media;
@@ -159,7 +160,9 @@ public class BoolToDownloadIconConverter : IValueConverter
 
 public class FilePathToImageConverter : IValueConverter
 {
+    private const int MaxCacheSize = 100;
     private static readonly Dictionary<string, (DateTime LastWriteTimeUtc, BitmapImage Image)> ImageCache = new();
+    private static readonly object CacheLock = new();
 
     public object? Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
@@ -168,8 +171,11 @@ public class FilePathToImageConverter : IValueConverter
             try
             {
                 var lastWriteTime = File.GetLastWriteTimeUtc(path);
-                if (ImageCache.TryGetValue(path, out var cached) && cached.LastWriteTimeUtc == lastWriteTime)
-                    return cached.Image;
+                lock (CacheLock)
+                {
+                    if (ImageCache.TryGetValue(path, out var cached) && cached.LastWriteTimeUtc == lastWriteTime)
+                        return cached.Image;
+                }
 
                 var bitmap = new BitmapImage();
                 bitmap.BeginInit();
@@ -177,7 +183,18 @@ public class FilePathToImageConverter : IValueConverter
                 bitmap.StreamSource = new MemoryStream(File.ReadAllBytes(path));
                 bitmap.EndInit();
                 bitmap.Freeze();
-                ImageCache[path] = (lastWriteTime, bitmap);
+
+                lock (CacheLock)
+                {
+                    if (ImageCache.Count >= MaxCacheSize)
+                    {
+                        // 超限时清理最旧的一半
+                        var toRemove = ImageCache.Keys.Take(MaxCacheSize / 2).ToList();
+                        foreach (var key in toRemove)
+                            ImageCache.Remove(key);
+                    }
+                    ImageCache[path] = (lastWriteTime, bitmap);
+                }
                 return bitmap;
             }
             catch { }

@@ -18,12 +18,14 @@ using SteamLuaManager.Views;
 
 namespace SteamLuaManager.ViewModels;
 
-public partial class TrainerViewModel : ObservableObject
+public partial class TrainerViewModel : ObservableObject, IDisposable
 {
     private readonly ITrainerService _trainerService;
     private readonly IHttpClientProvider _httpClientProvider;
     private readonly ISettingsService _settingsService;
     private readonly ITrainerAutoLaunchService _autoLaunchService;
+    private readonly IDialogService _dialogService;
+    private bool _disposed;
 
     [ObservableProperty]
     private string _searchQuery = string.Empty;
@@ -100,7 +102,8 @@ public partial class TrainerViewModel : ObservableObject
 
     public TrainerViewModel(ITrainerService trainerService, IHttpClientProvider httpClientProvider,
         ISettingsService settingsService,
-        ITrainerAutoLaunchService autoLaunchService)
+        ITrainerAutoLaunchService autoLaunchService,
+        IDialogService dialogService)
     {
         _trainerService = trainerService;
         _httpClientProvider = httpClientProvider;
@@ -108,15 +111,9 @@ public partial class TrainerViewModel : ObservableObject
 
 
         _autoLaunchService = autoLaunchService;
+        _dialogService = dialogService;
         _isShowTrainerSections = _settingsService.Load().ShowTrainerSections;
-        _autoLaunchService.StatusChanged += msg =>
-        {
-            StatusMessage = msg;
-            if (msg.Contains("失败") || msg.Contains("超时"))
-                LogService.Warn("修改器", $"自动启动: {msg}");
-            else
-                LogService.Info("修改器", $"自动启动: {msg}");
-        };
+        _autoLaunchService.StatusChanged += OnAutoLaunchStatusChanged;
         _settingsService.SettingsChanged += OnSettingsChanged;
         LoadBindings();
         IsServiceInstalled = IsMonitorInstalled();
@@ -129,6 +126,35 @@ public partial class TrainerViewModel : ObservableObject
     private void OnSettingsChanged(AppSettings settings)
     {
         IsShowTrainerSections = settings.ShowTrainerSections;
+    }
+
+    private void OnAutoLaunchStatusChanged(string msg)
+    {
+        StatusMessage = msg;
+        if (msg.Contains("失败") || msg.Contains("超时"))
+            LogService.Warn("修改器", $"自动启动: {msg}");
+        else
+            LogService.Info("修改器", $"自动启动: {msg}");
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _autoLaunchService.StatusChanged -= OnAutoLaunchStatusChanged;
+        _settingsService.SettingsChanged -= OnSettingsChanged;
+        if (_statusTimer != null)
+        {
+            _statusTimer.Stop();
+            _statusTimer.Tick -= StatusTimer_Tick;
+            _statusTimer = null;
+        }
+        if (_monitorPollTimer != null)
+        {
+            _monitorPollTimer.Stop();
+            _monitorPollTimer.Tick -= MonitorPollTimer_Tick;
+            _monitorPollTimer = null;
+        }
     }
 
     [RelayCommand]
@@ -487,15 +513,11 @@ public partial class TrainerViewModel : ObservableObject
     [RelayCommand]
     private async Task InstallServiceAsync()
     {
-        var confirm = new iNKORE.UI.WPF.Modern.Controls.ContentDialog
-        {
-            Title = "安装后台服务",
-            Content = "安装该服务后可在不启动该软件的情况下实现打开游戏自启动修改器，是否安装？\n\n（本服务仅作为游戏进程监控，无其他作用，后台内存占用不到10MB）",
-            PrimaryButtonText = "安装",
-            CloseButtonText = "取消",
-            DefaultButton = iNKORE.UI.WPF.Modern.Controls.ContentDialogButton.Primary
-        };
-        if (await confirm.ShowAsync() != iNKORE.UI.WPF.Modern.Controls.ContentDialogResult.Primary)
+        var confirmed = await _dialogService.ShowConfirmAsync(
+            "安装后台服务",
+            "安装该服务后可在不启动该软件的情况下实现打开游戏自启动修改器，是否安装？\n\n（本服务仅作为游戏进程监控，无其他作用，后台内存占用不到10MB）",
+            "安装", "取消");
+        if (!confirmed)
             return;
 
         try
@@ -539,15 +561,11 @@ public partial class TrainerViewModel : ObservableObject
     [RelayCommand]
     private async Task UninstallServiceAsync()
     {
-        var confirm = new iNKORE.UI.WPF.Modern.Controls.ContentDialog
-        {
-            Title = "卸载后台服务",
-            Content = "确定卸载该服务？卸载后需要开启该软件才能实现打开游戏自启动修改器",
-            PrimaryButtonText = "卸载",
-            CloseButtonText = "取消",
-            DefaultButton = iNKORE.UI.WPF.Modern.Controls.ContentDialogButton.Primary
-        };
-        if (await confirm.ShowAsync() != iNKORE.UI.WPF.Modern.Controls.ContentDialogResult.Primary)
+        var confirmed = await _dialogService.ShowConfirmAsync(
+            "卸载后台服务",
+            "确定卸载该服务？卸载后需要开启该软件才能实现打开游戏自启动修改器",
+            "卸载", "取消");
+        if (!confirmed)
             return;
 
         try
@@ -800,21 +818,12 @@ public partial class TrainerViewModel : ObservableObject
         if (item == null || string.IsNullOrWhiteSpace(item.FilePath)) return;
         if (!File.Exists(item.FilePath)) return;
 
-        var dialog = new ContentDialog
-        {
-            Title = "确认删除",
-            Content = new TextBlock
-            {
-                Text = $"确定要删除文件 \"{item.DisplayName}\" 吗？",
-                TextWrapping = TextWrapping.Wrap,
-                MaxWidth = 420
-            },
-            PrimaryButtonText = "删除",
-            CloseButtonText = "取消",
-            DefaultButton = ContentDialogButton.Primary
-        };
+        var confirmed = await _dialogService.ShowConfirmAsync(
+            "确认删除",
+            $"确定要删除文件 \"{item.DisplayName}\" 吗？",
+            "删除", "取消");
 
-        if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+        if (confirmed)
         {
             File.Delete(item.FilePath);
             // 同时删除对应的缓存文件

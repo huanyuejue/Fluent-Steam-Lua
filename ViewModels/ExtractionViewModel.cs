@@ -15,11 +15,13 @@ using SteamLuaManager.Services;
 
 namespace SteamLuaManager.ViewModels;
 
-public partial class ExtractionViewModel : ObservableObject
+public partial class ExtractionViewModel : ObservableObject, IDisposable
 {
     private readonly ISteamDepotService _depotService;
     private readonly ISteamPathService _steamPathService;
+    private readonly IDialogService _dialogService;
     private CancellationTokenSource? _cts;
+    private bool _disposed;
 
     [ObservableProperty]
     private string _appId = "";
@@ -38,10 +40,11 @@ public partial class ExtractionViewModel : ObservableObject
 
     public ObservableCollection<string> LogLines { get; } = [];
 
-    public ExtractionViewModel(ISteamDepotService depotService, ISteamPathService steamPathService)
+    public ExtractionViewModel(ISteamDepotService depotService, ISteamPathService steamPathService, IDialogService dialogService)
     {
         _depotService = depotService;
         _steamPathService = steamPathService;
+        _dialogService = dialogService;
     }
 
     [RelayCommand]
@@ -83,7 +86,7 @@ public partial class ExtractionViewModel : ObservableObject
             PostLog($"开始查询 AppID:{id}");
 
             // 1. Query depot info from api.steamcmd.net
-            var queryResult = await Task.Run(() => _depotService.QueryAppAsync(appId, ct), ct);
+            var queryResult = await _depotService.QueryAppAsync(appId, ct);
             if (queryResult == null || queryResult.GameDepots.Count == 0)
             {
                 StatusMessage = "查询失败，未找到该游戏的仓库信息";
@@ -177,7 +180,7 @@ public partial class ExtractionViewModel : ObservableObject
                 }
 
                 // Query DLC's own sub-depots for additional key matching
-                var dlcResult = await Task.Run(() => _depotService.QueryAppAsync(dlcAppId, ct), ct);
+                var dlcResult = await _depotService.QueryAppAsync(dlcAppId, ct);
                 if (dlcResult != null)
                 {
                     int subMatched = 0;
@@ -275,31 +278,35 @@ public partial class ExtractionViewModel : ObservableObject
         }
     }
 
-    private void ShowOpenDirectoryPrompt(string directory)
+    private async void ShowOpenDirectoryPrompt(string directory)
     {
-        _ = Application.Current.Dispatcher.BeginInvoke(new Action(async () =>
+        try
         {
-            var dialog = new ContentDialog
-            {
-                Title = "提取完成",
-                Content = new TextBlock
-                {
-                    Text = $"提取完成！文件已保存到:\n{directory}\n\n是否打开该目录？",
-                    TextWrapping = TextWrapping.Wrap,
-                    MaxWidth = 420
-                },
-                PrimaryButtonText = "打开目录",
-                CloseButtonText = "关闭",
-                DefaultButton = ContentDialogButton.Primary
-            };
-            if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+            var confirmed = await _dialogService.ShowConfirmAsync(
+                "提取完成",
+                $"提取完成！文件已保存到:\n{directory}\n\n是否打开该目录？",
+                "打开目录", "关闭");
+            if (confirmed)
                 Process.Start("explorer.exe", directory);
-        }));
+        }
+        catch (Exception ex)
+        {
+            LogService.Warn("提取", $"显示完成对话框失败: {ex.Message}");
+        }
     }
 
     private void PostLog(string message)
     {
         LogService.Info("提取", message);
-        _ = Application.Current.Dispatcher.BeginInvoke(new Action(() => LogLines.Add(message)));
+        _ = Application.Current.Dispatcher.InvokeAsync(() => LogLines.Add(message));
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = null;
     }
 }

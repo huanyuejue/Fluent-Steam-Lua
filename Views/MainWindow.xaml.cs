@@ -203,10 +203,18 @@ public partial class MainWindow : Window
     {
         SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
         _settingsViewModel.PropertyChanged -= SettingsViewModel_PropertyChanged;
-        if (_viewModel is IDisposable viewModelDisposable)
-            viewModelDisposable.Dispose();
-        if (_settingsViewModel is IDisposable settingsViewModelDisposable)
-            settingsViewModelDisposable.Dispose();
+        DisposeIfNeeded(_viewModel);
+        DisposeIfNeeded(_settingsViewModel);
+        DisposeIfNeeded(_scriptDownloadViewModel);
+        DisposeIfNeeded(_extractionViewModel);
+        DisposeIfNeeded(_trainerViewModel);
+        DisposeIfNeeded(_achievementViewModel);
+        DisposeIfNeeded(_authorizationViewModel);
+    }
+
+    private static void DisposeIfNeeded(object obj)
+    {
+        if (obj is IDisposable d) d.Dispose();
     }
 
     private void RepositionFab()

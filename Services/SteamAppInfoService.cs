@@ -16,6 +16,7 @@ public sealed class SteamAppInfoService : ISteamAppInfoService, IDisposable
     private volatile bool _loggedOn;
     private volatile bool _disconnected;
     private Task? _callbackLoop;
+    private CancellationTokenSource? _loopCts;
     private readonly SemaphoreSlim _logonLock = new(1, 1);
     private readonly TaskCompletionSource _firstLogonTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private const double CallbackTimeoutSeconds = 20;
@@ -31,8 +32,17 @@ public sealed class SteamAppInfoService : ISteamAppInfoService, IDisposable
 
     public void Dispose()
     {
+        _disconnected = true;
+        try { _loopCts?.Cancel(); } catch { }
+        try { _loopCts?.Dispose(); } catch { }
+        _loopCts = null;
+        try { _callbackLoop?.Wait(500); } catch { }
+        _callbackLoop = null;
         if (_client.IsValueCreated)
-            _client.Value.Disconnect();
+        {
+            try { _client.Value.Disconnect(); } catch { }
+        }
+        _logonLock.Dispose();
     }
 
     /// <summary>确保已连接并匿名登录。连接建立后可复用多次查询。</summary>
@@ -49,7 +59,10 @@ public sealed class SteamAppInfoService : ISteamAppInfoService, IDisposable
             if (_callbackLoop == null || _callbackLoop.IsCompleted)
             {
                 AttachLogonHandlers();
-                _callbackLoop = Task.Run(RunCallbackLoop);
+                _loopCts?.Dispose();
+                _loopCts = new CancellationTokenSource();
+                var token = _loopCts.Token;
+                _callbackLoop = Task.Run(() => RunCallbackLoop(token), token);
                 _client.Value.Connect();
             }
 
@@ -71,18 +84,19 @@ public sealed class SteamAppInfoService : ISteamAppInfoService, IDisposable
         }
     }
 
-    private void RunCallbackLoop()
+    private void RunCallbackLoop(CancellationToken ct)
     {
-        while (!_disconnected)
+        while (!ct.IsCancellationRequested && !_disconnected)
         {
             try
             {
                 _manager.Value.RunWaitCallbacks(TimeSpan.FromMilliseconds(100));
             }
+            catch (OperationCanceledException) { break; }
             catch (Exception ex)
             {
                 LogService.Warn("AppInfo", $"Steam 回调循环异常: {ex.Message}");
-                Thread.Sleep(100);
+                try { Task.Delay(100, ct).Wait(ct); } catch { break; }
             }
         }
     }

@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
 using iNKORE.UI.WPF.Modern;
 using iNKORE.UI.WPF.Modern.Controls;
 using Microsoft.Win32;
@@ -19,6 +20,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     private readonly ILuaFileManager _luaFileManager;
     private readonly ISettingsService _settingsService;
     private readonly ISteamApiService _steamApiService;
+    private readonly IDialogService _dialogService;
     private AppSettings _settings;
 
     [ObservableProperty]
@@ -78,12 +80,13 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     public ObservableCollection<SpeedTestItem> SpeedTestResults { get; } = new();
 
     public SettingsViewModel(ISteamPathService steamPathService, ILuaFileManager luaFileManager,
-        ISettingsService settingsService, ISteamApiService steamApiService)
+        ISettingsService settingsService, ISteamApiService steamApiService, IDialogService dialogService)
     {
         _steamPathService = steamPathService;
         _luaFileManager = luaFileManager;
         _settingsService = settingsService;
         _steamApiService = steamApiService;
+        _dialogService = dialogService;
         _settings = settingsService.Load();
 
         SteamPath = _settings.SteamPath;
@@ -418,7 +421,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             await MigrateLuaFilesIfNeededAsync(oldFolder, dir);
 
             // 通知主页重新扫描游戏，避免残留旧路径的 lua 引用
-            MainViewModel.RequestRefresh();
+            WeakReferenceMessenger.Default.Send(new LuaFolderChangedMessage());
 
             StatusMessage = $"Lua 目录已设置为: {dir}";
             LogService.Info("设置", $"Lua 目录已设置为: {dir}");
@@ -448,7 +451,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
                 _luaFileManager.StartWatching();
             }
 
-            MainViewModel.RequestRefresh();
+            WeakReferenceMessenger.Default.Send(new LuaFolderChangedMessage());
 
             StatusMessage = $"已重置为默认目录: {LuaFolderPath}";
             LogService.Info("设置", $"已重置 Lua 目录为默认: {LuaFolderPath}");
@@ -510,23 +513,8 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         return true;
     }
 
-    private static async Task<bool> ShowConfirmAsync(string title, string message, string primaryText = "确定", string closeText = "取消")
-    {
-        var dialog = new ContentDialog
-        {
-            Title = title,
-            Content = new System.Windows.Controls.TextBlock
-            {
-                Text = message,
-                TextWrapping = System.Windows.TextWrapping.Wrap,
-                MaxWidth = 420
-            },
-            PrimaryButtonText = primaryText,
-            CloseButtonText = closeText,
-            DefaultButton = ContentDialogButton.Primary
-        };
-        return await dialog.ShowAsync() == ContentDialogResult.Primary;
-    }
+    private Task<bool> ShowConfirmAsync(string title, string message, string primaryText = "确定", string closeText = "取消")
+        => _dialogService.ShowConfirmAsync(title, message, primaryText, closeText);
 
     [RelayCommand]
     private void OpenSteamFolder()
