@@ -1,5 +1,6 @@
 using System.IO;
 using System.Net.Http;
+using System.Runtime;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -21,6 +22,14 @@ public class SteamDepotService : ISteamDepotService
     private const string Source2TokenKeysUrl = "https://api.993499094.xyz/appaccesstokens.json";
 
     private static readonly string[] SourceNames = ["DepotKey", "DepotKey2"];
+
+    // 懒加载常驻字典：首次入库时建，后续复用，文件更新后失效
+    private Dictionary<string, string>? _cachedDepotKeys;
+    private Dictionary<string, string>? _cachedAppTokens;
+    private DateTime _cachedDepotKeysWriteTime;
+    private DateTime _cachedAppTokensWriteTime;
+    private string? _cachedSource;
+    private readonly SemaphoreSlim _cacheLock = new(1, 1);
 
     public SteamDepotService(ISteamPathService steamPathService, IHttpClientProvider httpClientProvider, ISteamAppInfoService appInfoService)
     {
@@ -137,14 +146,15 @@ public class SteamDepotService : ISteamDepotService
             var depotPath = GetDepotKeysPath();
             var tokenPath = GetTokenKeysPath();
 
-            // 读取旧文件条目数
+            // 读取旧文件条目数（流式计数，避免全量字典）
             if (File.Exists(depotPath))
             {
                 try
                 {
-                    var oldContent = await File.ReadAllTextAsync(depotPath, ct);
-                    var oldDict = JsonSerializer.Deserialize<Dictionary<string, string>>(oldContent);
-                    result.DepotKeysOldCount = oldDict?.Count ?? 0;
+                    await using var fs = File.OpenRead(depotPath);
+                    using var doc = await JsonDocument.ParseAsync(fs, cancellationToken: ct);
+                    result.DepotKeysOldCount = doc.RootElement.ValueKind == JsonValueKind.Object
+                        ? doc.RootElement.EnumerateObject().Count() : 0;
                 }
                 catch (Exception ex) { LogService.Warn("入库", $"解析旧 depot 密钥文件失败: {ex.Message}"); result.DepotKeysOldCount = 0; }
             }
@@ -152,9 +162,10 @@ public class SteamDepotService : ISteamDepotService
             {
                 try
                 {
-                    var oldContent = await File.ReadAllTextAsync(tokenPath, ct);
-                    var oldDict = JsonSerializer.Deserialize<Dictionary<string, string>>(oldContent);
-                    result.TokenKeysOldCount = oldDict?.Count ?? 0;
+                    await using var fs = File.OpenRead(tokenPath);
+                    using var doc = await JsonDocument.ParseAsync(fs, cancellationToken: ct);
+                    result.TokenKeysOldCount = doc.RootElement.ValueKind == JsonValueKind.Object
+                        ? doc.RootElement.EnumerateObject().Count() : 0;
                 }
                 catch (Exception ex) { LogService.Warn("入库", $"解析旧 token 密钥文件失败: {ex.Message}"); result.TokenKeysOldCount = 0; }
             }
@@ -182,19 +193,29 @@ public class SteamDepotService : ISteamDepotService
             await File.WriteAllBytesAsync(tokenPath, tokenData, ct);
             result.TokenKeysSizeBytes = tokenData.Length;
 
-            // 解析新文件条目数
+            // 解析新文件条目数（轻量计数，避免再建大字典）
             try
             {
-                var newDict = JsonSerializer.Deserialize<Dictionary<string, string>>(depotData);
-                result.DepotKeysNewCount = newDict?.Count ?? 0;
+                using var doc = JsonDocument.Parse(depotData);
+                result.DepotKeysNewCount = doc.RootElement.ValueKind == JsonValueKind.Object
+                    ? doc.RootElement.EnumerateObject().Count() : 0;
             }
             catch (Exception ex) { LogService.Warn("入库", $"解析新 depot 密钥文件失败: {ex.Message}"); result.DepotKeysNewCount = 0; }
             try
             {
-                var newDict = JsonSerializer.Deserialize<Dictionary<string, string>>(tokenData);
-                result.TokenKeysNewCount = newDict?.Count ?? 0;
+                using var doc = JsonDocument.Parse(tokenData);
+                result.TokenKeysNewCount = doc.RootElement.ValueKind == JsonValueKind.Object
+                    ? doc.RootElement.EnumerateObject().Count() : 0;
             }
             catch (Exception ex) { LogService.Warn("入库", $"解析新 token 密钥文件失败: {ex.Message}"); result.TokenKeysNewCount = 0; }
+
+            // 释放大对象引用，使旧缓存与下载缓冲尽快可回收
+            depotData = null!;
+            tokenData = null!;
+            InvalidateKeyCache();
+            // 刷新为低频操作，强制回收并压缩 LOH，避免 230→300 新旧字典叠加
+            GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
 
             result.Success = true;
             return result;
@@ -318,18 +339,21 @@ public class SteamDepotService : ISteamDepotService
         }
     }
 
-    /// <summary>从当前数据源缓存目录的 appaccesstokens.json 读取某 app 的 token，无则返回 0。</summary>
+    /// <summary>按需从 appaccesstokens.json 读取某 app 的 token（流式，避免全表字典）。</summary>
     private async Task<ulong> LoadLocalAppTokenAsync(int appId, CancellationToken ct = default)
     {
         try
         {
             var tokenPath = GetTokenKeysPath();
             if (!File.Exists(tokenPath)) return 0;
-            var json = await File.ReadAllTextAsync(tokenPath, ct);
-            var dict = JsonSerializer.Deserialize<Dictionary<string, string>>(json);
-            if (dict != null && dict.TryGetValue(appId.ToString(), out var tokenStr) &&
-                ulong.TryParse(tokenStr, out var token))
-                return token;
+            await using var fs = File.OpenRead(tokenPath);
+            using var doc = await JsonDocument.ParseAsync(fs, cancellationToken: ct);
+            if (doc.RootElement.TryGetProperty(appId.ToString(), out var val))
+            {
+                var tokenStr = val.GetString();
+                if (!string.IsNullOrEmpty(tokenStr) && ulong.TryParse(tokenStr, out var token))
+                    return token;
+            }
         }
         catch (Exception ex)
         {
@@ -457,14 +481,46 @@ public class SteamDepotService : ISteamDepotService
 
     private async Task<(Dictionary<string, string>? DepotKeys, Dictionary<string, string>? AppTokens)> LoadKeyDictionariesAsync(CancellationToken ct)
     {
+        var depotPath = GetDepotKeysPath();
+        var tokenPath = GetTokenKeysPath();
+
+        // 缓存命中：同源且文件未变更则直接复用
+        var depotWrite = File.Exists(depotPath) ? File.GetLastWriteTimeUtc(depotPath) : DateTime.MinValue;
+        var tokenWrite = File.Exists(tokenPath) ? File.GetLastWriteTimeUtc(tokenPath) : DateTime.MinValue;
+        if (_cachedDepotKeys != null && _cachedAppTokens != null
+            && _cachedSource == _currentSource
+            && _cachedDepotKeysWriteTime == depotWrite
+            && _cachedAppTokensWriteTime == tokenWrite)
+        {
+            return (_cachedDepotKeys, _cachedAppTokens);
+        }
+
+        await _cacheLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            var depotText = await File.ReadAllTextAsync(GetDepotKeysPath(), ct);
-            var tokenText = await File.ReadAllTextAsync(GetTokenKeysPath(), ct);
-            var depotKeys = JsonSerializer.Deserialize<Dictionary<string, string>>(depotText)
+            // 双检
+            depotWrite = File.Exists(depotPath) ? File.GetLastWriteTimeUtc(depotPath) : DateTime.MinValue;
+            tokenWrite = File.Exists(tokenPath) ? File.GetLastWriteTimeUtc(tokenPath) : DateTime.MinValue;
+            if (_cachedDepotKeys != null && _cachedAppTokens != null
+                && _cachedSource == _currentSource
+                && _cachedDepotKeysWriteTime == depotWrite
+                && _cachedAppTokensWriteTime == tokenWrite)
+            {
+                return (_cachedDepotKeys, _cachedAppTokens);
+            }
+
+            await using var depotStream = File.OpenRead(depotPath);
+            await using var tokenStream = File.OpenRead(tokenPath);
+            var depotKeys = await JsonSerializer.DeserializeAsync<Dictionary<string, string>>(depotStream, cancellationToken: ct)
                 ?? new Dictionary<string, string>();
-            var appTokens = JsonSerializer.Deserialize<Dictionary<string, string>>(tokenText)
+            var appTokens = await JsonSerializer.DeserializeAsync<Dictionary<string, string>>(tokenStream, cancellationToken: ct)
                 ?? new Dictionary<string, string>();
+
+            _cachedDepotKeys = depotKeys;
+            _cachedAppTokens = appTokens;
+            _cachedDepotKeysWriteTime = depotWrite;
+            _cachedAppTokensWriteTime = tokenWrite;
+            _cachedSource = _currentSource;
             return (depotKeys, appTokens);
         }
         catch (Exception ex)
@@ -472,6 +528,17 @@ public class SteamDepotService : ISteamDepotService
             LogService.Warn("入库", $"读取密钥文件失败: {ex.Message}");
             return (null, null);
         }
+        finally
+        {
+            _cacheLock.Release();
+        }
+    }
+
+    private void InvalidateKeyCache()
+    {
+        _cachedDepotKeys = null;
+        _cachedAppTokens = null;
+        _cachedSource = null;
     }
 
     public async Task<DlcFetchResult> FetchDlcAsync(string luaPath, int dlcAppId, bool hasOwnDepot, CancellationToken ct = default)
@@ -502,12 +569,13 @@ public class SteamDepotService : ISteamDepotService
                     return result;
                 }
 
-                Dictionary<string, string> depotKeys;
+                string? dlcMainKey = null;
                 try
                 {
-                    var depotText = await File.ReadAllTextAsync(GetDepotKeysPath(), ct);
-                    depotKeys = JsonSerializer.Deserialize<Dictionary<string, string>>(depotText)
-                        ?? new Dictionary<string, string>();
+                    await using var fs = File.OpenRead(GetDepotKeysPath());
+                    using var doc = await JsonDocument.ParseAsync(fs, cancellationToken: ct);
+                    if (doc.RootElement.TryGetProperty(dlcAppId.ToString(), out var val))
+                        dlcMainKey = val.GetString();
                 }
                 catch (Exception ex)
                 {
@@ -517,7 +585,7 @@ public class SteamDepotService : ISteamDepotService
                 }
 
                 // 查找 DLC 自身主 AppID 的密钥
-                if (depotKeys.TryGetValue(dlcAppId.ToString(), out var dlcMainKey))
+                if (!string.IsNullOrEmpty(dlcMainKey))
                 {
                     var lines = new List<string> { $"addappid({dlcAppId}, 1, \"{dlcMainKey}\")" };
                     await AppendLinesToLuaAsync(luaPath, lines, ct);
