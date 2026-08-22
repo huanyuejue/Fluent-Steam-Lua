@@ -22,8 +22,7 @@
         SizeChanged="Window_SizeChanged"
         PreviewMouseLeftButtonDown="Window_PreviewMouseLeftButtonDown"
         TextOptions.TextFormattingMode="Display"
-        TextOptions.TextRenderingMode="ClearType"
-        RenderOptions.ClearTypeHint="Enabled"
+        TextOptions.TextRenderingMode="Grayscale"
         UseLayoutRounding="True"
         SnapsToDevicePixels="True">
 

@@ -8,8 +8,7 @@
         DragOver="Zone_DragOver"
         Drop="Zone_Drop"
         TextOptions.TextFormattingMode="Display"
-        TextOptions.TextRenderingMode="ClearType"
-        RenderOptions.ClearTypeHint="Enabled"
+        TextOptions.TextRenderingMode="Grayscale"
         UseLayoutRounding="True"
         SnapsToDevicePixels="True">
 

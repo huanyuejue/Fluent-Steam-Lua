@@ -5,8 +5,7 @@
         xmlns:controls="clr-namespace:SteamLuaManager.Controls"
         Background="Transparent"
         TextOptions.TextFormattingMode="Display"
-        TextOptions.TextRenderingMode="ClearType"
-        RenderOptions.ClearTypeHint="Enabled"
+        TextOptions.TextRenderingMode="Grayscale"
         UseLayoutRounding="True"
         SnapsToDevicePixels="True">
 

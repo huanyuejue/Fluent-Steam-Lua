@@ -3,8 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Background="Transparent"
         TextOptions.TextFormattingMode="Display"
-        TextOptions.TextRenderingMode="ClearType"
-        RenderOptions.ClearTypeHint="Enabled"
+        TextOptions.TextRenderingMode="Grayscale"
         UseLayoutRounding="True"
         SnapsToDevicePixels="True">
 
