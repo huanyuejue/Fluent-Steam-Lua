@@ -379,23 +379,46 @@ public class SteamDepotService : ISteamDepotService
             sb.AppendLine();
             var matchedItems = 0;
 
-            // 主 AppID
+            // 主 AppID（优先中文名，同主页 DLC 名称获取逻辑）
+            var mainStoreName = await TryGetStoreNameAsync(appId, queryResult.AppName, ct);
+            var mainName = SanitizeLuaComment(mainStoreName);
             if (depotKeys.TryGetValue(appId.ToString(), out var mainKey))
             {
-                sb.AppendLine($"addappid({appId}, 1, \"{mainKey}\")");
+                sb.AppendLine(string.IsNullOrEmpty(mainName)
+                    ? $"addappid({appId}, 1, \"{mainKey}\")"
+                    : $"addappid({appId}, 1, \"{mainKey}\") -- {mainName}");
                 matchedItems++;
             }
             else
             {
-                sb.AppendLine($"addappid({appId})");
+                sb.AppendLine(string.IsNullOrEmpty(mainName)
+                    ? $"addappid({appId})"
+                    : $"addappid({appId}) -- {mainName}");
             }
 
-            // 主游戏 depots
+            // 预取各 DLC 信息并建立内容名映射：与主游戏 depot 同 ID 的 DLC
+            // 会以 depot 行写出，映射用于给这类行补名称
+            var contentNames = new Dictionary<int, string>();
+            DlcBuildInfo[]? dlcInfos = null;
+            HashSet<int> mainDepotIds = new(queryResult.GameDepots.Select(d => d.DepotId));
+            if (withDlc && queryResult.DlcAppIds.Count > 0)
+            {
+                dlcInfos = await FetchDlcInfosAsync(queryResult.DlcAppIds, ct);
+                foreach (var info in dlcInfos)
+                    if (!string.IsNullOrWhiteSpace(info.DisplayName))
+                        contentNames[info.AppId] = info.DisplayName;
+            }
+
+            // 主游戏 depots（命中已知内容 ID 时带名称注释，其余仓库无独立名）
             foreach (var depot in queryResult.GameDepots)
             {
                 if (depotKeys.TryGetValue(depot.DepotId.ToString(), out var key))
                 {
-                    sb.AppendLine($"addappid({depot.DepotId}, 1, \"{key}\")");
+                    var depotName = contentNames.TryGetValue(depot.DepotId, out var n)
+                        ? SanitizeLuaComment(n) : "";
+                    sb.AppendLine(string.IsNullOrEmpty(depotName)
+                        ? $"addappid({depot.DepotId}, 1, \"{key}\")"
+                        : $"addappid({depot.DepotId}, 1, \"{key}\") -- {depotName}");
                     depot.Key = key;
                     depot.IsMatched = true;
                     matchedItems++;
@@ -410,33 +433,42 @@ public class SteamDepotService : ISteamDepotService
                 matchedItems++;
             }
 
-            // DLC 段
-            if (withDlc && queryResult.DlcAppIds.Count > 0)
+            // DLC 段：复用预取结果按原顺序写行
+            if (dlcInfos != null)
             {
-                var mainDepotIds = new HashSet<int>(queryResult.GameDepots.Select(d => d.DepotId));
-                foreach (var dlcAppId in queryResult.DlcAppIds)
+                foreach (var info in dlcInfos)
                 {
-                    if (!mainDepotIds.Contains(dlcAppId))
-                    {
-                        sb.AppendLine($"addappid({dlcAppId})");
+                    var dlcName = SanitizeLuaComment(info.DisplayName);
 
-                        if (depotKeys.TryGetValue(dlcAppId.ToString(), out var dlcMainKey))
+                    if (!mainDepotIds.Contains(info.AppId))
+                    {
+                        // 有密钥时只写带密钥的行，避免裸的 addappid 与带密钥的重复
+                        if (depotKeys.TryGetValue(info.AppId.ToString(), out var dlcMainKey))
                         {
-                            sb.AppendLine($"addappid({dlcAppId}, 1, \"{dlcMainKey}\")");
+                            sb.AppendLine(string.IsNullOrEmpty(dlcName)
+                                ? $"addappid({info.AppId}, 1, \"{dlcMainKey}\")"
+                                : $"addappid({info.AppId}, 1, \"{dlcMainKey}\") -- {dlcName}");
                             matchedItems++;
                         }
-                        if (appTokens.TryGetValue(dlcAppId.ToString(), out var dlcToken))
+                        else
                         {
-                            sb.AppendLine($"addtoken({dlcAppId}, \"{dlcToken}\")");
+                            sb.AppendLine(string.IsNullOrEmpty(dlcName)
+                                ? $"addappid({info.AppId})"
+                                : $"addappid({info.AppId}) -- {dlcName}");
+                        }
+                        if (appTokens.TryGetValue(info.AppId.ToString(), out var dlcToken))
+                        {
+                            sb.AppendLine($"addtoken({info.AppId}, \"{dlcToken}\")");
                             matchedItems++;
                         }
                     }
 
-                    var dlcResult = await QueryAppAsync(dlcAppId, ct);
-                    if (dlcResult != null)
+                    if (info.Result != null)
                     {
-                        foreach (var depot in dlcResult.GameDepots)
+                        foreach (var depot in info.Result.GameDepots)
                         {
+                            // 跳过与 DLC 自身 AppId 重复的 depot，避免写入两次同 ID
+                            if (depot.DepotId == info.AppId) continue;
                             if (depotKeys.TryGetValue(depot.DepotId.ToString(), out var depKey))
                             {
                                 sb.AppendLine($"addappid({depot.DepotId}, 1, \"{depKey}\")");
@@ -470,6 +502,37 @@ public class SteamDepotService : ISteamDepotService
             LogService.Error("入库", $"生成入库文件失败 (AppID {appId}{(withDlc ? ", DLC" : "")}): {ex.Message}");
             return null;
         }
+    }
+
+    private sealed record DlcBuildInfo(int AppId, DepotQueryResult? Result, string DisplayName);
+
+    // 并发预取各 DLC 的仓库信息与中文名，限流避免触发站点风控；单个失败不影响整体生成
+    private async Task<DlcBuildInfo[]> FetchDlcInfosAsync(List<int> dlcAppIds, CancellationToken ct)
+    {
+        var infos = new DlcBuildInfo[dlcAppIds.Count];
+        await Parallel.ForEachAsync(Enumerable.Range(0, dlcAppIds.Count),
+            new ParallelOptions { MaxDegreeOfParallelism = 6, CancellationToken = ct },
+            async (index, innerCt) =>
+            {
+                var appId = dlcAppIds[index];
+                try
+                {
+                    var nameTask = TryGetStoreNameAsync(appId, "", innerCt);
+                    var resultTask = QueryAppAsync(appId, innerCt);
+                    await Task.WhenAll(nameTask, resultTask).ConfigureAwait(false);
+                    var fallback = resultTask.Result?.AppName ?? "";
+                    var name = nameTask.Result;
+                    infos[index] = new DlcBuildInfo(appId, resultTask.Result,
+                        string.IsNullOrWhiteSpace(name) ? fallback : name);
+                }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex)
+                {
+                    LogService.Warn("入库", $"获取 DLC {appId} 信息失败: {ex.Message}");
+                    infos[index] = new DlcBuildInfo(appId, null, "");
+                }
+            }).ConfigureAwait(false);
+        return infos;
     }
 
     private async Task<(Dictionary<string, string>? DepotKeys, Dictionary<string, string>? AppTokens)> LoadKeyDictionariesAsync(CancellationToken ct)
@@ -637,5 +700,37 @@ public class SteamDepotService : ISteamDepotService
 
         await File.WriteAllTextAsync(luaPath, sb.ToString(), ct);
         LogService.Info("获取DLC", $"已写入 {newLines.Count} 行到 {luaPath}");
+    }
+
+    private static string SanitizeLuaComment(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return "";
+        return text.Replace("\r", " ").Replace("\n", " ").Trim();
+    }
+
+    private async Task<string> TryGetStoreNameAsync(int appId, string fallbackName, CancellationToken ct)
+    {
+        try
+        {
+            var json = await _httpClientProvider.SendWithProxyRetryAsync(
+                "store-name",
+                TimeSpan.FromSeconds(10),
+                client => client.GetStringAsync($"https://store.steampowered.com/api/appdetails?appids={appId}&l=schinese", ct),
+                HttpHeaderHelper.ConfigureBrowserJson);
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty(appId.ToString(), out var appData)
+                && appData.TryGetProperty("success", out var success) && success.GetBoolean()
+                && appData.TryGetProperty("data", out var data)
+                && data.TryGetProperty("name", out var name))
+            {
+                var n = name.GetString();
+                if (!string.IsNullOrWhiteSpace(n)) return n;
+            }
+        }
+        catch
+        {
+            // 无商店页的 DLC 与断网属预期情形，静默回退到 steamcmd 名，避免刷告警
+        }
+        return fallbackName;
     }
 }
