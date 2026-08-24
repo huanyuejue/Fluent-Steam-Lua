@@ -90,11 +90,11 @@ public partial class ExtractionViewModel : ObservableObject, IDisposable
             if (queryResult == null || queryResult.GameDepots.Count == 0)
             {
                 StatusMessage = "查询失败，未找到该游戏的仓库信息";
-                PostLog("❌ 查询失败，未找到该游戏的仓库信息");
+                PostLog("查询失败，未找到该游戏的仓库信息");
                 return;
             }
 
-            PostLog($"✔ 已获取仓库信息，游戏名称：{queryResult.AppName}");
+            PostLog($"已获取仓库信息，游戏名称：{queryResult.AppName}");
             PostLog($"找到 {queryResult.GameDepots.Count} 个仓库（已排除共享仓库），{queryResult.DlcAppIds.Count} 个 DLC");
             StatusMessage = "正在读取 Steam 配置...";
 
@@ -103,7 +103,7 @@ public partial class ExtractionViewModel : ObservableObject, IDisposable
             if (string.IsNullOrEmpty(steamPath))
             {
                 StatusMessage = "未检测到 Steam 安装路径";
-                PostLog("❌ 未检测到 Steam 安装路径");
+                PostLog("未检测到 Steam 安装路径");
                 return;
             }
 
@@ -111,13 +111,13 @@ public partial class ExtractionViewModel : ObservableObject, IDisposable
             if (!File.Exists(vdfPath))
             {
                 StatusMessage = "未找到 config.vdf";
-                PostLog($"❌ 未找到 config.vdf：{vdfPath}");
+                PostLog($"未找到 config.vdf：{vdfPath}");
                 return;
             }
 
             var vdfContent = await File.ReadAllTextAsync(vdfPath, ct);
             var depotKeys = VdfHelper.ParseDepotKeys(vdfContent);
-            PostLog($"✔ 已读取 Steam 配置，找到 {depotKeys.Count} 个仓库密钥");
+            PostLog($"已读取 Steam 配置，找到 {depotKeys.Count} 个仓库密钥");
 
             // 3. Generate lua content
             var sb = new StringBuilder();
@@ -130,12 +130,12 @@ public partial class ExtractionViewModel : ObservableObject, IDisposable
             {
                 sb.AppendLine($"addappid({id}, 1, \"{mainKey}\")");
                 matchedCount++;
-                PostLog($"✔ 主仓库 {id} 密钥匹配成功");
+                PostLog($"主仓库 {id} 密钥匹配成功");
             }
             else
             {
                 sb.AppendLine($"addappid({id})");
-                PostLog($"⚠ 主仓库 {id} 未找到密钥，跳过加密");
+                PostLog($"主仓库 {id} 未找到密钥，跳过加密");
             }
 
             foreach (var depot in queryResult.GameDepots)
@@ -149,11 +149,11 @@ public partial class ExtractionViewModel : ObservableObject, IDisposable
                     depot.Key = key;
                     depot.IsMatched = true;
                     matchedCount++;
-                    PostLog($"✔ 仓库 {depot.DepotId} 密钥匹配成功");
+                    PostLog($"仓库 {depot.DepotId} 密钥匹配成功");
                 }
                 else
                 {
-                    PostLog($"⚠ 仓库 {depot.DepotId} 未找到密钥，跳过");
+                    PostLog($"仓库 {depot.DepotId} 未找到密钥，跳过");
                 }
             }
 
@@ -171,7 +171,7 @@ public partial class ExtractionViewModel : ObservableObject, IDisposable
                     {
                         sb.AppendLine($"addappid({dlcAppId}, 1, \"{dlcKey}\")");
                         matchedCount++;
-                        PostLog($"✔ DLC {dlcAppId} 密钥匹配成功");
+                        PostLog($"DLC {dlcAppId} 密钥匹配成功");
                     }
                     else
                     {
@@ -197,25 +197,25 @@ public partial class ExtractionViewModel : ObservableObject, IDisposable
                     }
                     if (dlcResult.GameDepots.Count > 0)
                         PostLog(isMainDepot
-                            ? $"✔ DLC {dlcAppId}（跳过，已是主仓库）{subMatched}/{dlcResult.GameDepots.Count} 子仓库匹配密钥"
-                            : $"✔ DLC {dlcAppId} {subMatched}/{dlcResult.GameDepots.Count} 子仓库匹配密钥");
+                            ? $"DLC {dlcAppId}（跳过，已是主仓库）{subMatched}/{dlcResult.GameDepots.Count} 子仓库匹配密钥"
+                            : $"DLC {dlcAppId} {subMatched}/{dlcResult.GameDepots.Count} 子仓库匹配密钥");
                     else
                         PostLog(isMainDepot
-                            ? $"ℹ DLC {dlcAppId}（跳过，已是主仓库），无额外子仓库"
-                            : $"ℹ DLC {dlcAppId} 无子仓库");
+                            ? $"DLC {dlcAppId}（跳过，已是主仓库），无额外子仓库"
+                            : $"DLC {dlcAppId} 无子仓库");
                 }
                 else
                 {
                     PostLog(isMainDepot
-                        ? $"ℹ DLC {dlcAppId}（跳过，已是主仓库），无额外子仓库信息"
-                        : $"ℹ DLC {dlcAppId} 无子仓库信息");
+                        ? $"DLC {dlcAppId}（跳过，已是主仓库），无额外子仓库信息"
+                        : $"DLC {dlcAppId} 无子仓库信息");
                 }
             }
 
             if (matchedCount == 0)
             {
                 StatusMessage = "未找到任何可用密钥";
-                PostLog("❌ 本地 config.vdf 中未找到该游戏及其仓库的任何密钥");
+                PostLog("本地 config.vdf 中未找到该游戏及其仓库的任何密钥");
                 PostLog("提示：请确保 Steam 已登录正版账号并启动过该游戏");
                 return;
             }
@@ -230,7 +230,7 @@ public partial class ExtractionViewModel : ObservableObject, IDisposable
             await File.WriteAllTextAsync(luaPath, sb.ToString(), ct);
 
             StatusMessage = $"提取完成，匹配到 {matchedCount} 个密钥";
-            PostLog($"✔ 提取成功！文件已保存到：{luaPath}");
+            PostLog($"提取成功！文件已保存到：{luaPath}");
 
             if (ExtractAchievements)
             {
@@ -245,16 +245,16 @@ public partial class ExtractionViewModel : ObservableObject, IDisposable
                         var largest = achFiles.OrderByDescending(f => new FileInfo(f).Length).First();
                         var dest = Path.Combine(dumpDir, Path.GetFileName(largest));
                         File.Copy(largest, dest, true);
-                        PostLog($"✔ 已提取成就文件：{Path.GetFileName(largest)}");
+                        PostLog($"已提取成就文件：{Path.GetFileName(largest)}");
                     }
                     else
                     {
-                        PostLog("ℹ 未找到该游戏的成就缓存文件");
+                        PostLog("未找到该游戏的成就缓存文件");
                     }
                 }
                 else
                 {
-                    PostLog($"ℹ 成就缓存目录不存在：{statsDir}");
+                    PostLog($"成就缓存目录不存在：{statsDir}");
                 }
             }
 
@@ -263,12 +263,12 @@ public partial class ExtractionViewModel : ObservableObject, IDisposable
         catch (OperationCanceledException)
         {
             StatusMessage = "已取消";
-            PostLog("⏹ 操作已取消");
+            PostLog("操作已取消");
         }
         catch (Exception ex)
         {
             StatusMessage = $"异常: {ex.Message}";
-            PostLog($"❌ 异常: {ex.Message}");
+            PostLog($"异常: {ex.Message}");
         }
         finally
         {
@@ -298,7 +298,8 @@ public partial class ExtractionViewModel : ObservableObject, IDisposable
     private void PostLog(string message)
     {
         LogService.Info("提取", message);
-        _ = Application.Current.Dispatcher.InvokeAsync(() => LogLines.Add(message));
+        var line = $"[{DateTime.Now:HH:mm:ss}] {message}";
+        _ = Application.Current.Dispatcher.InvokeAsync(() => LogLines.Add(line));
     }
 
     public void Dispose()

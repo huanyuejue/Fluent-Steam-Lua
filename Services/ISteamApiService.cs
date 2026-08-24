@@ -13,5 +13,6 @@ public interface ISteamApiService
     Task<string?> ResolveHeaderUrlAsync(int appId, CancellationToken cancellationToken = default);
     Task<List<(string Name, long LatencyMs, bool IsSuccess)>> TestCdnSpeedAsync(
         IProgress<(string Name, long LatencyMs, bool IsSuccess)>? progress = null);
+    Task<bool?> IsComingSoonAsync(int appId, CancellationToken cancellationToken = default);
     event Action<int>? CdnAutoSwitched;
 }

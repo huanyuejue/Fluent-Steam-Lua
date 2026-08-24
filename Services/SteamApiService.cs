@@ -441,6 +441,45 @@ public class SteamApiService : ISteamApiService
 		return (null, null);
 	}
 
+	/// <summary>
+	/// 查询游戏是否尚未发售（Store API 的 release_date.coming_soon）。
+	/// 返回 null 表示查询失败无法判定，调用方需与 true/false 区分处理。
+	/// </summary>
+	public async Task<bool?> IsComingSoonAsync(int appId, CancellationToken cancellationToken = default)
+	{
+		using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+		cts.CancelAfter(TimeSpan.FromSeconds(5));
+		try
+		{
+			var url = $"https://store.steampowered.com/api/appdetails?appids={appId}&l=schinese";
+			await using var stream = await _httpClientProvider.SendWithProxyRetryAsync(
+				"steam-api-json",
+				TimeSpan.FromSeconds(8),
+				client => client.GetStreamAsync(url, cts.Token),
+				HttpHeaderHelper.ConfigureBrowserJson);
+			using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cts.Token);
+			var root = doc.RootElement;
+
+			if (root.TryGetProperty(appId.ToString(), out var app) &&
+				app.TryGetProperty("success", out var ok) && ok.GetBoolean() &&
+				app.TryGetProperty("data", out var data) &&
+				data.TryGetProperty("release_date", out var releaseDate) &&
+				releaseDate.TryGetProperty("coming_soon", out var comingSoon))
+			{
+				return comingSoon.GetBoolean();
+			}
+		}
+		catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+		{
+			LogService.Warn("Steam API", $"coming_soon 查询超时 (AppID {appId})");
+		}
+		catch (Exception ex)
+		{
+			LogService.Warn("Steam API", $"coming_soon 查询失败 (AppID {appId}): {ex.Message}");
+		}
+		return null;
+	}
+
 	private async Task<string?> TrySteamSpy(int appId, CancellationToken cancellationToken)
 	{
 		try

@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -19,6 +20,7 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
     private readonly ISteamDepotService _depotService;
     private readonly ISettingsService _settingsService;
     private readonly IHttpClientProvider _httpClientProvider;
+    private readonly ISteamApiService _steamApiService;
     private string _currentDownloadMode = "DepotKey";
     private bool _disposed;
 
@@ -53,12 +55,13 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
     public ObservableCollection<FoundGame> SearchResults { get; } = new();
     public ObservableCollection<string> LogLines { get; } = new();
 
-    public ScriptDownloadViewModel(ISteamPathService steamPathService, ISteamDepotService depotService, ISettingsService settingsService, IHttpClientProvider httpClientProvider)
+    public ScriptDownloadViewModel(ISteamPathService steamPathService, ISteamDepotService depotService, ISettingsService settingsService, IHttpClientProvider httpClientProvider, ISteamApiService steamApiService)
     {
         _steamPathService = steamPathService;
         _depotService = depotService;
         _settingsService = settingsService;
         _httpClientProvider = httpClientProvider;
+        _steamApiService = steamApiService;
         _currentDownloadMode = _settingsService.Load().DownloadMode;
         _settingsService.SettingsChanged += OnSettingsChanged;
     }
@@ -103,7 +106,7 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
         IsSearching = true;
         SearchResults.Clear();
         LogLines.Clear();
-        AddLog($"🔍 搜索：{query}");
+        AddLog($"搜索：{query}");
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(7));
 
@@ -119,12 +122,12 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
                         ? headerImage
                         : $"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/header.jpg";
                     SearchResults.Add(new FoundGame(appId, name, coverUrl));
-                    AddLog($"✅ 找到：{name} (ID: {appId})");
+                    AddLog($"找到：{name} (ID: {appId})");
                     StatusMessage = $"找到：{name}";
                 }
                 else
                 {
-                    AddLog($"❌ 未找到 AppId 对应的游戏：{appId}");
+                    AddLog($"未找到 AppId 对应的游戏：{appId}");
                     StatusMessage = "未找到匹配的游戏";
                 }
             }
@@ -135,13 +138,13 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
         }
         catch (OperationCanceledException)
         {
-            AddLog("❌ 搜索超时（7秒），请检查网络连接");
-            AddLog("💡 建议：尝试开启VPN或代理后重试");
+            AddLog("搜索超时（7秒），请检查网络连接");
+            AddLog("建议：尝试开启VPN或代理后重试");
             StatusMessage = "搜索超时，请检查网络";
         }
         catch (Exception ex)
         {
-            AddLog($"❌ 搜索异常：{ex.Message}");
+            AddLog($"搜索异常：{ex.Message}");
             StatusMessage = $"搜索异常：{ex.Message}";
         }
         finally
@@ -243,12 +246,12 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
                 SearchResults.Add(new FoundGame(appId, gameName, coverUrl));
             }
 
-            AddLog($"✅ 找到 {count} 个匹配结果");
+            AddLog($"找到 {count} 个匹配结果");
             StatusMessage = $"找到 {count} 个匹配结果";
             return;
         }
 
-        AddLog("❌ 未找到匹配的游戏");
+        AddLog("未找到匹配的游戏");
         StatusMessage = "未找到匹配的游戏";
     }
 
@@ -263,15 +266,15 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
     {
         IsDownloading = true;
         LogLines.Clear();
-        AddLog($"🚀 开始处理 ID：{gameId}");
-        AddLog($"📌 当前入库接口：{CurrentDataSourceLabel}");
+        AddLog($"开始处理 ID：{gameId}");
+        AddLog($"当前入库接口：{CurrentDataSourceLabel}");
         AddLog("=".PadRight(50, '='));
 
         try
         {
             if (!int.TryParse(gameId, out int appId))
             {
-                AddLog("❌ 无效的游戏 ID");
+                AddLog("无效的游戏 ID");
                 StatusMessage = "无效的游戏 ID";
                 return;
             }
@@ -279,7 +282,7 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
             var luaFolder = _steamPathService.GetLuaFolder();
             if (string.IsNullOrEmpty(luaFolder))
             {
-                AddLog("❌ 未配置 Steam 路径，请先在基本设置中设置路径");
+                AddLog("未配置 Steam 路径，请先在基本设置中设置路径");
                 StatusMessage = "未配置 Steam 路径";
                 return;
             }
@@ -287,11 +290,11 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
             if (!Directory.Exists(luaFolder))
             {
                 Directory.CreateDirectory(luaFolder);
-                AddLog($"📂 已创建目录：{luaFolder}");
+                AddLog($"已创建目录：{luaFolder}");
             }
             else
             {
-                AddLog($"📂 目标目录：{luaFolder}");
+                AddLog($"目标目录：{luaFolder}");
             }
 
             if (IsLocalCacheMode)
@@ -305,7 +308,7 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AddLog($"❌ 任务异常：{ex.Message}");
+            AddLog($"任务异常：{ex.Message}");
             StatusMessage = $"异常：{ex.Message}";
         }
         finally
@@ -314,11 +317,22 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
         }
     }
 
+    // 主仓库为空时的成因区分提示：未发售 / 暂无数据 / 查询失败（查询失败返回 null）
+    private async Task<string> GetEmptyDepotsReasonAsync(int appId)
+    {
+        return await _steamApiService.IsComingSoonAsync(appId) switch
+        {
+            true => "该游戏尚未发售，暂无法生成入库文件",
+            false => "未能获取该游戏的仓库信息（可能为新上架游戏），请稍后重试",
+            _ => "该游戏仓库信息查询失败，请检查网络后重试"
+        };
+    }
+
     private async Task ExecuteDepotKeyDownloadAsync(int appId)
     {
         _depotService.UseDataSource(_currentDownloadMode);
 
-        AddLog("🔍 查询游戏仓库信息...");
+        AddLog("查询游戏仓库信息...");
         DepotQueryResult? queryResult = null;
         try
         {
@@ -326,39 +340,62 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AddLog($"❌ 查询异常：{ex.InnerException?.Message ?? ex.Message}");
+            AddLog($"查询异常：{ex.InnerException?.Message ?? ex.Message}");
             StatusMessage = "查询失败";
             return;
         }
 
         if (queryResult == null)
         {
-            AddLog("❌ 查询失败：API 返回数据中不包含该 AppID 的仓库信息");
+            var reason = await GetEmptyDepotsReasonAsync(appId);
+            AddLog($"查询失败：{reason}");
             StatusMessage = "查询失败";
             return;
         }
-        AddLog($"✅ 查询完成：{queryResult.AppName}");
-        AddLog($"   主游戏仓库: {queryResult.GameDepots.Count} 个");
-        AddLog($"   总DLC数量: {queryResult.DlcAppIds.Count} 个");
+        AddLog($"查询完成：{queryResult.AppName}");
+        AddLog($"主游戏仓库: {queryResult.GameDepots.Count} 个");
+        AddLog($"总DLC数量: {queryResult.DlcAppIds.Count} 个");
 
-        AddLog("📥 下载密钥文件...");
+        // SteamKit2 兜底后主仓库仍为空：token 保护已在兜底中处理，
+        // 剩余成因为未发售或数据暂缺，继续生成只会得到无密钥的空清单，直接终止
+        if (queryResult.GameDepots.Count == 0)
+        {
+            var reason = await GetEmptyDepotsReasonAsync(appId);
+            AddLog($"生成终止：{reason}");
+            StatusMessage = "生成失败";
+            return;
+        }
+
+        AddLog("下载密钥文件...");
         var keyReady = await _depotService.EnsureKeyFilesAsync();
         if (!keyReady)
         {
-            AddLog("❌ 下载密钥文件失败");
+            AddLog("下载密钥文件失败");
             StatusMessage = "下载密钥文件失败";
             return;
         }
-        AddLog("✅ 密钥文件已就绪");
+        AddLog("密钥文件已就绪");
 
-        AddLog("⚙️ 正在生成 Lua 配置文件...");
+        AddLog("正在生成 Lua 配置文件...");
         string? luaPath;
         try
         {
             if (queryResult.DlcAppIds.Count > 0)
             {
                 luaPath = await _depotService.GenerateLuaWithDlcAsync(appId);
-                AddLog($"   包含 DLC 共 {queryResult.DlcAppIds.Count} 个");
+                if (!string.IsNullOrEmpty(luaPath) && File.Exists(luaPath))
+                {
+                    var content = await File.ReadAllTextAsync(luaPath);
+                    var included = queryResult.DlcAppIds.Count(id =>
+                        Regex.IsMatch(content, $@"\badd(?:app|token)id\(\s*{id}\s*[,\)]", RegexOptions.IgnoreCase));
+                    AddLog($"包含 DLC 共 {included}/{queryResult.DlcAppIds.Count} 个");
+                    if (included < queryResult.DlcAppIds.Count)
+                        AddLog($"其中 {queryResult.DlcAppIds.Count - included} 个 DLC 因本地密钥仓库无对应 depots 密钥暂未收录");
+                }
+                else
+                {
+                    AddLog($"包含 DLC 共 {queryResult.DlcAppIds.Count} 个");
+                }
             }
             else
             {
@@ -367,58 +404,58 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
         }
         catch (InvalidOperationException ex)
         {
-            AddLog($"❌ {ex.Message}");
-            StatusMessage = "入库失败：本地缓存缺少解密密钥";
+            AddLog(ex.Message);
+            StatusMessage = "入库失败：密钥未收录，请更新缓存或更换接口";
             return;
         }
 
         if (string.IsNullOrEmpty(luaPath))
         {
-            AddLog("❌ 生成 Lua 文件失败");
+            AddLog("生成 Lua 文件失败");
             StatusMessage = "生成失败";
             return;
         }
 
-        AddLog($"✅ Lua 配置文件已保存：{luaPath}");
-        AddLog($"🎉 入库成功！Lua 文件：{Path.GetFileName(luaPath)}");
+        AddLog($"Lua 配置文件已保存：{luaPath}");
+        AddLog($"入库成功！Lua 文件：{Path.GetFileName(luaPath)}");
         StatusMessage = $"入库成功：{queryResult.AppName}";
     }
 
     private async Task ExecuteRemoteDownloadAsync(string gameId, string luaFolder)
     {
-        AddLog("🔗 获取下载地址...");
+        AddLog("获取下载地址...");
         var shortCode = await GetShortCodeAsync(gameId);
         if (string.IsNullOrEmpty(shortCode))
         {
-            AddLog("❌ 获取短码失败");
+            AddLog("获取短码失败");
             StatusMessage = "获取短码失败";
             return;
         }
-        AddLog($"🔗 获取短码：{shortCode}");
+        AddLog($"获取短码：{shortCode}");
 
-        AddLog("📥 开始下载文件...");
+        AddLog("开始下载文件...");
         var zipPath = Path.Combine(Path.GetTempPath(), $"{gameId}.zip");
         var success = await DownloadFileAsync(shortCode, zipPath);
         if (!success)
         {
-            AddLog("❌ 下载失败");
+            AddLog("下载失败");
             StatusMessage = "下载失败";
             return;
         }
-        AddLog("✅ 文件下载完成");
+        AddLog("文件下载完成");
 
-        AddLog("📦 正在解压...");
+        AddLog("正在解压...");
         var luaCount = ExtractLuaFiles(zipPath, luaFolder);
-        AddLog("✅ 清理临时压缩包");
+        AddLog("清理临时压缩包");
 
         if (luaCount > 0)
         {
-            AddLog($"🎉 入库完成！共导入 {luaCount} 个 Lua 脚本");
+            AddLog($"入库完成！共导入 {luaCount} 个 Lua 脚本");
             StatusMessage = $"成功入库 {luaCount} 个 Lua 脚本";
         }
         else
         {
-            AddLog("⚠️ 未找到任何 Lua 文件");
+            AddLog("未找到任何 Lua 文件");
             StatusMessage = "未找到 Lua 文件";
         }
     }
@@ -456,8 +493,8 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
             }
             catch (Exception ex)
             {
-                AddLog($"⚠️ 短码 API 响应解析失败：{ex.GetType().Name}: {ex.Message}");
-                AddLog($"   响应内容前 500 字符：{json[..Math.Min(json.Length, 500)]}");
+                AddLog($"短码 API 响应解析失败：{ex.GetType().Name}: {ex.Message}");
+                AddLog($"响应内容前 500 字符：{json[..Math.Min(json.Length, 500)]}");
                 return null;
             }
         }, "获取短码");
@@ -513,11 +550,11 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
                     break;
 
                 var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt));
-                AddLog($"⚠️ {stepName}失败（第{attempt}次）：{ex.GetType().Name}: {ex.Message}，{delay.TotalSeconds}s后重试...");
+                AddLog($"{stepName}失败（第{attempt}次）：{ex.GetType().Name}: {ex.Message}，{delay.TotalSeconds}s后重试...");
                 await Task.Delay(delay);
             }
         }
-        AddLog($"❌ {stepName}失败，已重试{maxRetries}次");
+        AddLog($"{stepName}失败，已重试{maxRetries}次");
         throw new HttpRequestException($"{stepName}失败，请检查网络后重试", lastException);
     }
 
@@ -533,7 +570,7 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
                     var destPath = Path.Combine(targetDir, Path.GetFileName(entry.FullName));
                     entry.ExtractToFile(destPath, overwrite: true);
                     count++;
-                    AddLog($"📄 导入：{Path.GetFileName(entry.FullName)}");
+                    AddLog($"导入：{Path.GetFileName(entry.FullName)}");
                 }
             }
         }
@@ -544,7 +581,8 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
     private void AddLog(string message)
     {
         LogService.Info("入库", message);
-        Application.Current.Dispatcher.Invoke(() => LogLines.Add(message));
+        var line = $"[{DateTime.Now:HH:mm:ss}] {message}";
+        Application.Current.Dispatcher.Invoke(() => LogLines.Add(line));
     }
 
     [RelayCommand]
@@ -555,7 +593,7 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
         {
             IsDownloading = true;
             _depotService.UseDataSource(_currentDownloadMode);
-            AddLog($"🔄 正在更新密钥缓存（{CurrentDataSourceLabel}）...");
+            AddLog($"正在更新密钥缓存（{CurrentDataSourceLabel}）...");
             var updateResult = await _depotService.UpdateKeyFilesAsync();
 
             if (updateResult.Success)
@@ -563,20 +601,20 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
                 var depotDelta = updateResult.DepotKeysNewCount - updateResult.DepotKeysOldCount;
                 var tokenDelta = updateResult.TokenKeysNewCount - updateResult.TokenKeysOldCount;
 
-                AddLog($"✅ {CurrentDataSourceLabel}状态：");
-                AddLog($"   depotkeys.json 已更新：{updateResult.DepotKeysOldCount} → {updateResult.DepotKeysNewCount} 条 ({(depotDelta >= 0 ? "+" : "")}{depotDelta})");
-                AddLog($"   appaccesstokens.json 已更新：{updateResult.TokenKeysOldCount} → {updateResult.TokenKeysNewCount} 条 ({(tokenDelta >= 0 ? "+" : "")}{tokenDelta})");
+                AddLog($"{CurrentDataSourceLabel}状态：");
+                AddLog($"depotkeys.json 已更新：{updateResult.DepotKeysOldCount} → {updateResult.DepotKeysNewCount} 条 ({(depotDelta >= 0 ? "+" : "")}{depotDelta})");
+                AddLog($"appaccesstokens.json 已更新：{updateResult.TokenKeysOldCount} → {updateResult.TokenKeysNewCount} 条 ({(tokenDelta >= 0 ? "+" : "")}{tokenDelta})");
                 StatusMessage = $"{CurrentDataSourceLabel}密钥缓存已更新";
             }
             else
             {
-                AddLog("❌ 更新失败，请检查网络");
+                AddLog("更新失败，请检查网络");
                 StatusMessage = "更新失败";
             }
         }
         catch (Exception ex)
         {
-            AddLog($"❌ 更新失败：{ex.Message}");
+            AddLog($"更新失败：{ex.Message}");
             StatusMessage = "更新失败";
         }
         finally

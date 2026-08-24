@@ -164,12 +164,11 @@ public class DlcQueryResultView : Window
             VerticalAlignment = VerticalAlignment.Top,
             HorizontalAlignment = HorizontalAlignment.Stretch,
             Margin = new Thickness(0, 8, 0, 0),
-            MaxHeight = 40,
-            Padding = new Thickness(12, 4, 12, 4),
+            Padding = new Thickness(12, 8, 12, 8),
             IsOpen = false,
             Severity = InfoBarSeverity.Success,
             IsClosable = false,
-            ClipToBounds = true
+            ClipToBounds = false
         };
         Panel.SetZIndex(_statusBar, 10);
         _statusBar.SetResourceReference(InfoBar.BackgroundProperty, "SolidBackgroundFillColorBaseBrush");

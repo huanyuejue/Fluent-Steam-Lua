@@ -481,9 +481,7 @@ public class SteamDepotService : ISteamDepotService
 
             if (matchedItems == 0)
                 throw new InvalidOperationException(
-                    withDlc
-                        ? $"本地缓存未找到 AppID {appId}、其 depots 或 DLC 的任何密钥或 token，已停止生成入库文件"
-                        : $"本地缓存未找到 AppID {appId} 及其 depots 的任何密钥或 token，已停止生成入库文件");
+                    $"密钥仓库暂未收录该游戏（AppID {appId}），请尝试更新密钥缓存；新上架游戏清单同步需时间，可稍后再试");
 
             var luaFolder = _steamPathService.GetLuaFolder();
             if (string.IsNullOrEmpty(luaFolder)) return null;
