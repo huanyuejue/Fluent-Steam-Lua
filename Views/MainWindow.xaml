@@ -4,7 +4,7 @@
         xmlns:ui="http://schemas.inkore.net/lib/ui/wpf/modern"
         Title="Fluent Steam Lua 管理工具"
         Icon="pack://application:,,,/Assets/app.ico"
-        Height="780" Width="1050"
+        Height="780" Width="1070"
         MinHeight="500" MinWidth="800"
         WindowStartupLocation="CenterScreen"
         ui:WindowHelper.UseModernWindowStyle="True"

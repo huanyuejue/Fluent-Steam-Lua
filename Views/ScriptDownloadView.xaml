@@ -1,4 +1,4 @@
-<UserControl x:Class="SteamLuaManager.Views.ScriptDownloadView"
+<UserControl xmlns:controls="clr-namespace:SteamLuaManager.Controls" x:Class="SteamLuaManager.Views.ScriptDownloadView"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.inkore.net/lib/ui/wpf/modern"
@@ -9,7 +9,7 @@
         SnapsToDevicePixels="True">
 
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+    <controls:SmoothScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <StackPanel Margin="36,24,36,24" HorizontalAlignment="Stretch">
 
             <!-- 页面标题 -->
@@ -175,5 +175,5 @@
             </ItemsControl>
 
         </StackPanel>
-    </ScrollViewer>
+    </controls:SmoothScrollViewer>
 </UserControl>

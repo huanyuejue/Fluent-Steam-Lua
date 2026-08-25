@@ -140,7 +140,7 @@ public class DlcQueryResultView : Window
         grid.Children.Add(headerPanel);
 
         // DLC list
-        var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        var scroll = new SteamLuaManager.Controls.SmoothScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         _itemsStack = new StackPanel { Margin = new Thickness(0, 0, 6, 0) };
         scroll.Content = _itemsStack;
         Grid.SetRow(scroll, 1);

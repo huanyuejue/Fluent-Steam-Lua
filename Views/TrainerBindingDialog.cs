@@ -169,7 +169,7 @@ public class TrainerBindingDialog : Window
         grid.Children.Add(titleBlock);
 
         // Form
-        var formScroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        var formScroll = new SteamLuaManager.Controls.SmoothScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         var formPanel = new StackPanel { Margin = new Thickness(0, 0, 6, 0) };
 
         // --- Trainer selector ---

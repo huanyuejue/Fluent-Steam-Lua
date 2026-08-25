@@ -1,4 +1,4 @@
-<UserControl x:Class="SteamLuaManager.Views.ExtractionView"
+<UserControl xmlns:controls="clr-namespace:SteamLuaManager.Controls" x:Class="SteamLuaManager.Views.ExtractionView"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.inkore.net/lib/ui/wpf/modern"
@@ -8,7 +8,7 @@
         UseLayoutRounding="True"
         SnapsToDevicePixels="True">
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+    <controls:SmoothScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <StackPanel Margin="36,24,36,24">
 
             <TextBlock Text="Lua 提取" FontSize="28" FontWeight="SemiBold" Margin="0,0,0,4"
@@ -133,5 +133,5 @@
             </Border>
 
         </StackPanel>
-    </ScrollViewer>
+    </controls:SmoothScrollViewer>
 </UserControl>

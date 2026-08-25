@@ -48,7 +48,11 @@ public partial class TrainerView : UserControl
             var parent = FindVisualParent<ScrollViewer>(innerSv);
             if (parent != null)
             {
-                parent.ScrollToVerticalOffset(parent.VerticalOffset - e.Delta);
+                // 父级为平滑滚动容器时走缓动动画，保持与页面滚动一致的手感
+                if (parent is Controls.SmoothScrollViewer smooth)
+                    smooth.SmoothScrollBy(-e.Delta);
+                else
+                    parent.ScrollToVerticalOffset(parent.VerticalOffset - e.Delta);
                 e.Handled = true;
             }
         }

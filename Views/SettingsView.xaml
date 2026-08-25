@@ -1,4 +1,4 @@
-<UserControl x:Class="SteamLuaManager.Views.SettingsView"
+<UserControl xmlns:controls="clr-namespace:SteamLuaManager.Controls" x:Class="SteamLuaManager.Views.SettingsView"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.inkore.net/lib/ui/wpf/modern"
@@ -80,7 +80,7 @@
 
             <!-- 基本设置 -->
             <TabItem Header="基本设置">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" BorderThickness="0"
+                <controls:SmoothScrollViewer VerticalScrollBarVisibility="Auto" BorderThickness="0"
                               Background="Transparent" Padding="0,0,20,0">
                     <StackPanel Margin="0,8,0,16">
 
@@ -190,12 +190,12 @@ Style="{StaticResource SettingsCardStyle}">
                         </ui:SettingsCard>
 
                     </StackPanel>
-                </ScrollViewer>
+                </controls:SmoothScrollViewer>
             </TabItem>
 
             <!-- 显示设置 -->
             <TabItem Header="显示设置">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" BorderThickness="0"
+                <controls:SmoothScrollViewer VerticalScrollBarVisibility="Auto" BorderThickness="0"
                               Background="Transparent" Padding="0,0,20,0">
                     <StackPanel Margin="0,8,0,16">
 
@@ -254,12 +254,12 @@ Style="{StaticResource SettingsCardStyle}">
                         </ui:SettingsCard>
 
                     </StackPanel>
-                </ScrollViewer>
+                </controls:SmoothScrollViewer>
             </TabItem>
 
             <!-- 接口设置 -->
             <TabItem Header="接口设置">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" BorderThickness="0"
+                <controls:SmoothScrollViewer VerticalScrollBarVisibility="Auto" BorderThickness="0"
                               Background="Transparent" Padding="0,0,20,0">
                     <StackPanel Margin="0,8,0,16">
 
@@ -350,7 +350,7 @@ Style="{StaticResource SettingsCardStyle}">
                         </ui:SettingsCard>
 
                     </StackPanel>
-                </ScrollViewer>
+                </controls:SmoothScrollViewer>
             </TabItem>
 
         </TabControl>

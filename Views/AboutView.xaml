@@ -1,4 +1,4 @@
-<UserControl x:Class="SteamLuaManager.Views.AboutView"
+<UserControl xmlns:controls="clr-namespace:SteamLuaManager.Controls" x:Class="SteamLuaManager.Views.AboutView"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Background="Transparent"
@@ -8,7 +8,7 @@
         SnapsToDevicePixels="True">
 
     <Grid>
-        <ScrollViewer VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled"
+        <controls:SmoothScrollViewer VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled"
                       VerticalAlignment="Center" HorizontalAlignment="Center">
             <StackPanel HorizontalAlignment="Center" Margin="48,32">
 
@@ -57,7 +57,7 @@
                 </Button>
 
             </StackPanel>
-        </ScrollViewer>
+        </controls:SmoothScrollViewer>
 
         <!-- GitHub 图标 - 固定在底部 -->
         <Button Click="GitHub_Click"

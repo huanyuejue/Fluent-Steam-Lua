@@ -228,7 +228,7 @@
         <Grid Grid.Row="4">
 
             <!-- 卡片模式 -->
-            <ScrollViewer x:Name="CardScrollViewer"
+            <controls:SmoothScrollViewer x:Name="CardScrollViewer"
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled"
                           Loaded="ViewModeContainer_Loaded"
@@ -381,10 +381,10 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
-            </ScrollViewer>
+            </controls:SmoothScrollViewer>
 
             <!-- 列表模式 -->
-            <ScrollViewer VerticalScrollBarVisibility="Auto"
+            <controls:SmoothScrollViewer VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled"
                           Loaded="ViewModeContainer_Loaded"
                           Padding="0,0,20,0"
@@ -502,10 +502,10 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                 </StackPanel>
-            </ScrollViewer>
+            </controls:SmoothScrollViewer>
 
             <!-- 表格模式 -->
-            <ScrollViewer VerticalScrollBarVisibility="Auto"
+            <controls:SmoothScrollViewer VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled"
                           Loaded="ViewModeContainer_Loaded"
                           Visibility="{Binding SelectedViewMode, Converter={StaticResource EqualityToVisibilityConverter}, ConverterParameter=表格}">
@@ -657,7 +657,7 @@
                         </Grid>
                     </controls:ClippingBorder>
                 </Grid>
-            </ScrollViewer>
+            </controls:SmoothScrollViewer>
         </Grid>
 
         <!-- 空状态提示 -->

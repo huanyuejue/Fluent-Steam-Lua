@@ -95,7 +95,7 @@
 
         <!-- 卡片区 -->
         <Grid Grid.Row="2">
-            <ScrollViewer x:Name="CardsScrollViewer" VerticalScrollBarVisibility="Auto"
+            <controls:SmoothScrollViewer x:Name="CardsScrollViewer" VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled"
                           Loaded="CardsScrollViewer_Loaded"
                           ScrollChanged="GamesScrollViewer_ScrollChanged"
@@ -152,10 +152,10 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
-            </ScrollViewer>
+            </controls:SmoothScrollViewer>
 
             <!-- 列表模式：纯文字行，无封面 -->
-            <ScrollViewer x:Name="ListScrollViewer" Visibility="Collapsed"
+            <controls:SmoothScrollViewer x:Name="ListScrollViewer" Visibility="Collapsed"
                           VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                           ScrollChanged="GamesScrollViewer_ScrollChanged"
                           Padding="0,0,20,0">
@@ -199,7 +199,7 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
-            </ScrollViewer>
+            </controls:SmoothScrollViewer>
 
             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,40,0,0"
                         Visibility="{Binding Games.Count, Converter={StaticResource ZeroToVisibilityConverter}}">

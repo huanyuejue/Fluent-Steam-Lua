@@ -1,4 +1,4 @@
-<UserControl x:Class="SteamLuaManager.Views.AuthorizationView"
+<UserControl xmlns:controls="clr-namespace:SteamLuaManager.Controls" x:Class="SteamLuaManager.Views.AuthorizationView"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.inkore.net/lib/ui/wpf/modern"
@@ -55,7 +55,7 @@
         </StackPanel>
 
         <!-- 内容区 -->
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+        <controls:SmoothScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Disabled">
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -274,7 +274,7 @@
                     </StackPanel>
                 </Border>
             </Grid>
-        </ScrollViewer>
+        </controls:SmoothScrollViewer>
 
         <!-- 状态条 -->
         <ui:InfoBar Grid.Row="2" Margin="0,14,0,0" Style="{StaticResource InfoBarStyle}"

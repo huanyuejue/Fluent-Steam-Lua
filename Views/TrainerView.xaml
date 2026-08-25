@@ -155,7 +155,7 @@
         </Border>
 
         <!-- 滚动内容 -->
-        <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+        <controls:SmoothScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                       Padding="0,0,14,0">
             <StackPanel>
 
@@ -671,7 +671,7 @@
                 </StackPanel>
 
             </StackPanel>
-        </ScrollViewer>
+        </controls:SmoothScrollViewer>
 
         <ui:InfoBar Grid.Row="4" Style="{StaticResource InfoBarStyle}"
                     IsOpen="{Binding StatusMessage, Converter={StaticResource StringNotEmptyToBoolConverter}}"
