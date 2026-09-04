@@ -728,7 +728,13 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
             var client = _httpClientProvider.GetClient("trainer-download", TimeSpan.FromSeconds(60));
 
-            using var response = await client.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+            using var request = new HttpRequestMessage(HttpMethod.Get, downloadUrl);
+            if (Uri.TryCreate(trainer.PageUrl, UriKind.Absolute, out var refererUri))
+                request.Headers.Referrer = refererUri;
+            request.Headers.TryAddWithoutValidation("Accept",
+                "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8");
+
+            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
             response.EnsureSuccessStatusCode();
 
             var fileName = GetFileNameFromResponse(response, trainer.GameName);
