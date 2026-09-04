@@ -52,6 +52,17 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
         _ => "远程清单仓库"
     };
 
+    /// <summary>上次更新本地缓存的时间；仅本地缓存仓库模式显示，远程仓库为空。</summary>
+    public string LastUpdateTimeText
+    {
+        get
+        {
+            if (!IsLocalCacheMode) return "";
+            var time = _depotService.GetLastUpdateTime(_currentDownloadMode);
+            return time == null ? " · 缓存尚未更新" : $" · 上次更新 {time.Value:MM-dd HH:mm}";
+        }
+    }
+
     public ObservableCollection<FoundGame> SearchResults { get; } = new();
     public ObservableCollection<string> LogLines { get; } = new();
 
@@ -64,6 +75,8 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
         _steamApiService = steamApiService;
         _currentDownloadMode = _settingsService.Load().DownloadMode;
         _settingsService.SettingsChanged += OnSettingsChanged;
+        _depotService.AllSourcesUpdated += OnAllSourcesUpdated;
+        OnPropertyChanged(nameof(LastUpdateTimeText));
     }
 
     private void OnSettingsChanged(AppSettings settings)
@@ -73,6 +86,12 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(IsDepotKeyMode));
         OnPropertyChanged(nameof(IsLocalCacheMode));
         OnPropertyChanged(nameof(CurrentDataSourceLabel));
+        OnPropertyChanged(nameof(LastUpdateTimeText));
+    }
+
+    private void OnAllSourcesUpdated()
+    {
+        Application.Current.Dispatcher.Invoke(() => OnPropertyChanged(nameof(LastUpdateTimeText)));
     }
 
     public void Dispose()
@@ -80,6 +99,7 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
         if (_disposed) return;
         _disposed = true;
         _settingsService.SettingsChanged -= OnSettingsChanged;
+        _depotService.AllSourcesUpdated -= OnAllSourcesUpdated;
     }
 
     public record FoundGame(int AppId, string Name, string CoverUrl);
@@ -605,6 +625,7 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
                 AddLog($"depotkeys.json 已更新：{updateResult.DepotKeysOldCount} → {updateResult.DepotKeysNewCount} 条 ({(depotDelta >= 0 ? "+" : "")}{depotDelta})");
                 AddLog($"appaccesstokens.json 已更新：{updateResult.TokenKeysOldCount} → {updateResult.TokenKeysNewCount} 条 ({(tokenDelta >= 0 ? "+" : "")}{tokenDelta})");
                 StatusMessage = $"{CurrentDataSourceLabel}密钥缓存已更新";
+                OnPropertyChanged(nameof(LastUpdateTimeText));
             }
             else
             {

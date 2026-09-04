@@ -94,6 +94,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         IsFabVisible = _settings.IsFabVisible;
         IsCardRefreshVisible = _settings.IsCardRefreshVisible;
         AutoCheckUpdateEnabled = _settings.AutoCheckUpdateEnabled;
+        AutoRefreshKeyCache = _settings.AutoRefreshKeyCache;
         IsShowTrainerSections = _settings.ShowTrainerSections;
         IsShowCopyLogButton = _settings.ShowCopyLogButton;
         EnableLogging = _settings.EnableLogging;
@@ -245,6 +246,14 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         _settingsService.Save(_settings);
         StatusMessage = value ? "启动时自动检查更新已开启" : "启动时自动检查更新已关闭";
         LogService.Info("设置", value ? "启动时自动检查更新已开启" : "启动时自动检查更新已关闭");
+    }
+
+    partial void OnAutoRefreshKeyCacheChanged(bool value)
+    {
+        _settings.AutoRefreshKeyCache = value;
+        _settingsService.Save(_settings);
+        StatusMessage = value ? "自动更新密钥缓存已开启" : "自动更新密钥缓存已关闭";
+        LogService.Info("设置", value ? "自动更新密钥缓存已开启" : "自动更新密钥缓存已关闭");
     }
 
     partial void OnMinimizeToTrayChanged(bool value)
@@ -609,6 +618,9 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private bool _autoCheckUpdateEnabled = true;
+
+    [ObservableProperty]
+    private bool _autoRefreshKeyCache = true;
 
     [ObservableProperty]
     private string _selectedTheme = "System";

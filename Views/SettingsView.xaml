@@ -277,6 +277,13 @@ Style="{StaticResource SettingsCardStyle}">
                             </ComboBox>
                         </ui:SettingsCard>
 
+                        <ui:SettingsCard Header="自动更新密钥缓存" Margin="0,0,0,8"
+                                         Description="启动应用时检查本地缓存更新时间，超过24小时自动刷新 V1/V2 密钥缓存"
+Style="{StaticResource SettingsCardStyle}">
+                            <ui:ToggleSwitch IsOn="{Binding AutoRefreshKeyCache}"
+                                             OnContent="开" OffContent="关"/>
+                        </ui:SettingsCard>
+
                         <ui:SettingsCard Header="封面CDN节点" Margin="0,0,0,8"
                                          Description="选择优先使用的封面下载节点"
 Style="{StaticResource SettingsCardStyle}">

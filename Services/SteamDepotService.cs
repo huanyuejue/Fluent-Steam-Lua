@@ -13,6 +13,7 @@ public class SteamDepotService : ISteamDepotService
     private readonly IHttpClientProvider _httpClientProvider;
     private readonly ISteamPathService _steamPathService;
     private readonly ISteamAppInfoService _appInfoService;
+    private readonly ISettingsService _settingsService;
     private readonly string _cacheFolder;
     private string _currentSource = "DepotKey";
     private readonly Dictionary<string, (string DepotKeysUrl, string TokenKeysUrl)> _resolvedUrls = new();
@@ -20,6 +21,8 @@ public class SteamDepotService : ISteamDepotService
     private const string KeyIndexUrl = "https://pan.qzyun.net/f/d/MlArs0/key.txt";
     private const string Source2DepotKeysUrl = "https://api.993499094.xyz/depotkeys.json";
     private const string Source2TokenKeysUrl = "https://api.993499094.xyz/appaccesstokens.json";
+    private const string LastUpdateStampFileName = ".lastupdate";
+    private static readonly TimeSpan AutoRefreshInterval = TimeSpan.FromHours(24);
 
     private static readonly string[] SourceNames = ["DepotKey", "DepotKey2"];
 
@@ -31,11 +34,14 @@ public class SteamDepotService : ISteamDepotService
     private string? _cachedSource;
     private readonly SemaphoreSlim _cacheLock = new(1, 1);
 
-    public SteamDepotService(ISteamPathService steamPathService, IHttpClientProvider httpClientProvider, ISteamAppInfoService appInfoService)
+    public event Action? AllSourcesUpdated;
+
+    public SteamDepotService(ISteamPathService steamPathService, IHttpClientProvider httpClientProvider, ISteamAppInfoService appInfoService, ISettingsService settingsService)
     {
         _steamPathService = steamPathService;
         _httpClientProvider = httpClientProvider;
         _appInfoService = appInfoService;
+        _settingsService = settingsService;
 
         _cacheFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "cache");
         if (!Directory.Exists(_cacheFolder))
@@ -49,6 +55,40 @@ public class SteamDepotService : ISteamDepotService
 
     private string GetSourceCacheDir() =>
         Path.Combine(_cacheFolder, _currentSource == "DepotKey2" ? "v2" : "v1");
+
+    private static string SourceCacheDirOf(string cacheFolder, string source) =>
+        Path.Combine(cacheFolder, source == "DepotKey2" ? "v2" : "v1");
+
+    private static string LastUpdateStampPathOf(string cacheFolder, string source) =>
+        Path.Combine(SourceCacheDirOf(cacheFolder, source), LastUpdateStampFileName);
+
+    /// <summary>某数据源上次成功更新缓存的时间（本地时区），无时间戳则返回 null。</summary>
+    public DateTime? GetLastUpdateTime(string source)
+    {
+        try
+        {
+            var path = LastUpdateStampPathOf(_cacheFolder, source);
+            if (!File.Exists(path)) return null;
+            var text = File.ReadAllText(path);
+            if (DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.RoundtripKind, out var t))
+                return t.ToLocalTime();
+        }
+        catch (Exception ex) { LogService.Warn("入库", $"读取更新时间戳失败 ({source}): {ex.Message}"); }
+        return null;
+    }
+
+    private static void WriteLastUpdateStamp(string cacheFolder, string source)
+    {
+        try
+        {
+            var dir = SourceCacheDirOf(cacheFolder, source);
+            if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+            File.WriteAllText(LastUpdateStampPathOf(cacheFolder, source),
+                DateTime.UtcNow.ToString("O", System.Globalization.CultureInfo.InvariantCulture));
+        }
+        catch (Exception ex) { LogService.Warn("入库", $"写入更新时间戳失败 ({source}): {ex.Message}"); }
+    }
 
     // 轻量计数 JSON 顶层属性数，避免反序列化整个大字典
     private static int CountJsonProps(byte[] data, string label)
@@ -211,6 +251,7 @@ public class SteamDepotService : ISteamDepotService
             GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
 
             result.Success = true;
+            WriteLastUpdateStamp(_cacheFolder, _currentSource);
             return result;
         }
         catch (Exception ex)
@@ -221,14 +262,34 @@ public class SteamDepotService : ISteamDepotService
         }
     }
 
+    // 启动时自动刷新：开关开启时，文件缺失或上次更新时间超过 24 小时的源才更新
     public async Task EnsureAllSourcesAsync(CancellationToken ct = default)
     {
+        if (!_settingsService.Load().AutoRefreshKeyCache)
+            return;
+
         foreach (var source in SourceNames)
         {
             UseDataSource(source);
-            try { await EnsureKeyFilesAsync(ct); }
+            try
+            {
+                var filesMissing = !File.Exists(GetDepotKeysPath()) || !File.Exists(GetTokenKeysPath());
+                var last = GetLastUpdateTime(source);
+                var stale = last == null || DateTime.Now - last.Value > AutoRefreshInterval;
+                if (!filesMissing && !stale)
+                    continue;
+
+                for (int attempt = 1; attempt <= 3; attempt++)
+                {
+                    var result = await UpdateKeyFilesAsync(ct);
+                    if (result.Success) break;
+                    if (attempt < 3)
+                        await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, attempt)), ct);
+                }
+            }
             catch (Exception ex) { LogService.Warn("入库", $"后台更新密钥文件失败 ({source}): {ex.Message}"); }
         }
+        AllSourcesUpdated?.Invoke();
     }
 
     public async Task<DepotQueryResult?> QueryAppAsync(int appId, CancellationToken ct = default)

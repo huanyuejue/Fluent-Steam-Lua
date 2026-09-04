@@ -12,6 +12,10 @@ public interface ISteamDepotService
     Task<bool> EnsureKeyFilesAsync(CancellationToken ct = default);
     Task<KeyFileUpdateResult> UpdateKeyFilesAsync(CancellationToken ct = default);
     Task EnsureAllSourcesAsync(CancellationToken ct = default);
+    DateTime? GetLastUpdateTime(string source);
+
+    /// <summary>EnsureAllSourcesAsync 完成后触发，通知 UI 刷新时间显示。</summary>
+    event Action? AllSourcesUpdated;
 }
 
 public class DlcFetchResult

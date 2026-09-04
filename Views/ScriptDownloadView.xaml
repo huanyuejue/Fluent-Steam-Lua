@@ -16,10 +16,11 @@
             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                 <TextBlock Text="游戏入库" FontSize="28" FontWeight="SemiBold"
                            Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-                <TextBlock Margin="12,14,0,0" FontSize="12" FontWeight="Normal"
-                           Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+<TextBlock Margin="12,14,0,0" FontSize="12" FontWeight="Normal"
+                   Foreground="{DynamicResource TextFillColorSecondaryBrush}">
                     <Run Text="-  当前清单接口 :"/>
                     <Run Text="{Binding CurrentDataSourceLabel, Mode=OneWay}"/>
+                    <Run Text="{Binding LastUpdateTimeText, Mode=OneWay}"/>
                 </TextBlock>
             </StackPanel>
             <TextBlock Text="支持通过游戏AppID和游戏名搜索（中英文皆可），支持模糊匹配，最多显示10条搜索结果"
