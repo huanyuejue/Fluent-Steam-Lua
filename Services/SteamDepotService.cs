@@ -656,16 +656,20 @@ public class SteamDepotService : ISteamDepotService
         _cachedSource = null;
     }
 
-    public async Task<DlcFetchResult> FetchDlcAsync(string luaPath, int dlcAppId, bool hasOwnDepot, CancellationToken ct = default)
+    public async Task<DlcFetchResult> FetchDlcAsync(string luaPath, int dlcAppId, bool hasOwnDepot, CancellationToken ct = default, string? dlcName = null)
     {
         var result = new DlcFetchResult();
         try
         {
+            // 名称注释与整包生成保持一致：有中文名则拼在行尾
+            var nameComment = SanitizeLuaComment(dlcName);
+            var commentSuffix = string.IsNullOrEmpty(nameComment) ? "" : $" -- {nameComment}";
+
             // 1. 无独立 depot → 无需密钥，直接写入
             if (!hasOwnDepot)
             {
                 result.NeedKey = false;
-                await AppendLinesToLuaAsync(luaPath, new List<string> { $"addappid({dlcAppId})" }, ct);
+                await AppendLinesToLuaAsync(luaPath, new List<string> { $"addappid({dlcAppId}){commentSuffix}" }, ct);
                 result.Success = true;
                 result.Message = $"DLC {dlcAppId} 无独立 depot，无需密钥，已写入";
                 return result;
@@ -702,7 +706,7 @@ public class SteamDepotService : ISteamDepotService
                 // 查找 DLC 自身主 AppID 的密钥
                 if (!string.IsNullOrEmpty(dlcMainKey))
                 {
-                    var lines = new List<string> { $"addappid({dlcAppId}, 1, \"{dlcMainKey}\")" };
+                    var lines = new List<string> { $"addappid({dlcAppId}, 1, \"{dlcMainKey}\"){commentSuffix}" };
                     await AppendLinesToLuaAsync(luaPath, lines, ct);
                     result.Success = true;
                     result.Message = $"DLC {dlcAppId} 密钥获取成功，已写入";

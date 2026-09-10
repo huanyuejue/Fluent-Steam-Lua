@@ -247,7 +247,7 @@ public class DlcQueryResultView : Window
                 dlc.IsFetching = true;
                 try
                 {
-                    var result = await _depotService.FetchDlcAsync(_luaPath, dlc.AppId, dlc.HasDepot);
+                    var result = await _depotService.FetchDlcAsync(_luaPath, dlc.AppId, dlc.HasDepot, ct: default, dlcName: dlc.Name);
                     if (result.Success)
                     {
                         dlc.IsImported = true;
@@ -289,7 +289,7 @@ public class DlcQueryResultView : Window
 
         try
         {
-            var result = await _depotService.FetchDlcAsync(_luaPath, dlc.AppId, dlc.HasDepot);
+            var result = await _depotService.FetchDlcAsync(_luaPath, dlc.AppId, dlc.HasDepot, ct: default, dlcName: dlc.Name);
             if (result.Success)
             {
                 dlc.IsImported = true;
