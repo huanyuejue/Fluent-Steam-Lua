@@ -7,6 +7,7 @@ public interface ILuaFileManager
     Task<List<GameInfo>> ScanLuaFilesAsync();
     Task AddLuaFileAsync(string sourceFilePath);
     Task AddBinFileAsync(string sourceFilePath);
+    Task AddManifestFileAsync(string sourceFilePath);
     Task DeleteLuaFileAsync(int appId);
     void StartWatching();
     void StopWatching();

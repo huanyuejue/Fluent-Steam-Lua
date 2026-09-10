@@ -459,7 +459,7 @@
                         <TextBlock Text="拖拽到此处即可一键导入" FontSize="18" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                    HorizontalAlignment="Center" Margin="0,16,0,0"/>
-                        <TextBlock Text="支持 .lua（游戏清单）和 .bin（成就数据）文件" FontSize="13"
+                        <TextBlock Text="支持 .lua（游戏清单）、.bin（成就数据）和 .manifest（仓库清单）文件" FontSize="13"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                    HorizontalAlignment="Center" Margin="0,6,0,0"/>
                     </StackPanel>

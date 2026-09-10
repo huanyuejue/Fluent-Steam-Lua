@@ -159,6 +159,17 @@ Style="{StaticResource SettingsCardStyle}">
                             </Button>
                         </ui:SettingsCard>
 
+                        <ui:SettingsCard Header="Manifest 清单文件夹" Margin="0,0,0,8"
+                                         Description="打开Steam Manifest清单文件夹"
+Style="{StaticResource SettingsCardStyle}">
+                            <Button Content="打开目录" Command="{Binding OpenManifestFolderCommand}"
+                                    Padding="12,6" Margin="4,0">
+                                <Button.Background>
+                                    <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                                </Button.Background>
+                            </Button>
+                        </ui:SettingsCard>
+
                         <ui:SettingsCard Header="Steam 文件夹" Margin="0,0,0,8"
                                          Description="打开Steam安装目录"
 Style="{StaticResource SettingsCardStyle}">

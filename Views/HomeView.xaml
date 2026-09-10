@@ -667,7 +667,7 @@
                          Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
             <TextBlock Text="还没有入库的游戏" FontSize="18" HorizontalAlignment="Center" Margin="0,16,0,8"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-            <TextBlock Text="将 .lua 或 .bin 文件拖拽到此处，或点击上方添加游戏按钮" FontSize="13"
+            <TextBlock Text="将 .lua、.bin 或 .manifest 文件拖拽到此处，或点击上方添加游戏按钮" FontSize="13"
                        HorizontalAlignment="Center"
                        Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
         </StackPanel>

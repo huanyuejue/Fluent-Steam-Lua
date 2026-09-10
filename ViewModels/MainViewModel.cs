@@ -426,7 +426,7 @@ namespace SteamLuaManager.ViewModels;
 	{
 		var dialog = new Microsoft.Win32.OpenFileDialog
 		{
-			Filter = "游戏文件 (*.lua;*.bin)|*.lua;*.bin",
+			Filter = "游戏文件 (*.lua;*.bin;*.manifest)|*.lua;*.bin;*.manifest",
 			Multiselect = true,
 			Title = "选择游戏文件"
 		};
@@ -435,6 +435,7 @@ namespace SteamLuaManager.ViewModels;
 		{
 			var luaCount = 0;
 			var binCount = 0;
+			var manifestCount = 0;
 			foreach (var file in dialog.FileNames)
 			{
 				try
@@ -449,12 +450,18 @@ namespace SteamLuaManager.ViewModels;
 						await _luaFileManager.AddBinFileAsync(file);
 						binCount++;
 					}
+					else if (file.EndsWith(".manifest", StringComparison.OrdinalIgnoreCase))
+					{
+						await _luaFileManager.AddManifestFileAsync(file);
+						manifestCount++;
+					}
 				}
 				catch (Exception ex) { StatusText = $"添加失败: {ex.Message}"; LogService.Error("主页", $"添加文件失败: {ex}"); }
 			}
 			var msgs = new List<string>();
 			if (luaCount > 0) msgs.Add($"导入游戏成功 ({luaCount})");
 			if (binCount > 0) msgs.Add($"导入成就成功 ({binCount})");
+			if (manifestCount > 0) msgs.Add($"导入清单成功 ({manifestCount})");
 			if (msgs.Count > 0)
 			{
 				StatusMessage = string.Join("，", msgs);
@@ -862,6 +869,7 @@ namespace SteamLuaManager.ViewModels;
 	{
 		var luaCount = 0;
 		var binCount = 0;
+		var manifestCount = 0;
 		foreach (var file in files)
 		{
 			if (file.EndsWith(".lua", StringComparison.OrdinalIgnoreCase))
@@ -874,12 +882,18 @@ namespace SteamLuaManager.ViewModels;
 				try { await _luaFileManager.AddBinFileAsync(file); binCount++; }
 				catch (Exception ex) { StatusText = $"拖拽添加 bin 失败: {ex.Message}"; LogService.Error("主页", $"拖拽添加 bin 失败: {ex}"); }
 			}
+			else if (file.EndsWith(".manifest", StringComparison.OrdinalIgnoreCase))
+			{
+				try { await _luaFileManager.AddManifestFileAsync(file); manifestCount++; }
+				catch (Exception ex) { StatusText = $"拖拽添加 manifest 失败: {ex.Message}"; LogService.Error("主页", $"拖拽添加 manifest 失败: {ex}"); }
+			}
 		}
-		if (luaCount > 0 || binCount > 0)
+		if (luaCount > 0 || binCount > 0 || manifestCount > 0)
 		{
 			var msgs = new List<string>();
 			if (luaCount > 0) msgs.Add($"导入游戏成功 ({luaCount})");
 			if (binCount > 0) msgs.Add($"导入成就成功 ({binCount})");
+			if (manifestCount > 0) msgs.Add($"导入清单成功 ({manifestCount})");
 			StatusMessage = string.Join("，", msgs);
 			LogService.Info("主页", $"拖拽导入: {string.Join("，", msgs)}");
 		}

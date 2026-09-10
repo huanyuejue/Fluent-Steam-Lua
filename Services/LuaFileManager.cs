@@ -268,6 +268,19 @@ public class LuaFileManager : ILuaFileManager, IDisposable
         await Task.Run(() => File.Copy(sourceFilePath, destPath, true));
     }
 
+    public async Task AddManifestFileAsync(string sourceFilePath)
+    {
+        var steamPath = _steamPathService.DetectSteamPath();
+        if (string.IsNullOrEmpty(steamPath)) return;
+
+        var depotCacheDir = Path.Combine(steamPath, "depotcache");
+        Directory.CreateDirectory(depotCacheDir);
+        var fileName = Path.GetFileName(sourceFilePath);
+        var destPath = Path.Combine(depotCacheDir, fileName);
+
+        await Task.Run(() => File.Copy(sourceFilePath, destPath, true));
+    }
+
     public async Task DeleteLuaFileAsync(int appId)
     {
         var luaFolder = _steamPathService.GetLuaFolder();

@@ -554,6 +554,21 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
+    private void OpenManifestFolder()
+    {
+        var steamDir = SteamPath;
+        if (string.IsNullOrEmpty(steamDir) || !Directory.Exists(steamDir))
+        {
+            StatusMessage = "Steam路径不存在或未设置";
+            LogService.Warn("设置", "Steam路径不存在或未设置");
+            return;
+        }
+        var manifestDir = Path.Combine(steamDir, "depotcache");
+        Directory.CreateDirectory(manifestDir);
+        Process.Start(new ProcessStartInfo { FileName = manifestDir, UseShellExecute = true });
+    }
+
+    [RelayCommand]
     private void OpenCacheFolder()
     {
         var cacheDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "cache");
