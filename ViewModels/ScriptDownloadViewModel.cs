@@ -43,6 +43,9 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _statusMessage = "就绪";
 
+    [ObservableProperty]
+    private bool _includeDlc = true;
+
     public bool IsDepotKeyMode => _currentDownloadMode == "DepotKey";
     public bool IsLocalCacheMode => _currentDownloadMode == "DepotKey" || _currentDownloadMode == "DepotKey2";
     public string CurrentDataSourceLabel => _currentDownloadMode switch
@@ -400,7 +403,7 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
         string? luaPath;
         try
         {
-            if (queryResult.DlcAppIds.Count > 0)
+            if (IncludeDlc && queryResult.DlcAppIds.Count > 0)
             {
                 luaPath = await _depotService.GenerateLuaWithDlcAsync(appId);
                 if (!string.IsNullOrEmpty(luaPath) && File.Exists(luaPath))
@@ -419,6 +422,8 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
             }
             else
             {
+                if (!IncludeDlc && queryResult.DlcAppIds.Count > 0)
+                    AddLog($"已跳过 {queryResult.DlcAppIds.Count} 个 DLC（未勾选 DLC入库）");
                 luaPath = await _depotService.GenerateLuaAsync(appId);
             }
         }

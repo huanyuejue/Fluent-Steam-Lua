@@ -470,9 +470,17 @@ public class SteamDepotService : ISteamDepotService
                         contentNames[info.AppId] = info.DisplayName;
             }
 
-            // 主游戏 depots（命中已知内容 ID 时带名称注释，其余仓库无独立名）
+            // 主游戏 depots（命中已知内容 ID 时带名称注释，其余仓库无独立名）；
+            // 未勾选 DLC 入库时跳过与 DLC AppID 同 ID 的仓库，避免 DLC 内容随 depot 行写入
+            HashSet<int>? dlcIdSet = withDlc ? null : new HashSet<int>(queryResult.DlcAppIds);
+            var skippedDlcDepots = 0;
             foreach (var depot in queryResult.GameDepots)
             {
+                if (dlcIdSet != null && dlcIdSet.Contains(depot.DepotId))
+                {
+                    skippedDlcDepots++;
+                    continue;
+                }
                 if (depotKeys.TryGetValue(depot.DepotId.ToString(), out var key))
                 {
                     var depotName = contentNames.TryGetValue(depot.DepotId, out var n)
@@ -485,6 +493,8 @@ public class SteamDepotService : ISteamDepotService
                     matchedItems++;
                 }
             }
+            if (skippedDlcDepots > 0)
+                LogService.Info("入库", $"未勾选 DLC入库，已跳过 {skippedDlcDepots} 个 DLC 关联仓库");
 
             // App token
             if (appTokens.TryGetValue(appId.ToString(), out var token))
