@@ -24,6 +24,9 @@ public bool ShowTrainerSections { get; set; } = true;
     public bool MinimizeToTray { get; set; }
     public bool AutoRefreshKeyCache { get; set; } = true;
     public List<TrainerBinding> TrainerBindings { get; set; } = new();
+    public string SavedAccountName { get; set; } = string.Empty;
+    public string EncryptedRefreshToken { get; set; } = string.Empty;
+    public string EncryptedGuardData { get; set; } = string.Empty;
 }
 
 public interface ISettingsService

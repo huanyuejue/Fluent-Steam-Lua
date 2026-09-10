@@ -14,10 +14,10 @@
             <TextBlock Text="Lua 提取" FontSize="28" FontWeight="SemiBold" Margin="0,0,0,4"
                        Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
             <StackPanel Margin="0,0,0,24">
-                <TextBlock Text="输入游戏 AppID，从 Steam 配置中获取仓库密钥并生成 Lua 入库清单"
+                <TextBlock Text="输入游戏 AppID，登录账号后从云端获取仓库密钥并生成 Lua 入库清单"
                            FontSize="12"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                <TextBlock Text="需账号拥有正版游戏且下载后启动过游戏"
+                <TextBlock Text="需登录拥有该游戏的账号；成就提取需本机 Steam 下载并启动过游戏"
                            FontSize="12"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
             </StackPanel>
@@ -89,6 +89,21 @@
                         </Button>
                     </Grid>
 
+                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding LoginStatusText}" FontSize="13" Margin="0,0,12,0"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                        <Button Content="账号登录" Command="{Binding OpenLoginCommand}"
+                                Padding="16,6" Height="32" FontSize="13" Margin="0,0,8,0"
+                                Visibility="{Binding IsLoggedOn, Converter={StaticResource InvertedBoolToVisibilityConverter}}"/>
+                        <Button Content="切换账号" Command="{Binding OpenLoginCommand}"
+                                Padding="16,6" Height="32" FontSize="13" Margin="0,0,8,0"
+                                Visibility="{Binding IsLoggedOn, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                        <Button Content="退出" Command="{Binding LogoutCommand}"
+                                Padding="16,6" Height="32" FontSize="13"
+                                Visibility="{Binding IsLoggedOn, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                    </StackPanel>
+
                     <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
                         <CheckBox Content="固定游戏版本" IsChecked="{Binding PinManifest}"
                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
@@ -96,8 +111,12 @@
                                   ToolTip="获取游戏Depots的最新清单ID并写入Lua"/>
                         <CheckBox Content="提取游戏成就文件" IsChecked="{Binding ExtractAchievements}"
                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                  FontSize="13"
+                                  FontSize="13" Margin="0,0,32,0"
                                   ToolTip="从Steam缓存提取游戏的成就文件"/>
+                        <CheckBox Content="下载 Manifest 清单文件" IsChecked="{Binding DownloadManifests}"
+                                  Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                  FontSize="13"
+                                  ToolTip="登录后从 Steam CDN 下载各仓库的 Manifest 文件到提取目录"/>
                     </StackPanel>
                 </StackPanel>
             </Border>
