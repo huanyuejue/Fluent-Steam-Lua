@@ -28,44 +28,79 @@ public sealed class HttpClientProvider : IHttpClientProvider, IDisposable
     public HttpClient GetClient(string name, TimeSpan timeout, Action<HttpClient>? configure = null)
     {
         var proxy = GetProxySnapshotCached();
+        var key = CacheKey(name, timeout);
         lock (_lock)
         {
-            if (_clients.TryGetValue(name, out var entry) && entry.ProxySignature == proxy.Signature)
-                return entry.Client;
-
-            if (_clients.Remove(name, out entry))
-                entry.Client.Dispose();
-
-            var client = CreateClient(timeout, proxy);
-            configure?.Invoke(client);
-            _clients[name] = new ClientEntry(client, proxy.Signature);
-            return client;
+            return GetOrCreateLocked(key, timeout, configure, proxy);
         }
     }
 
     public async Task<T> SendWithProxyRetryAsync<T>(string name, TimeSpan timeout, Func<HttpClient, Task<T>> sendAsync, Action<HttpClient>? configure = null)
     {
-        try
+        // 最多尝试 3 次：并发下旧实例被废弃是常态，靠“仅当字典仍持有才废弃”收敛，
+        // 孤儿连接上的在飞请求不受影响
+        Exception? lastError = null;
+        for (int attempt = 0; attempt < 3; attempt++)
         {
-            return await sendAsync(GetClient(name, timeout, configure));
+            var client = GetClient(name, timeout, configure);
+            try
+            {
+                return await sendAsync(client);
+            }
+            catch (Exception ex) when (ShouldRefreshClient(ex))
+            {
+                lastError = ex;
+                InvalidateIfCurrent(name, timeout, client);
+            }
         }
-        catch (Exception ex) when (ShouldRefreshClient(ex))
-        {
-            Reset(name);
-            return await sendAsync(GetClient(name, timeout, configure));
-        }
+        throw lastError!;
     }
 
     public async Task SendWithProxyRetryAsync(string name, TimeSpan timeout, Func<HttpClient, Task> sendAsync, Action<HttpClient>? configure = null)
     {
-        try
+        Exception? lastError = null;
+        for (int attempt = 0; attempt < 3; attempt++)
         {
-            await sendAsync(GetClient(name, timeout, configure));
+            var client = GetClient(name, timeout, configure);
+            try
+            {
+                await sendAsync(client);
+                return;
+            }
+            catch (Exception ex) when (ShouldRefreshClient(ex))
+            {
+                lastError = ex;
+                InvalidateIfCurrent(name, timeout, client);
+            }
         }
-        catch (Exception ex) when (ShouldRefreshClient(ex))
+        throw lastError!;
+    }
+
+    private static string CacheKey(string name, TimeSpan timeout) => $"{name}|{timeout.Ticks}";
+
+    private HttpClient GetOrCreateLocked(string key, TimeSpan timeout, Action<HttpClient>? configure, ProxySnapshot proxy)
+    {
+        if (_clients.TryGetValue(key, out var entry) && entry.ProxySignature == proxy.Signature)
+            return entry.Client;
+
+        // 淘汰旧实例只摘除不 Dispose（理由同上），新请求用新实例
+        _clients.Remove(key);
+
+        var client = CreateClient(timeout, proxy);
+        configure?.Invoke(client);
+        _clients[key] = new ClientEntry(client, proxy.Signature);
+        return client;
+    }
+
+    // 只有字典里仍是这个实例才废弃：只摘除不 Dispose——在飞请求拿着旧实例继续跑不受影响，
+    // 旧实例靠 GC/终结器回收。之前这里直接 Dispose，是并发下载连环炸的根因。
+    private void InvalidateIfCurrent(string name, TimeSpan timeout, HttpClient client)
+    {
+        var key = CacheKey(name, timeout);
+        lock (_lock)
         {
-            Reset(name);
-            await sendAsync(GetClient(name, timeout, configure));
+            if (_clients.TryGetValue(key, out var entry) && ReferenceEquals(entry.Client, client))
+                _clients.Remove(key);
         }
     }
 
@@ -73,15 +108,15 @@ public sealed class HttpClientProvider : IHttpClientProvider, IDisposable
     {
         lock (_lock)
         {
+            // 同上：只摘除不清掉，避免误杀在飞请求；连接池 2 分钟空闲自回收 + GC 兜底
             if (name != null)
             {
-                if (_clients.Remove(name, out var entry))
-                    entry.Client.Dispose();
+                var prefix = name + "|";
+                foreach (var key in _clients.Keys.Where(k => k == name || k.StartsWith(prefix)).ToList())
+                    _clients.Remove(key);
                 return;
             }
 
-            foreach (var entry in _clients.Values)
-                entry.Client.Dispose();
             _clients.Clear();
             _proxySnapshot = null;
             _proxySnapshotTime = DateTime.MinValue;
@@ -106,7 +141,14 @@ public sealed class HttpClientProvider : IHttpClientProvider, IDisposable
 
     public void Dispose()
     {
-        Reset();
+        lock (_lock)
+        {
+            foreach (var entry in _clients.Values)
+            {
+                try { entry.Client.Dispose(); } catch { }
+            }
+            Reset();
+        }
     }
 
     private static HttpClient CreateClient(TimeSpan timeout, ProxySnapshot proxy)
@@ -199,7 +241,8 @@ public sealed class HttpClientProvider : IHttpClientProvider, IDisposable
 
     private static bool ShouldRefreshClient(Exception ex)
     {
-        return ex is HttpRequestException or TaskCanceledException ||
-               ex.InnerException is HttpRequestException or WebException;
+        // ObjectDisposed 表示共享连接被并发的 Reset 拆掉，重建一次即可自愈
+        return ex is HttpRequestException or TaskCanceledException or ObjectDisposedException ||
+                ex.InnerException is HttpRequestException or WebException;
     }
 }

@@ -255,6 +255,9 @@ public partial class HomeView : UserControl
             case "dlc-query":
                 await _activeMenuViewModel.QueryDlcCommand.ExecuteAsync(_activeMenuGame);
                 break;
+            case "fetch-manifest":
+                await _activeMenuViewModel.FetchManifestsCommand.ExecuteAsync(_activeMenuGame);
+                break;
         }
     }
 
@@ -343,7 +346,7 @@ public partial class HomeView : UserControl
         : [new CardMenuItem("pin-latest", "固定到游戏最新版本"), CardMenuItem.Separator(), new CardMenuItem("pin-current", "固定到当前已安装版本")];
 
     private static CardMenuItem[] BuildInfoSubmenu() =>
-        [new CardMenuItem("steamdb", "SteamDB页面"), CardMenuItem.Separator(), new CardMenuItem("store", "Steam商店页面"), CardMenuItem.Separator(), new CardMenuItem("dlc-query", "清单DLC入库查询")];
+        [new CardMenuItem("steamdb", "SteamDB页面"), CardMenuItem.Separator(), new CardMenuItem("store", "Steam商店页面"), CardMenuItem.Separator(), new CardMenuItem("dlc-query", "清单DLC入库查询"), CardMenuItem.Separator(), new CardMenuItem("fetch-manifest", "获取Manifest清单")];
 
     private void UpdateCardMenuBackground()
     {

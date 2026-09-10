@@ -173,6 +173,17 @@ public class LuaFileManager : ILuaFileManager, IDisposable
             }
         }
 
+        // Parse bare addappid(id) lines (pure entitlement DLC etc.), excluding keyed ones
+        game.BareAppIds.Clear();
+        var keyedIds = new HashSet<int>(game.Depots.Select(d => d.DepotId));
+        foreach (Match match in AddAppIdRegex.Matches(content))
+        {
+            if (int.TryParse(match.Groups[1].Value, out var bareId)
+                && !keyedIds.Contains(bareId)
+                && !game.BareAppIds.Contains(bareId))
+                game.BareAppIds.Add(bareId);
+        }
+
         game.IsManifestPinned = activePins.Count > 0;
     }
 
@@ -268,10 +279,10 @@ public class LuaFileManager : ILuaFileManager, IDisposable
         await Task.Run(() => File.Copy(sourceFilePath, destPath, true));
     }
 
-    public async Task AddManifestFileAsync(string sourceFilePath)
+    public async Task<string?> AddManifestFileAsync(string sourceFilePath)
     {
         var steamPath = _steamPathService.DetectSteamPath();
-        if (string.IsNullOrEmpty(steamPath)) return;
+        if (string.IsNullOrEmpty(steamPath)) return null;
 
         var depotCacheDir = Path.Combine(steamPath, "depotcache");
         Directory.CreateDirectory(depotCacheDir);
@@ -279,6 +290,44 @@ public class LuaFileManager : ILuaFileManager, IDisposable
         var destPath = Path.Combine(depotCacheDir, fileName);
 
         await Task.Run(() => File.Copy(sourceFilePath, destPath, true));
+        return destPath;
+    }
+
+    /// <summary>删除 lua 中指定 id 的 addappid 行（裸行/带密钥行）及其 setManifestid 行（含注释掉的）。</summary>
+    public async Task RemoveAppIdsFromLuaAsync(int appId, IEnumerable<int> depotIds)
+    {
+        var ids = new HashSet<int>(depotIds);
+        if (ids.Count == 0) return;
+
+        var luaFolder = _steamPathService.GetLuaFolder();
+        if (string.IsNullOrEmpty(luaFolder)) return;
+
+        var filePath = Path.Combine(luaFolder, $"{appId}.lua");
+        if (!File.Exists(filePath)) return;
+
+        var content = await File.ReadAllTextAsync(filePath);
+        var lines = content.Split('\n').Select(l => l.TrimEnd('\r')).ToList();
+        var kept = new List<string>(lines.Count);
+
+        foreach (var line in lines)
+        {
+            var depotMatch = AddDepotRegex.Match(line);
+            var appMatch = depotMatch.Success ? null : AddAppIdRegex.Match(line);
+            int? lineId = null;
+            if (depotMatch.Success && int.TryParse(depotMatch.Groups[1].Value, out var did)) lineId = did;
+            else if (appMatch != null && appMatch.Success && int.TryParse(appMatch.Groups[1].Value, out var aid)) lineId = aid;
+            if (lineId is int x && ids.Contains(x)) continue;
+
+            var pinMatch = ManifestPinRegex.Match(line);
+            var commentedMatch = pinMatch.Success ? null : ManifestPinCommentedRegex.Match(line);
+            var pinIdStr = pinMatch.Success ? pinMatch.Groups[1].Value
+                : commentedMatch != null && commentedMatch.Success ? commentedMatch.Groups[1].Value : null;
+            if (pinIdStr != null && int.TryParse(pinIdStr, out var pid) && ids.Contains(pid)) continue;
+
+            kept.Add(line);
+        }
+
+        await File.WriteAllTextAsync(filePath, string.Join("\n", kept));
     }
 
     public async Task DeleteLuaFileAsync(int appId)

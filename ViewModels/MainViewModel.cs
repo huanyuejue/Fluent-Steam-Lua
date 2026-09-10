@@ -25,9 +25,11 @@ namespace SteamLuaManager.ViewModels;
 	private readonly ISteamDepotService _steamDepotService;
 	private readonly IHttpClientProvider _httpClientProvider;
 	private readonly IDialogService _dialogService;
+	private readonly ISteamManifestRepoService _manifestRepoService;
 	private List<GameInfo> _allGames = new();
 	private CancellationTokenSource? _refreshCts;
 	private CancellationTokenSource? _dlcQueryCts;
+	private bool _isFetchingManifest;
 	private DispatcherTimer? _progressTimer;
 	private DispatcherTimer? _searchDebounceTimer;
 
@@ -142,7 +144,8 @@ namespace SteamLuaManager.ViewModels;
 		ISteamManifestService steamManifestService,
 		ISteamDepotService steamDepotService,
 		IHttpClientProvider httpClientProvider,
-		IDialogService dialogService)
+		IDialogService dialogService,
+		ISteamManifestRepoService manifestRepoService)
 	{
 		_steamPathService = steamPathService;
 		_luaFileManager = luaFileManager;
@@ -153,6 +156,7 @@ namespace SteamLuaManager.ViewModels;
 		_httpClientProvider = httpClientProvider;
 
 		_dialogService = dialogService;
+		_manifestRepoService = manifestRepoService;
 		_luaFileManager.FilesChanged += OnFilesChanged;
 		WeakReferenceMessenger.Default.Register<LuaFolderChangedMessage>(this, (_, _) => OnRefreshRequested());
 
@@ -504,6 +508,145 @@ namespace SteamLuaManager.ViewModels;
 		else
 			await _luaFileManager.DisableGameAsync(game.AppId);
 
+		await QuickRefreshAsync();
+	}
+
+	[RelayCommand]
+	private async Task FetchManifestsAsync(GameInfo? game)
+	{
+		if (game == null || _isFetchingManifest) return;
+
+		if (game.IsDisabled)
+		{
+			await ShowModernDialogAsync("操作被阻止", "该游戏已被禁用入库，请先启用后再获取。");
+			return;
+		}
+
+		var displayName = string.IsNullOrEmpty(game.GameName) ? game.AppId.ToString() : game.GameName;
+		var lua = await _luaFileManager.ParseLuaFileAsync(game.AppId);
+		if (lua == null)
+		{
+			await ShowModernDialogAsync("获取失败", "找不到该游戏的 Lua 文件。");
+			return;
+		}
+		var luaIds = lua.Depots.Select(d => d.DepotId)
+			.Concat(lua.BareAppIds)
+			.Distinct()
+			.Where(id => id != game.AppId)
+			.ToList();
+		if (luaIds.Count == 0)
+		{
+			await ShowModernDialogAsync("无需获取", "该 Lua 中没有需要 manifest 的仓库行。");
+			return;
+		}
+
+		_isFetchingManifest = true;
+		try
+		{
+			await FetchManifestsCoreAsync(game, displayName, luaIds);
+		}
+		finally
+		{
+			_isFetchingManifest = false;
+		}
+	}
+
+	private async Task FetchManifestsCoreAsync(GameInfo game, string displayName, List<int> luaIds)
+	{
+		var progressWin = new Views.ManifestFetchProgressView(displayName, _settingsService.Load().SelectedBackdrop);
+		progressWin.Owner = Application.Current.MainWindow;
+		using var cts = new CancellationTokenSource();
+		progressWin.CancelRequested += (_, _) => { try { cts.Cancel(); } catch { } };
+		progressWin.Show();
+
+		ManifestRepoFetchResult? result = null;
+		try
+		{
+			var progress = new Progress<(int done, int total, string text)>(t => progressWin.Report(t.done, t.total, t.text));
+			result = await _manifestRepoService.FetchManifestsAsync(game.AppId, luaIds, progress, cts.Token);
+		}
+		catch (OperationCanceledException) when (cts.IsCancellationRequested)
+		{
+			StatusMessage = "已取消获取";
+		}
+		catch (OperationCanceledException ex)
+		{
+			LogService.Error("主页", $"Manifest 获取被中断（非用户取消）: {ex}");
+			await ShowModernDialogAsync("获取失败", $"请求被中断：{ex.Message}");
+		}
+		catch (Exception ex)
+		{
+			LogService.Error("主页", $"Manifest 获取异常: {ex}");
+			await ShowModernDialogAsync("获取失败", $"发生异常：{ex.Message}");
+		}
+		finally
+		{
+			try { progressWin.Close(); } catch { }
+		}
+
+		if (result == null || !result.Success)
+		{
+			if (result != null)
+				await ShowModernDialogAsync("获取失败", result.Error ?? "未知错误");
+			return;
+		}
+
+		var pins = result.GetPinMap();
+		if (pins.Count > 0)
+			await _luaFileManager.SetManifestPinAsync(game.AppId, true, pins);
+
+		var rateNote = result.PossiblyRateLimited ? "\n（GitHub API 可能限流，缺失或为误判，可稍后重试）" : "";
+		if (result.MissingMainDepots.Count > 0)
+		{
+			await ShowModernDialogAsync("获取失败",
+				$"游戏主仓库缺少 manifest，下载仍会失败：\n{string.Join("、", result.MissingMainDepots)}{rateNote}");
+		}
+		else if (result.MissingDlcDepots.Count > 0)
+		{
+			var confirmed = await ShowModernConfirmAsync(
+				"部分DLC清单缺失",
+				$"以下 DLC 未找到 manifest，下载仍会失败：\n{string.Join("、", result.MissingDlcDepots)}\n\n可以移除这些 DLC 的入库行后正常下载本体，是否移除？{rateNote}",
+				"移除", "保留");
+			if (confirmed)
+				await _luaFileManager.RemoveAppIdsFromLuaAsync(game.AppId, result.MissingDlcDepots);
+		}
+		else if (result.MissingUnknownDepots.Count > 0)
+		{
+			var confirmed = await ShowModernConfirmAsync(
+				"部分清单缺失",
+				$"以下 id 未在仓库中找到 manifest，且无法查询游戏仓库信息区分归属：\n{string.Join("、", result.MissingUnknownDepots)}\n\n可移除这些行后重试下载（若本体无法下载请手动恢复行），是否移除？{rateNote}",
+				"移除", "保留");
+			if (confirmed)
+				await _luaFileManager.RemoveAppIdsFromLuaAsync(game.AppId, result.MissingUnknownDepots);
+		}
+
+		var summary = new List<string>();
+		foreach (var f in result.Fetched.Where(f => f.Kind == RepoDepotKind.Latest))
+			summary.Add(string.IsNullOrEmpty(f.PicsGid)
+				? $"depot {f.DepotId}：已获取仓库版 ({f.Gid})"
+				: $"depot {f.DepotId}：已获取最新版 ({f.Gid})");
+		foreach (var f in result.Fetched.Where(f => f.Kind == RepoDepotKind.RepoStale))
+			summary.Add($"depot {f.DepotId}：仓库版落后于 Steam 最新，已固定仓库版 ({f.Gid})");
+		foreach (var f in result.Fetched.Where(f => f.Kind == RepoDepotKind.OldVersion))
+			summary.Add($"depot {f.DepotId}：无最新版，已固定旧版 ({f.Gid})，游戏将安装指定旧版本");
+		foreach (var id in result.MissingMainDepots)
+			summary.Add($"depot {id}：主仓库缺失 manifest");
+		foreach (var id in result.MissingDlcDepots)
+			summary.Add($"depot {id}：DLC 缺失 manifest");
+		foreach (var id in result.MissingUnknownDepots)
+			summary.Add($"depot {id}：未知归属缺失 manifest");
+		if (result.PossiblyRateLimited)
+			summary.Add("注意：GitHub API 可能限流，以上缺失或为误判，可稍后重试");
+		if (summary.Count == 0)
+		{
+			await ShowModernDialogAsync("无需获取", "lua 中的 id 与仓库信息均不匹配，无需获取 manifest。");
+			return;
+		}
+		if (!string.IsNullOrEmpty(result.DepotCacheDir))
+			summary.Add($"文件已放入：{result.DepotCacheDir}（{result.Fetched.Count} 个）");
+		StatusMessage = $"Manifest 获取完成：成功 {result.Fetched.Count} / 缺失 {result.MissingMainDepots.Count + result.MissingDlcDepots.Count + result.MissingUnknownDepots.Count}";
+		LogService.Info("主页", $"Manifest 获取完成 ({displayName})：成功 {result.Fetched.Count}，缺失 {result.MissingMainDepots.Count + result.MissingDlcDepots.Count + result.MissingUnknownDepots.Count}");
+		await ShowModernDialogAsync("获取完成", string.Join("\n", summary));
 		await QuickRefreshAsync();
 	}
 

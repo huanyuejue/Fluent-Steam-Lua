@@ -39,5 +39,8 @@ public partial class GameInfo : ObservableObject
     private bool _isSelected;
 
     public ObservableCollection<DepotInfo> Depots { get; set; } = new();
+
+    /// <summary>裸 addappid(id) 行的 id（无密钥的纯 DLC 等），解析时收集，不影响 Depots。</summary>
+    public List<int> BareAppIds { get; set; } = new();
 }
 
