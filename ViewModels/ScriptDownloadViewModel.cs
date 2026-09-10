@@ -46,6 +46,9 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private bool _includeDlc = true;
 
+    [ObservableProperty]
+    private bool _pinManifest;
+
     public bool IsDepotKeyMode => _currentDownloadMode == "DepotKey";
     public bool IsLocalCacheMode => _currentDownloadMode == "DepotKey" || _currentDownloadMode == "DepotKey2";
     public string CurrentDataSourceLabel => _currentDownloadMode switch
@@ -405,7 +408,7 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
         {
             if (IncludeDlc && queryResult.DlcAppIds.Count > 0)
             {
-                luaPath = await _depotService.GenerateLuaWithDlcAsync(appId);
+                luaPath = await _depotService.GenerateLuaWithDlcAsync(appId, pinManifest: PinManifest);
                 if (!string.IsNullOrEmpty(luaPath) && File.Exists(luaPath))
                 {
                     var content = await File.ReadAllTextAsync(luaPath);
@@ -424,7 +427,7 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
             {
                 if (!IncludeDlc && queryResult.DlcAppIds.Count > 0)
                     AddLog($"已跳过 {queryResult.DlcAppIds.Count} 个 DLC（未勾选 DLC入库）");
-                luaPath = await _depotService.GenerateLuaAsync(appId);
+                luaPath = await _depotService.GenerateLuaAsync(appId, pinManifest: PinManifest);
             }
         }
         catch (InvalidOperationException ex)

@@ -6,8 +6,8 @@ public interface ISteamDepotService
 {
     void UseDataSource(string source);
     Task<DepotQueryResult?> QueryAppAsync(int appId, CancellationToken ct = default);
-    Task<string?> GenerateLuaAsync(int appId, CancellationToken ct = default);
-    Task<string?> GenerateLuaWithDlcAsync(int appId, CancellationToken ct = default);
+    Task<string?> GenerateLuaAsync(int appId, CancellationToken ct = default, bool pinManifest = false);
+    Task<string?> GenerateLuaWithDlcAsync(int appId, CancellationToken ct = default, bool pinManifest = false);
     Task<DlcFetchResult> FetchDlcAsync(string luaPath, int dlcAppId, bool hasOwnDepot, CancellationToken ct = default, string? dlcName = null);
     Task<bool> EnsureKeyFilesAsync(CancellationToken ct = default);
     Task<KeyFileUpdateResult> UpdateKeyFilesAsync(CancellationToken ct = default);

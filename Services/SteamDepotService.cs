@@ -416,13 +416,13 @@ public class SteamDepotService : ISteamDepotService
         return 0;
     }
 
-    public Task<string?> GenerateLuaAsync(int appId, CancellationToken ct = default)
-        => BuildLuaCoreAsync(appId, withDlc: false, ct);
+    public Task<string?> GenerateLuaAsync(int appId, CancellationToken ct = default, bool pinManifest = false)
+        => BuildLuaCoreAsync(appId, withDlc: false, pinManifest, ct);
 
-    public Task<string?> GenerateLuaWithDlcAsync(int appId, CancellationToken ct = default)
-        => BuildLuaCoreAsync(appId, withDlc: true, ct);
+    public Task<string?> GenerateLuaWithDlcAsync(int appId, CancellationToken ct = default, bool pinManifest = false)
+        => BuildLuaCoreAsync(appId, withDlc: true, pinManifest, ct);
 
-    private async Task<string?> BuildLuaCoreAsync(int appId, bool withDlc, CancellationToken ct)
+    private async Task<string?> BuildLuaCoreAsync(int appId, bool withDlc, bool pinManifest, CancellationToken ct)
     {
         try
         {
@@ -474,6 +474,7 @@ public class SteamDepotService : ISteamDepotService
             // 未勾选 DLC 入库时跳过与 DLC AppID 同 ID 的仓库，避免 DLC 内容随 depot 行写入
             HashSet<int>? dlcIdSet = withDlc ? null : new HashSet<int>(queryResult.DlcAppIds);
             var skippedDlcDepots = 0;
+            var pinnedManifests = 0;
             foreach (var depot in queryResult.GameDepots)
             {
                 if (dlcIdSet != null && dlcIdSet.Contains(depot.DepotId))
@@ -488,6 +489,11 @@ public class SteamDepotService : ISteamDepotService
                     sb.AppendLine(string.IsNullOrEmpty(depotName)
                         ? $"addappid({depot.DepotId}, 1, \"{key}\")"
                         : $"addappid({depot.DepotId}, 1, \"{key}\") -- {depotName}");
+                    if (pinManifest && !string.IsNullOrEmpty(depot.ManifestId))
+                    {
+                        sb.AppendLine($"setManifestid({depot.DepotId},\"{depot.ManifestId}\",0)");
+                        pinnedManifests++;
+                    }
                     depot.Key = key;
                     depot.IsMatched = true;
                     matchedItems++;
@@ -543,12 +549,22 @@ public class SteamDepotService : ISteamDepotService
                             if (depotKeys.TryGetValue(depot.DepotId.ToString(), out var depKey))
                             {
                                 sb.AppendLine($"addappid({depot.DepotId}, 1, \"{depKey}\")");
+                                if (pinManifest && !string.IsNullOrEmpty(depot.ManifestId))
+                                {
+                                    sb.AppendLine($"setManifestid({depot.DepotId},\"{depot.ManifestId}\",0)");
+                                    pinnedManifests++;
+                                }
                                 matchedItems++;
                             }
                         }
                     }
                 }
             }
+
+            if (pinManifest)
+                LogService.Info("入库", pinnedManifests > 0
+                    ? $"已固定 {pinnedManifests} 个仓库版本"
+                    : "勾选了固定游戏版本，但未获取到任何仓库 Manifest 数据");
 
             if (matchedItems == 0)
                 throw new InvalidOperationException(

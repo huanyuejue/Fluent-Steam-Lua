@@ -84,12 +84,16 @@
                         </Button>
                     </Grid>
 
-                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0"
+                                  Visibility="{Binding IsLocalCacheMode, Converter={StaticResource BoolToVisibilityConverter}}">
                         <CheckBox Content="DLC入库" IsChecked="{Binding IncludeDlc}"
                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                  FontSize="13"
-                                  IsEnabled="{Binding IsLocalCacheMode}"
+                                  FontSize="13" Margin="0,0,32,0"
                                   ToolTip="勾选后，入库时将同时入库该游戏的全部DLC（仅本地缓存仓库模式生效）"/>
+                        <CheckBox Content="固定游戏版本" IsChecked="{Binding PinManifest}"
+                                  Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                  FontSize="13"
+                                  ToolTip="勾选后，入库的游戏将固定到当前游戏最新版本，后续游戏更新也不会跟随触发更新，D加密游戏推荐勾选，以防止游戏更新导致D加密授权失效（仅本地缓存仓库模式生效）"/>
                     </StackPanel>
                 </StackPanel>
             </Border>
