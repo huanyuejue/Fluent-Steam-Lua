@@ -560,9 +560,9 @@ namespace SteamLuaManager.ViewModels;
 		for (var e = ex; e != null; e = e.InnerException)
 		{
 			if (e is HttpRequestException or IOException or SocketException or WebException)
-				return "网络连接失败，请检查网络（可尝试开启 VPN 或配置代理）后重试。";
+				return "网络连接失败，请检查网络（可尝试开启 VPN/代理，或在设置 → 接口设置中切换镜像加速源）后重试。";
 			if (e is TimeoutException)
-				return "请求超时，请检查网络（可尝试开启 VPN 或配置代理）后重试。";
+				return "请求超时，请检查网络（可尝试开启 VPN/代理，或在设置 → 接口设置中切换镜像加速源）后重试。";
 		}
 		return $"发生异常：{ex.Message}";
 	}
@@ -588,7 +588,7 @@ namespace SteamLuaManager.ViewModels;
 		catch (OperationCanceledException ex)
 		{
 			LogService.Error("主页", $"Manifest 获取被中断（非用户取消）: {ex}");
-			await ShowModernDialogAsync("获取失败", $"请求被中断（可能是网络超时）：{ex.Message}\n可尝试开启 VPN 或配置代理后重试");
+			await ShowModernDialogAsync("获取失败", $"请求被中断（可能是网络超时）：{ex.Message}\n可尝试开启 VPN/代理，或在设置 → 接口设置中切换镜像加速源后重试");
 		}
 		catch (Exception ex)
 		{
@@ -616,7 +616,7 @@ namespace SteamLuaManager.ViewModels;
 		if (result.UnknownDepots.Count > 0)
 		{
 			await ShowModernDialogAsync("部分清单未能确认",
-				$"以下 depot 因网络原因未能确认是否存在（不是缺失），请检查网络（可尝试开启 VPN 或配置代理）后重试，不要删除入库行：\n{string.Join("、", result.UnknownDepots)}");
+				$"以下 depot 因网络原因未能确认是否存在（不是缺失），请检查网络（可尝试开启 VPN/代理，或在设置 → 接口设置中切换镜像加速源）后重试，不要删除入库行：\n{string.Join("、", result.UnknownDepots)}");
 		}
 		if (result.MissingMainDepots.Count > 0)
 		{

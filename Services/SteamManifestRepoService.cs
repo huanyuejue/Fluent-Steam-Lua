@@ -31,6 +31,7 @@ public class SteamManifestRepoService : ISteamManifestRepoService
     private readonly IHttpClientProvider _httpClientProvider;
     private readonly ISteamDepotService _depotService;
     private readonly ILuaFileManager _luaFileManager;
+    private readonly ISettingsService _settingsService;
 
     private readonly object _treeCacheLock = new();
     private readonly Dictionary<int, (Dictionary<int, string>? Files, bool ListOk)> _treeCache = new();
@@ -41,11 +42,13 @@ public class SteamManifestRepoService : ISteamManifestRepoService
     public SteamManifestRepoService(
         IHttpClientProvider httpClientProvider,
         ISteamDepotService depotService,
-        ILuaFileManager luaFileManager)
+        ILuaFileManager luaFileManager,
+        ISettingsService settingsService)
     {
         _httpClientProvider = httpClientProvider;
         _depotService = depotService;
         _luaFileManager = luaFileManager;
+        _settingsService = settingsService;
     }
 
     public async Task<ManifestRepoFetchResult> FetchManifestsAsync(
@@ -55,6 +58,8 @@ public class SteamManifestRepoService : ISteamManifestRepoService
         CancellationToken ct = default)
     {
         _rateLimited = 0;
+        // 首选镜像源一次读出，本轮获取内保持一致（中途改设置下次生效）
+        var preferredMirror = _settingsService.Load().ManifestMirror;
         // 20s 仍未进入逐 depot 获取：大概率网络受限，提示开 VPN/代理（只提示一次，不中断；
         // 提前返回/进入获取循环时置位抑制，避免事后误报）。
         var hintSuppressed = 0;
@@ -62,7 +67,7 @@ public class SteamManifestRepoService : ISteamManifestRepoService
         {
             if (Interlocked.CompareExchange(ref hintSuppressed, 0, 0) == 0)
             {
-                try { progress?.Report((0, 1, "等待 20s 仍未开始获取，网络可能受限，可尝试开启 VPN 或配置代理后重试…")); }
+                try { progress?.Report((0, 1, "等待 20s 仍未开始获取，网络可能受限，可尝试开启 VPN/代理，或在设置 → 接口设置中切换镜像加速源后重试…")); }
                 catch { }
             }
         }, TaskScheduler.Default);
@@ -83,7 +88,7 @@ public class SteamManifestRepoService : ISteamManifestRepoService
         if (basePics == null)
         {
             Interlocked.Exchange(ref hintSuppressed, 1);
-            return new ManifestRepoFetchResult(false, "无法查询该游戏的仓库信息，请检查网络（可尝试开启 VPN 或配置代理）后重试",
+            return new ManifestRepoFetchResult(false, "无法查询该游戏的仓库信息，请检查网络（可尝试开启 VPN/代理，或在设置 → 接口设置中切换镜像加速源）后重试",
                 [], [], [], [], [], false, null);
         }
 
@@ -184,7 +189,7 @@ public class SteamManifestRepoService : ISteamManifestRepoService
             async (depotId, innerCt) =>
             {
                 picsGids.TryGetValue(depotId, out var picsGid);
-                var r = await FetchOneDepotAsync(appId, depotId, picsGid ?? "", branchFiles, branchListOk, progress, GetDone, needList.Count, innerCt);
+                var r = await FetchOneDepotAsync(appId, depotId, picsGid ?? "", branchFiles, branchListOk, progress, GetDone, needList.Count, preferredMirror, innerCt);
                 lock (resultLock)
                 {
                     done++;
@@ -222,6 +227,57 @@ public class SteamManifestRepoService : ISteamManifestRepoService
             Interlocked.Exchange(ref _rateLimited, 1);
     }
 
+    // 测速探测文件：真实存在的小 manifest（分支 1433130 下）。仓库删了它则全源失败，
+    // 与"均不可达"同一种展示，换个稳定文件即可，不影响主流程。
+    private const string SpeedTestBranch = "1433130";
+    private const string SpeedTestFile = "1433131_5676412693243015272.manifest";
+
+    /// <summary>直连 + 各镜像并发下载同一探测文件；单个 15s 超时，互不等待。</summary>
+    public async Task<List<(string Name, long LatencyMs, bool IsSuccess)>> TestMirrorSpeedAsync(
+        IProgress<(string Name, long LatencyMs, bool IsSuccess)>? progress = null)
+    {
+        var rawProbe = $"https://raw.githubusercontent.com/{Owner}/{Repo}/{SpeedTestBranch}/{SpeedTestFile}";
+        // 测速与用户偏好无关：全源都测，默认顺序即直连首位
+        var urls = GitHubMirror.ManifestRawMirrors(rawProbe);
+
+        var taskList = urls.Select(async url =>
+        {
+            var name = GitHubMirror.SourceDisplayName(url);
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            try
+            {
+                using var response = await _httpClientProvider.SendWithProxyRetryAsync(
+                    ClientName, TimeSpan.FromSeconds(15),
+                    client => client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead),
+                    HttpHeaderHelper.ConfigureBrowser);
+                response.EnsureSuccessStatusCode();
+                var bytes = await response.Content.ReadAsByteArrayAsync();
+                sw.Stop();
+                return (name, sw.ElapsedMilliseconds, bytes.Length > 0);
+            }
+            catch
+            {
+                sw.Stop();
+                return (name, sw.ElapsedMilliseconds, false);
+            }
+        }).Select(async task =>
+        {
+            var result = await task;
+            progress?.Report(result);
+            return result;
+        }).ToList();
+
+        var pending = new List<Task<(string Name, long LatencyMs, bool IsSuccess)>>(taskList);
+        var results = new List<(string Name, long LatencyMs, bool IsSuccess)>();
+        while (pending.Count > 0)
+        {
+            var done = await Task.WhenAny(pending);
+            pending.Remove(done);
+            results.Add(await done);
+        }
+        return results;
+    }
+
     // 单 depot 获取结果：任何一条路径网络未知都记未知（未知优先于缺失，不诱导删行）
     private record DepotFetchOutcome(FetchedDepot? Fetched, bool Unknown);
 
@@ -233,6 +289,7 @@ public class SteamManifestRepoService : ISteamManifestRepoService
         int appId, int depotId, string picsGid,
         Dictionary<int, string> branchFiles, bool branchListOk,
         IProgress<(int done, int total, string text)>? progress, Func<int> getDone, int total,
+        string preferredMirror,
         CancellationToken ct)
     {
         var tmpDir = Path.Combine(Path.GetTempPath(), $"manifestfetch_{appId}");
@@ -241,40 +298,58 @@ public class SteamManifestRepoService : ISteamManifestRepoService
         FetchedDepot? fetched = null;
         var unknown = false;
 
-        // 单路径尝试：先报"正在尝试某路"保证窗口持续有动静；成功则落盘组装，
-        // 网络未知/确认不存在分别记证据后找下一条路
-        async Task<bool> TryPlaceAsync(string gid, RepoDepotKind kind, string fileName, string url, string label)
+        // 单路径尝试：同文件多源按顺序试，首个成功落盘即返回；
+        // 网络未知/确认不存在记证据后找下一条路。
+        // 日志只记关键节点：成功走的源、未知失败的源、整条路全灭；例行的 404 不刷屏。
+        async Task<bool> TryPlaceAsync(string gid, RepoDepotKind kind, string fileName, List<string> urls, string label)
         {
-            try { progress?.Report((getDone(), total, $"depot {depotId} 正在尝试{label}…")); } catch { }
-            // 单路总预算：provider 内部静默重试叠起来太久，这里到时换下一条路（超时记未知）
-            RepoDownload dl;
-            try
+            foreach (var url in urls)
             {
-                dl = await TryDownloadBytesAsync(url, ct).WaitAsync(PathPhaseBudget, ct);
+                var host = new Uri(url).Host;
+                try { progress?.Report((getDone(), total, $"depot {depotId} 正在尝试{label}（{host}）…")); } catch { }
+                // 单路总预算：provider 内部静默重试叠起来太久，这里到时换下一条路（超时记未知）
+                RepoDownload dl;
+                try
+                {
+                    dl = await TryDownloadBytesAsync(url, ct).WaitAsync(PathPhaseBudget, ct);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                catch (Exception ex)
+                {
+                    LogService.Info("Manifest仓库", $"depot {depotId} {label}经 {host} 超时未完成，已换下一源: {ex.Message}");
+                    unknown = true;
+                    continue;
+                }
+                if (dl.Kind == RepoDownloadKind.Unknown)
+                {
+                    LogService.Info("Manifest仓库", $"depot {depotId} {label}经 {host} 失败，已换下一源");
+                    unknown = true;
+                    continue;
+                }
+                // 直连源的 404 是权威的：镜像取的都是源站，不可能有源站没有的文件，直接整条路结束
+                if (dl.Kind == RepoDownloadKind.NotFound || dl.Bytes == null)
+                {
+                    if (GitHubMirror.IsDirectUrl(url)) return false;
+                    continue;
+                }
+                if (TryPrepareManifestBytes(depotId, dl.Bytes, out var placed)
+                    && await PlaceBytesAsync(depotId, gid, placed, tmpDir, fileName) is string saved)
+                {
+                    LogService.Info("Manifest仓库", $"depot {depotId} 通过{label}（{host}）获取成功 ({gid})");
+                    fetched = new FetchedDepot(depotId, gid, kind, picsGid, saved);
+                    return true;
+                }
             }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
-            catch (Exception ex)
-            {
-                LogService.Info("Manifest仓库", $"depot {depotId} {label}超时未完成，已换下一条路: {ex.Message}");
-                unknown = true;
-                return false;
-            }
-            if (dl.Kind == RepoDownloadKind.Unknown) { unknown = true; return false; }
-            if (dl.Kind == RepoDownloadKind.NotFound || dl.Bytes == null) return false;
-            if (TryPrepareManifestBytes(depotId, dl.Bytes, out var placed)
-                && await PlaceBytesAsync(depotId, gid, placed, tmpDir, fileName) is string saved)
-            {
-                fetched = new FetchedDepot(depotId, gid, kind, picsGid, saved);
-                return true;
-            }
+            LogService.Info("Manifest仓库", $"depot {depotId} {label}全部 {urls.Count} 个源均失败");
             return false;
         }
 
-        // 路径 1：PICS 最新 gid 直链（命中则 0 API 开销）
+        // 路径 1：PICS 最新 gid 直链（命中则 0 API 开销），直连失败顺延公共镜像
         if (ulong.TryParse(picsGid, out var picsNum) && picsNum != 0)
         {
             var name = $"{depotId}_{picsGid}.manifest";
-            if (await TryPlaceAsync(picsGid, RepoDepotKind.Latest, name, BranchRawUrl(appId.ToString(), name), "直链"))
+            if (await TryPlaceAsync(picsGid, RepoDepotKind.Latest, name,
+                GitHubMirror.ManifestRawMirrors($"https://raw.githubusercontent.com/{Owner}/{Repo}/{appId}/{name}", preferredMirror), "直链"))
                 return new DepotFetchOutcome(fetched, false);
         }
 
@@ -287,7 +362,8 @@ public class SteamManifestRepoService : ISteamManifestRepoService
             {
                 var name = $"{depotId}_{branchGid}.manifest";
                 var kind = string.IsNullOrEmpty(picsGid) || branchGid == picsGid ? RepoDepotKind.Latest : RepoDepotKind.RepoStale;
-                if (await TryPlaceAsync(branchGid, kind, name, BranchRawUrl(appId.ToString(), name), "分支文件"))
+                if (await TryPlaceAsync(branchGid, kind, name,
+                    GitHubMirror.ManifestRawMirrors($"https://raw.githubusercontent.com/{Owner}/{Repo}/{appId}/{name}", preferredMirror), "分支文件"))
                     return new DepotFetchOutcome(fetched, false);
             }
             // 分支列表成功但无此文件 = 该分支确实没有
@@ -296,21 +372,25 @@ public class SteamManifestRepoService : ISteamManifestRepoService
 
         // 路径 3：Tag 旧版（取最大 gid）
         var (tagGid, tagApiOk) = await GetMaxTagGidAsync(depotId, ct);
+        var tagAbsent = tagApiOk && tagGid == null;
         if (!tagApiOk) unknown = true;
         else if (tagGid != null)
         {
             var tag = $"{depotId}_{tagGid}";
             var name = $"{tag}.manifest";
-            if (await TryPlaceAsync(tagGid, RepoDepotKind.OldVersion, name, $"https://raw.githubusercontent.com/{Owner}/{Repo}/refs/tags/{tag}/{name}", "旧版"))
+            if (await TryPlaceAsync(tagGid, RepoDepotKind.OldVersion, name,
+                GitHubMirror.ManifestRawMirrors($"https://raw.githubusercontent.com/{Owner}/{Repo}/refs/tags/{tag}/{name}", preferredMirror), "旧版"))
                 return new DepotFetchOutcome(fetched, false);
         }
         // Tag 查询成功但无 tag = 确实没有旧版
 
+        // 双清单都确认没有 → 缺失（直链超时等单路未知不再翻盘）；
+        // 否则有未知记未知，全 404 记缺失
+        var branchAbsent = branchListOk && !branchFiles.ContainsKey(depotId);
+        if (branchAbsent && tagAbsent)
+            return new DepotFetchOutcome(null, false);
         return new DepotFetchOutcome(null, unknown);
     }
-
-    private static string BranchRawUrl(string branch, string fileName) =>
-        $"https://raw.githubusercontent.com/{Owner}/{Repo}/{branch}/{fileName}";
 
     private async Task<RepoDownload> TryDownloadBytesAsync(string url, CancellationToken ct)
     {

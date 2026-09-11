@@ -302,6 +302,67 @@ Style="{StaticResource SettingsCardStyle}">
                                              OnContent="开" OffContent="关"/>
                         </ui:SettingsCard>
 
+                        <ui:SettingsCard Header="镜像加速源" Margin="0,0,0,8"
+                                         Description="manifest 清单与内核包文件下载的首选源；选择镜像后直连最后尝试。仅作用于文件下载，GitHub 接口查询不受影响"
+Style="{StaticResource SettingsCardStyle}">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <Button Content="测速" Command="{Binding TestMirrorSpeedCommand}"
+                                            IsEnabled="{Binding IsMirrorSpeedTesting, Converter={StaticResource BoolInvertConverter}}"
+                                            Padding="12,6" Margin="0,0,4,0">
+                                        <Button.Background>
+                                            <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                                        </Button.Background>
+                                    </Button>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,8,0"
+                                                VerticalAlignment="Center"
+                                                Visibility="{Binding IsMirrorSpeedTesting, Converter={StaticResource BoolToVisibilityConverter}}">
+                                        <ProgressBar Value="{Binding MirrorSpeedTestProgress}"
+                                                     Maximum="{Binding MirrorSpeedTestTotal}"
+                                                     Width="100" Height="3" VerticalAlignment="Center"/>
+                                        <TextBlock Text="{Binding MirrorSpeedTestProgressText}" FontSize="12"
+                                                   Margin="6,0,0,0" VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                    </StackPanel>
+                                    <ComboBox SelectedValue="{Binding ManifestMirror, Mode=TwoWay}"
+                                               SelectedValuePath="Tag" HorizontalAlignment="Left" Padding="8,4">
+                                        <ComboBox.Background>
+                                            <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                                        </ComboBox.Background>
+                                        <ComboBoxItem Content="直连（默认）" Tag="direct"/>
+                                        <ComboBoxItem Content="gh-proxy.com" Tag="gh-proxy.com"/>
+                                        <ComboBoxItem Content="ghfast.top" Tag="ghfast.top"/>
+                                        <ComboBoxItem Content="gh-proxy.org" Tag="gh-proxy.org"/>
+                                    </ComboBox>
+                                </StackPanel>
+                            </StackPanel>
+                        </ui:SettingsCard>
+
+                        <Border CornerRadius="8" Background="{DynamicResource LayerFillColorDefaultBrush}"
+                                Margin="0,0,0,8" Padding="12,8"
+                                Visibility="{Binding MirrorSpeedTestResults.Count, Converter={StaticResource NonZeroToVisibilityConverter}}">
+                            <ItemsControl ItemsSource="{Binding MirrorSpeedTestResults}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,4,0,4">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Ellipse Grid.Column="0" Width="8" Height="8" Fill="{Binding ColorCode}"
+                                                     Margin="0,0,10,0" VerticalAlignment="Center" Opacity="0.9"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="13"
+                                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="2" Text="{Binding StatusText}" FontSize="13"
+                                                       FontWeight="Medium"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Border>
+
                         <ui:SettingsCard Header="封面CDN节点" Margin="0,0,0,8"
                                          Description="选择优先使用的封面下载节点"
 Style="{StaticResource SettingsCardStyle}">

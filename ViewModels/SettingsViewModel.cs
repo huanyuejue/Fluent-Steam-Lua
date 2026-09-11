@@ -20,6 +20,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     private readonly ILuaFileManager _luaFileManager;
     private readonly ISettingsService _settingsService;
     private readonly ISteamApiService _steamApiService;
+    private readonly ISteamManifestRepoService _manifestRepoService;
     private readonly IDialogService _dialogService;
     private AppSettings _settings;
 
@@ -43,6 +44,19 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private bool _isSpeedTesting;
+
+    [ObservableProperty]
+    private bool _isMirrorSpeedTesting;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MirrorSpeedTestProgressText))]
+    private int _mirrorSpeedTestProgress;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MirrorSpeedTestProgressText))]
+    private int _mirrorSpeedTestTotal;
+
+    public string MirrorSpeedTestProgressText => $"{MirrorSpeedTestProgress}/{MirrorSpeedTestTotal}";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SpeedTestProgressText))]
@@ -79,13 +93,17 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
 
     public ObservableCollection<SpeedTestItem> SpeedTestResults { get; } = new();
 
+    public ObservableCollection<SpeedTestItem> MirrorSpeedTestResults { get; } = new();
+
     public SettingsViewModel(ISteamPathService steamPathService, ILuaFileManager luaFileManager,
-        ISettingsService settingsService, ISteamApiService steamApiService, IDialogService dialogService)
+        ISettingsService settingsService, ISteamApiService steamApiService,
+        ISteamManifestRepoService manifestRepoService, IDialogService dialogService)
     {
         _steamPathService = steamPathService;
         _luaFileManager = luaFileManager;
         _settingsService = settingsService;
         _steamApiService = steamApiService;
+        _manifestRepoService = manifestRepoService;
         _dialogService = dialogService;
         _settings = settingsService.Load();
 
@@ -93,6 +111,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         IsAutoRefreshEnabled = _settings.AutoRefreshEnabled;
         IsFabVisible = _settings.IsFabVisible;
         IsCardRefreshVisible = _settings.IsCardRefreshVisible;
+        ManifestMirror = GitHubMirror.NormalizePreferredHost(_settings.ManifestMirror);
         AutoFetchCovers = _settings.AutoFetchCovers;
         AutoCheckUpdateEnabled = _settings.AutoCheckUpdateEnabled;
         AutoRefreshKeyCache = _settings.AutoRefreshKeyCache;
@@ -634,6 +653,54 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         }
     }
 
+    [RelayCommand]
+    private async Task TestMirrorSpeedAsync()
+    {
+        if (IsMirrorSpeedTesting) return;
+        IsMirrorSpeedTesting = true;
+        MirrorSpeedTestResults.Clear();
+        MirrorSpeedTestTotal = GitHubMirror.ReleaseAssetMirrorPrefixes.Length + 1;
+        MirrorSpeedTestProgress = 0;
+        StatusMessage = "正在测试所有镜像源...";
+
+        try
+        {
+            var progress = new Progress<(string Name, long LatencyMs, bool IsSuccess)>(result =>
+            {
+                MirrorSpeedTestProgress++;
+                MirrorSpeedTestResults.Add(new SpeedTestItem
+                {
+                    Name = result.Name,
+                    LatencyMs = result.LatencyMs,
+                    IsSuccess = result.IsSuccess
+                });
+            });
+
+            var results = await _manifestRepoService.TestMirrorSpeedAsync(progress);
+
+            var best = MirrorSpeedTestResults.Where(r => r.IsSuccess).OrderBy(r => r.LatencyMs).FirstOrDefault();
+            if (best != null)
+            {
+                StatusMessage = $"测速完成，最快镜像源: {best.Name} ({best.LatencyMs}ms)，可在上方下拉框中切换";
+                LogService.Info("设置", $"镜像源测速完成，最快: {best.Name} ({best.LatencyMs}ms)");
+            }
+            else
+            {
+                StatusMessage = "所有镜像源均不可达";
+                LogService.Warn("设置", "镜像源测速完成，所有源均不可达");
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"测速失败: {ex.Message}";
+            LogService.Error("设置", $"镜像源测速失败: {ex}");
+        }
+        finally
+        {
+            IsMirrorSpeedTesting = false;
+        }
+    }
+
     [ObservableProperty]
     private bool _isFabVisible = true;
 
@@ -657,6 +724,9 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private string _downloadMode = "DepotKey";
+
+    [ObservableProperty]
+    private string _manifestMirror = "direct";
 
     [ObservableProperty]
     private bool _isShowTrainerSections = true;
@@ -711,6 +781,14 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         };
         if (!string.IsNullOrEmpty(StatusMessage))
             LogService.Info("设置", StatusMessage);
+    }
+
+    partial void OnManifestMirrorChanged(string value)
+    {
+        _settings.ManifestMirror = value;
+        _settingsService.Save(_settings);
+        StatusMessage = value == "direct" ? "镜像加速源已切换为直连" : $"镜像加速源已切换为 {value}（直连最后尝试）";
+        LogService.Info("设置", StatusMessage);
     }
 
     partial void OnKeyFolderPathChanged(string value)

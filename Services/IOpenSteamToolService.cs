@@ -22,6 +22,7 @@ public class OpenSteamToolService : IOpenSteamToolService
 {
     private readonly IHttpClientProvider _httpClientProvider;
     private readonly ISteamPathService _steamPathService;
+    private readonly ISettingsService _settingsService;
     private const string GitHubLatestUrl = "https://api.github.com/repos/OpenSteam001/OpenSteamTool/releases/latest";
     private static readonly string[] RequiredDlls = ["dwmapi.dll", "xinput1_4.dll", "OpenSteamTool.dll"];
     private static readonly Dictionary<string, string> EmbeddedVersionMap = new()
@@ -42,10 +43,11 @@ public class OpenSteamToolService : IOpenSteamToolService
     };
     private static readonly byte[] VersionMarker = [0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00];
 
-    public OpenSteamToolService(ISteamPathService steamPathService, IHttpClientProvider httpClientProvider)
+    public OpenSteamToolService(ISteamPathService steamPathService, IHttpClientProvider httpClientProvider, ISettingsService settingsService)
     {
         _steamPathService = steamPathService;
         _httpClientProvider = httpClientProvider;
+        _settingsService = settingsService;
     }
 
 
@@ -127,68 +129,91 @@ public class OpenSteamToolService : IOpenSteamToolService
         return (tag, downloadUrl, releaseUrl);
     }
 
+    // 单下载源总预算：多源串行，黑洞源不能无限拖；用户取消走 ct 立刻中断
+    private static readonly TimeSpan PerSourceBudget = TimeSpan.FromSeconds(300);
+
     public async Task InstallAsync(string downloadUrl, IProgress<string>? status = null, IProgress<int>? downloadProgress = null, CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
         var steamPath = GetSteamPath() ?? throw new InvalidOperationException("无法检测 Steam 路径");
-        status?.Report("正在下载 OpenSteamTool...");
 
-        var tempZip = Path.Combine(Path.GetTempPath(), $"OpenSteamTool_{Guid.NewGuid():N}.zip");
-        try
+        // 下载源：默认直连优先，用户在设置里选了镜像则该镜像首位、直连垫底
+        var sources = GitHubMirror.WithAssetMirrors(downloadUrl, _settingsService.Load().ManifestMirror);
+        Exception? lastError = null;
+        for (var i = 0; i < sources.Count; i++)
         {
-            using (var response = await _httpClientProvider.SendWithProxyRetryAsync(
-                       "open-steam-tool",
-                       TimeSpan.FromSeconds(120),
-                       client => client.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead),
-                       HttpHeaderHelper.ConfigureApp))
+            var src = sources[i];
+            status?.Report(i == 0
+                ? $"正在通过 {GitHubMirror.SourceDisplayName(src)} 下载 OpenSteamTool..."
+                : $"经 {GitHubMirror.SourceDisplayName(sources[i - 1])} 下载失败，正在尝试 {GitHubMirror.SourceDisplayName(src)}…");
+
+            var tempZip = Path.Combine(Path.GetTempPath(), $"OpenSteamTool_{Guid.NewGuid():N}.zip");
+            try
             {
-                response.EnsureSuccessStatusCode();
-                var totalBytes = response.Content.Headers.ContentLength ?? -1;
-
-                await using var httpStream = await response.Content.ReadAsStreamAsync();
-                await using var fileStream = File.Create(tempZip);
-
-                var buffer = new byte[81920];
-                long readBytes = 0;
-                int bytesRead;
-                while ((bytesRead = await httpStream.ReadAsync(buffer, 0, buffer.Length, ct)) > 0)
+                using (var response = await _httpClientProvider.SendWithProxyRetryAsync(
+                           "open-steam-tool",
+                           TimeSpan.FromSeconds(120),
+                           client => client.GetAsync(src, HttpCompletionOption.ResponseHeadersRead),
+                           HttpHeaderHelper.ConfigureApp).WaitAsync(PerSourceBudget, ct))
                 {
-                    ct.ThrowIfCancellationRequested();
-                    await fileStream.WriteAsync(buffer, 0, bytesRead, ct);
-                    readBytes += bytesRead;
-                    if (totalBytes > 0 && downloadProgress != null)
+                    response.EnsureSuccessStatusCode();
+                    var totalBytes = response.Content.Headers.ContentLength ?? -1;
+
+                    await using var httpStream = await response.Content.ReadAsStreamAsync();
+                    await using var fileStream = File.Create(tempZip);
+
+                    var buffer = new byte[81920];
+                    long readBytes = 0;
+                    int bytesRead;
+                    while ((bytesRead = await httpStream.ReadAsync(buffer, 0, buffer.Length, ct)) > 0)
                     {
-                        var percent = (int)(readBytes * 100 / totalBytes);
-                        downloadProgress.Report(Math.Clamp(percent, 0, 100));
+                        ct.ThrowIfCancellationRequested();
+                        await fileStream.WriteAsync(buffer, 0, bytesRead, ct);
+                        readBytes += bytesRead;
+                        if (totalBytes > 0 && downloadProgress != null)
+                        {
+                            var percent = (int)(readBytes * 100 / totalBytes);
+                            downloadProgress.Report(Math.Clamp(percent, 0, 100));
+                        }
                     }
                 }
-            }
 
-            ct.ThrowIfCancellationRequested();
-            status?.Report("正在解压并安装 DLL...");
-            using var archive = ZipFile.OpenRead(tempZip);
-            var extracted = 0;
-            foreach (var entry in archive.Entries)
-            {
                 ct.ThrowIfCancellationRequested();
-                var fileName = Path.GetFileName(entry.Name);
-                if (string.IsNullOrEmpty(fileName)) continue;
-                if (!RequiredDlls.Contains(fileName, StringComparer.OrdinalIgnoreCase)) continue;
+                status?.Report("正在解压并安装 DLL...");
+                using var archive = ZipFile.OpenRead(tempZip);
+                var extracted = 0;
+                foreach (var entry in archive.Entries)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    var fileName = Path.GetFileName(entry.Name);
+                    if (string.IsNullOrEmpty(fileName)) continue;
+                    if (!RequiredDlls.Contains(fileName, StringComparer.OrdinalIgnoreCase)) continue;
 
-                var targetPath = Path.Combine(steamPath, fileName);
-                entry.ExtractToFile(targetPath, overwrite: true);
-                extracted++;
+                    var targetPath = Path.Combine(steamPath, fileName);
+                    entry.ExtractToFile(targetPath, overwrite: true);
+                    extracted++;
+                }
+
+                if (extracted == 0)
+                    throw new InvalidOperationException("压缩包中未找到 OpenSteamTool DLL 文件");
+
+                status?.Report("安装完成");
+                return;
             }
-
-            if (extracted == 0)
-                throw new InvalidOperationException("压缩包中未找到 OpenSteamTool DLL 文件");
-
-            status?.Report("安装完成");
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            // 包内容问题（非网络）换源也没用，直接抛
+            catch (InvalidOperationException) { throw; }
+            catch (Exception ex)
+            {
+                lastError = ex;
+                LogService.Warn("内核", $"下载源失败 ({src}): {ex.Message}");
+            }
+            finally
+            {
+                try { File.Delete(tempZip); } catch { }
+            }
         }
-        finally
-        {
-            try { File.Delete(tempZip); } catch { }
-        }
+        throw new InvalidOperationException($"OpenSteamTool 下载失败，已尝试 {sources.Count} 个下载源：{lastError?.Message}", lastError);
     }
 
     public Task UninstallAsync()
