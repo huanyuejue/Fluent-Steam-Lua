@@ -624,7 +624,9 @@ namespace SteamLuaManager.ViewModels;
 		foreach (var f in result.Fetched.Where(f => f.Kind == RepoDepotKind.Latest))
 			summary.Add(string.IsNullOrEmpty(f.PicsGid)
 				? $"depot {f.DepotId}：已获取仓库版 ({f.Gid})"
-				: $"depot {f.DepotId}：已获取最新版 ({f.Gid})");
+				: pins.ContainsKey(f.DepotId)
+					? $"depot {f.DepotId}：已获取最新版 ({f.Gid})"
+					: $"depot {f.DepotId}：已是最新版 ({f.Gid})，未固定（随 Steam 正常更新）");
 		foreach (var f in result.Fetched.Where(f => f.Kind == RepoDepotKind.RepoStale))
 			summary.Add($"depot {f.DepotId}：仓库版落后于 Steam 最新，已固定仓库版 ({f.Gid})");
 		foreach (var f in result.Fetched.Where(f => f.Kind == RepoDepotKind.OldVersion))

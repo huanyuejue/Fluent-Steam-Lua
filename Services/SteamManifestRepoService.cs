@@ -411,11 +411,5 @@ public class SteamManifestRepoService : ISteamManifestRepoService
     }
 
     // gid 为十进制大整数：先比长度再比字典序
-    private static int CompareGid(string a, string b)
-    {
-        var x = a.TrimStart('0');
-        var y = b.TrimStart('0');
-        if (x.Length != y.Length) return x.Length.CompareTo(y.Length);
-        return string.Compare(x, y, StringComparison.Ordinal);
-    }
+    private static int CompareGid(string a, string b) => FetchedDepot.CompareGid(a, b);
 }
