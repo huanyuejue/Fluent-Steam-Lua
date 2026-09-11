@@ -106,9 +106,22 @@ public partial class HomeView : UserControl
         {
             if (source == CardMenuPanel || source == CardSubmenuPanel || source == _activeMenuButton)
                 return;
-            source = VisualTreeHelper.GetParent(source);
+            source = GetParentSafe(source);
         }
         _ = HideCardMenuAsync();
+    }
+
+    // OriginalSource 可能是 TextBlock 内的 Run 等 ContentElement（非 Visual），
+    // 直接调 VisualTreeHelper.GetParent 会抛"不是 Visual 或 Visual3D"，非 Visual 走逻辑树。
+    private static DependencyObject? GetParentSafe(DependencyObject obj)
+    {
+        try
+        {
+            if (obj is System.Windows.Media.Visual || obj is System.Windows.Media.Media3D.Visual3D)
+                return System.Windows.Media.VisualTreeHelper.GetParent(obj);
+        }
+        catch { }
+        return LogicalTreeHelper.GetParent(obj);
     }
 
     private void PositionCardMenu(Button btn)
