@@ -16,7 +16,14 @@ public class SteamManifestRepoService : ISteamManifestRepoService
     private const string Repo = "SteamManifestCache_Pro";
     private const string ClientName = "manifest-repo";
     private static readonly TimeSpan ApiTimeout = TimeSpan.FromSeconds(30);
-    private static readonly TimeSpan DownloadTimeout = TimeSpan.FromSeconds(120);
+    // manifest 文件很小（KB~MB 级），20s 无响应即判定该路不通快速降级；
+    // provider 内部还有 3 次重试，单 URL 最坏 60s，一定比用户手动取消的耐心短。
+    private static readonly TimeSpan DownloadTimeout = TimeSpan.FromSeconds(20);
+    // 分阶段总预算（provider 重试是静默的，这里兜底保证每阶段最多静默这么久就有动静；
+    // 用户取消走 ct 立刻中断，不受预算影响）。
+    private static readonly TimeSpan ApiPhaseBudget = TimeSpan.FromSeconds(40);
+    private static readonly TimeSpan TagPhaseBudget = TimeSpan.FromSeconds(35);
+    private static readonly TimeSpan PathPhaseBudget = TimeSpan.FromSeconds(25);
     private const int FetchParallelism = 5;
 
     private static readonly Regex ManifestFileRegex = new(@"^(\d+)_(\d+)\.manifest$", RegexOptions.IgnoreCase);
@@ -26,7 +33,7 @@ public class SteamManifestRepoService : ISteamManifestRepoService
     private readonly ILuaFileManager _luaFileManager;
 
     private readonly object _treeCacheLock = new();
-    private readonly Dictionary<int, Dictionary<int, string>?> _treeCache = new();
+    private readonly Dictionary<int, (Dictionary<int, string>? Files, bool ListOk)> _treeCache = new();
 
     // GitHub API 403 限流标记：单次 Fetch 内有效，调用方据此提示"缺失或为误判"
     private int _rateLimited;
@@ -62,10 +69,11 @@ public class SteamManifestRepoService : ISteamManifestRepoService
 
         // 1. PICS：base 仓库 gid + DLC 列表（最新性比对与主/DLC 分类都靠它）。
         // PICS 查询抛异常（SSL/连接/超时等）也按查不到处理，给友好提示而非英文原文弹窗。
+        progress?.Report((0, 1, "正在查询游戏仓库信息…"));
         DepotQueryResult? basePics = null;
         try
         {
-            basePics = await _depotService.QueryAppAsync(appId, ct);
+            basePics = await _depotService.QueryAppAsync(appId, ct).WaitAsync(ApiPhaseBudget, ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception ex)
@@ -76,7 +84,7 @@ public class SteamManifestRepoService : ISteamManifestRepoService
         {
             Interlocked.Exchange(ref hintSuppressed, 1);
             return new ManifestRepoFetchResult(false, "无法查询该游戏的仓库信息，请检查网络（可尝试开启 VPN 或配置代理）后重试",
-                [], [], [], [], false, null);
+                [], [], [], [], [], false, null);
         }
 
         var baseMap = basePics.GameDepots
@@ -113,6 +121,7 @@ public class SteamManifestRepoService : ISteamManifestRepoService
         var dlcLuaIds = luaAppIds.Where(id => id != appId && dlcSet.Contains(id) && !baseMap.ContainsKey(id)).Distinct().ToList();
         if (dlcLuaIds.Count > 0)
         {
+            progress?.Report((0, 1, $"正在查询 {dlcLuaIds.Count} 个 DLC 的仓库信息…"));
             var luaIdSet = new HashSet<int>(luaAppIds);
             var subResults = new Dictionary<int, DepotQueryResult?>();
             await Parallel.ForEachAsync(dlcLuaIds,
@@ -120,7 +129,7 @@ public class SteamManifestRepoService : ISteamManifestRepoService
                 async (dlcId, innerCt) =>
                 {
                     DepotQueryResult? sub = null;
-                    try { sub = await _depotService.QueryAppAsync(dlcId, innerCt); }
+                    try { sub = await _depotService.QueryAppAsync(dlcId, innerCt).WaitAsync(ApiPhaseBudget, innerCt); }
                     catch (OperationCanceledException) when (innerCt.IsCancellationRequested) { throw; }
                     catch (Exception ex) { LogService.Info("Manifest仓库", $"DLC {dlcId} 仓库查询失败: {ex.Message}"); }
                     lock (subResults) { subResults[dlcId] = sub; }
@@ -138,16 +147,18 @@ public class SteamManifestRepoService : ISteamManifestRepoService
         if (needIds.Count == 0)
         {
             Interlocked.Exchange(ref hintSuppressed, 1);
-            return new ManifestRepoFetchResult(true, null, [], [], [], [], false, null);
+            return new ManifestRepoFetchResult(true, null, [], [], [], [], [], false, null);
         }
 
-        // 2. 分支存在性：404 即整游戏缺失，直接返回
-        var branchFiles = await GetBranchFilesAsync(appId, ct);
+        // 2. 分支存在性：404 即整游戏缺失，直接返回；
+        // 非 404 失败（限流/断网）不按空分支处理，后续各 depot 记未知而非缺失。
+        progress?.Report((0, 1, "正在获取仓库文件列表…"));
+        var (branchFiles, branchListOk) = await GetBranchFilesAsync(appId, ct).WaitAsync(ApiPhaseBudget, ct);
         if (branchFiles == null)
         {
             Interlocked.Exchange(ref hintSuppressed, 1);
             return new ManifestRepoFetchResult(false, $"仓库中没有游戏 {appId} 的分支，无法获取",
-                [], [], [], [], false, null);
+                [], [], [], [], [], false, null);
         }
 
         // 主仓库判定：base 专属 depot；其余（含 DLC 共享 depot）走 DLC 可移除流程。
@@ -161,21 +172,26 @@ public class SteamManifestRepoService : ISteamManifestRepoService
         var missingMain = new List<int>();
         var missingDlc = new List<int>();
         var missingUnknown = new List<int>();
+        var unknownIds = new List<int>();
         int done = 0;
         var resultLock = new object();
         Interlocked.Exchange(ref hintSuppressed, 1);
+        progress?.Report((0, needList.Count, $"共 {needList.Count} 个仓库，开始获取…"));
+        int GetDone() { lock (resultLock) { return done; } }
 
         await Parallel.ForEachAsync(needList,
             new ParallelOptions { MaxDegreeOfParallelism = FetchParallelism, CancellationToken = ct },
             async (depotId, innerCt) =>
             {
                 picsGids.TryGetValue(depotId, out var picsGid);
-                var r = await FetchOneDepotAsync(appId, depotId, picsGid ?? "", branchFiles, innerCt);
+                var r = await FetchOneDepotAsync(appId, depotId, picsGid ?? "", branchFiles, branchListOk, progress, GetDone, needList.Count, innerCt);
                 lock (resultLock)
                 {
                     done++;
-                    if (r != null)
-                        fetched.Add(r);
+                    if (r.Fetched != null)
+                        fetched.Add(r.Fetched);
+                    else if (r.Unknown)
+                        unknownIds.Add(depotId);
                     else if (picsEmpty)
                         missingUnknown.Add(depotId);
                     else if (IsMainDepot(depotId))
@@ -183,7 +199,9 @@ public class SteamManifestRepoService : ISteamManifestRepoService
                     else
                         missingDlc.Add(depotId);
                     progress?.Report((done, needList.Count,
-                        r == null ? $"depot {depotId} 未找到可用 manifest" : $"depot {depotId} 已获取 ({r.Gid})"));
+                        r.Fetched != null ? $"depot {depotId} 已获取 ({r.Fetched.Gid})"
+                        : r.Unknown ? $"depot {depotId} 网络未知，稍后重试"
+                        : $"depot {depotId} 未找到可用 manifest"));
                 }
             });
 
@@ -191,10 +209,11 @@ public class SteamManifestRepoService : ISteamManifestRepoService
         missingMain.Sort();
         missingDlc.Sort();
         missingUnknown.Sort();
+        unknownIds.Sort();
         var depotCacheDir = fetched.Select(f => f.PlacedPath).FirstOrDefault(p => !string.IsNullOrEmpty(p)) is string placed
             ? Path.GetDirectoryName(placed)
             : null;
-        return new ManifestRepoFetchResult(true, null, fetched, missingMain, missingDlc, missingUnknown, _rateLimited != 0, depotCacheDir);
+        return new ManifestRepoFetchResult(true, null, fetched, missingMain, missingDlc, missingUnknown, unknownIds, _rateLimited != 0, depotCacheDir);
     }
 
     private void NoteRateLimited(Exception ex)
@@ -203,76 +222,128 @@ public class SteamManifestRepoService : ISteamManifestRepoService
             Interlocked.Exchange(ref _rateLimited, 1);
     }
 
-    private async Task<FetchedDepot?> FetchOneDepotAsync(
+    // 单 depot 获取结果：任何一条路径网络未知都记未知（未知优先于缺失，不诱导删行）
+    private record DepotFetchOutcome(FetchedDepot? Fetched, bool Unknown);
+
+    // 单文件下载三态：404 确认不存在；超时/连接等网络问题记未知
+    private enum RepoDownloadKind { Found, NotFound, Unknown }
+    private record RepoDownload(RepoDownloadKind Kind, byte[]? Bytes);
+
+    private async Task<DepotFetchOutcome> FetchOneDepotAsync(
         int appId, int depotId, string picsGid,
-        Dictionary<int, string> branchFiles, CancellationToken ct)
+        Dictionary<int, string> branchFiles, bool branchListOk,
+        IProgress<(int done, int total, string text)>? progress, Func<int> getDone, int total,
+        CancellationToken ct)
     {
         var tmpDir = Path.Combine(Path.GetTempPath(), $"manifestfetch_{appId}");
         Directory.CreateDirectory(tmpDir);
+
+        FetchedDepot? fetched = null;
+        var unknown = false;
+
+        // 单路径尝试：先报"正在尝试某路"保证窗口持续有动静；成功则落盘组装，
+        // 网络未知/确认不存在分别记证据后找下一条路
+        async Task<bool> TryPlaceAsync(string gid, RepoDepotKind kind, string fileName, string url, string label)
+        {
+            try { progress?.Report((getDone(), total, $"depot {depotId} 正在尝试{label}…")); } catch { }
+            // 单路总预算：provider 内部静默重试叠起来太久，这里到时换下一条路（超时记未知）
+            RepoDownload dl;
+            try
+            {
+                dl = await TryDownloadBytesAsync(url, ct).WaitAsync(PathPhaseBudget, ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception ex)
+            {
+                LogService.Info("Manifest仓库", $"depot {depotId} {label}超时未完成，已换下一条路: {ex.Message}");
+                unknown = true;
+                return false;
+            }
+            if (dl.Kind == RepoDownloadKind.Unknown) { unknown = true; return false; }
+            if (dl.Kind == RepoDownloadKind.NotFound || dl.Bytes == null) return false;
+            if (TryPrepareManifestBytes(depotId, dl.Bytes, out var placed)
+                && await PlaceBytesAsync(depotId, gid, placed, tmpDir, fileName) is string saved)
+            {
+                fetched = new FetchedDepot(depotId, gid, kind, picsGid, saved);
+                return true;
+            }
+            return false;
+        }
 
         // 路径 1：PICS 最新 gid 直链（命中则 0 API 开销）
         if (ulong.TryParse(picsGid, out var picsNum) && picsNum != 0)
         {
             var name = $"{depotId}_{picsGid}.manifest";
-            var bytes = await TryDownloadBytesAsync(BranchRawUrl(appId.ToString(), name), ct);
-            if (TryPrepareManifestBytes(depotId, bytes, out var placed)
-                && await PlaceBytesAsync(depotId, picsGid, placed, tmpDir, name) is string saved)
-                return new FetchedDepot(depotId, picsGid, RepoDepotKind.Latest, picsGid, saved);
+            if (await TryPlaceAsync(picsGid, RepoDepotKind.Latest, name, BranchRawUrl(appId.ToString(), name), "直链"))
+                return new DepotFetchOutcome(fetched, false);
         }
 
         // 路径 2：分支文件（仓库现有最新，多文件取最大 gid）。
         // PICS 无 gid 时无法比对，按仓库最新处理。
-        if (branchFiles.TryGetValue(depotId, out var branchGid))
+        // 分支列表本身失败时无法确认有无，记未知而非缺失。
+        if (branchListOk)
         {
-            var name = $"{depotId}_{branchGid}.manifest";
-            var bytes = await TryDownloadBytesAsync(BranchRawUrl(appId.ToString(), name), ct);
-            if (TryPrepareManifestBytes(depotId, bytes, out var placed)
-                && await PlaceBytesAsync(depotId, branchGid, placed, tmpDir, name) is string saved)
+            if (branchFiles.TryGetValue(depotId, out var branchGid))
             {
+                var name = $"{depotId}_{branchGid}.manifest";
                 var kind = string.IsNullOrEmpty(picsGid) || branchGid == picsGid ? RepoDepotKind.Latest : RepoDepotKind.RepoStale;
-                return new FetchedDepot(depotId, branchGid, kind, picsGid, saved);
+                if (await TryPlaceAsync(branchGid, kind, name, BranchRawUrl(appId.ToString(), name), "分支文件"))
+                    return new DepotFetchOutcome(fetched, false);
             }
+            // 分支列表成功但无此文件 = 该分支确实没有
         }
+        else unknown = true;
 
         // 路径 3：Tag 旧版（取最大 gid）
-        var tagGid = await GetMaxTagGidAsync(depotId, ct);
-        if (tagGid != null)
+        var (tagGid, tagApiOk) = await GetMaxTagGidAsync(depotId, ct);
+        if (!tagApiOk) unknown = true;
+        else if (tagGid != null)
         {
             var tag = $"{depotId}_{tagGid}";
             var name = $"{tag}.manifest";
-            var bytes = await TryDownloadBytesAsync($"https://raw.githubusercontent.com/{Owner}/{Repo}/refs/tags/{tag}/{name}", ct);
-            if (TryPrepareManifestBytes(depotId, bytes, out var placed)
-                && await PlaceBytesAsync(depotId, tagGid, placed, tmpDir, name) is string saved)
-                return new FetchedDepot(depotId, tagGid, RepoDepotKind.OldVersion, picsGid, saved);
+            if (await TryPlaceAsync(tagGid, RepoDepotKind.OldVersion, name, $"https://raw.githubusercontent.com/{Owner}/{Repo}/refs/tags/{tag}/{name}", "旧版"))
+                return new DepotFetchOutcome(fetched, false);
         }
+        // Tag 查询成功但无 tag = 确实没有旧版
 
-        return null;
+        return new DepotFetchOutcome(null, unknown);
     }
 
     private static string BranchRawUrl(string branch, string fileName) =>
         $"https://raw.githubusercontent.com/{Owner}/{Repo}/{branch}/{fileName}";
 
-    private async Task<byte[]?> TryDownloadBytesAsync(string url, CancellationToken ct)
+    private async Task<RepoDownload> TryDownloadBytesAsync(string url, CancellationToken ct)
     {
         try
         {
-            var bytes = await _httpClientProvider.SendWithProxyRetryAsync(
+            // 用 GetAsync 自行判状态码：404 是"确认不存在"，必须与网络失败区分开
+            using var response = await _httpClientProvider.SendWithProxyRetryAsync(
                 ClientName, DownloadTimeout,
-                client => client.GetByteArrayAsync(url, ct),
+                client => client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct),
                 HttpHeaderHelper.ConfigureBrowser);
-            return bytes is { Length: > 0 } ? bytes : null;
+            if (response.StatusCode == HttpStatusCode.NotFound)
+                return new RepoDownload(RepoDownloadKind.NotFound, null);
+            response.EnsureSuccessStatusCode();
+            var bytes = await response.Content.ReadAsByteArrayAsync(ct);
+            return bytes is { Length: > 0 }
+                ? new RepoDownload(RepoDownloadKind.Found, bytes)
+                : new RepoDownload(RepoDownloadKind.NotFound, null);
         }
-        // 只有用户取消才重抛；超时等 OCE 视为单源失败，交由上层降级找旧版
+        // 只有用户取消才重抛；超时等 OCE 记未知，交由上层归入未知桶而非缺失
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (OperationCanceledException ex)
         {
             LogService.Info("Manifest仓库", $"raw 下载中断（超时或连接被回收） {url}: {ex.Message}");
-            return null;
+            return new RepoDownload(RepoDownloadKind.Unknown, null);
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        {
+            return new RepoDownload(RepoDownloadKind.NotFound, null);
         }
         catch (Exception ex)
         {
             LogService.Info("Manifest仓库", $"raw 下载失败 {url}: {ex.Message}");
-            return null;
+            return new RepoDownload(RepoDownloadKind.Unknown, null);
         }
     }
 
@@ -363,8 +434,9 @@ public class SteamManifestRepoService : ISteamManifestRepoService
         catch { return false; }
     }
 
-    /// <summary>分支根文件列表（depot→gid），会话内缓存；分支不存在返回 null。</summary>
-    private async Task<Dictionary<int, string>?> GetBranchFilesAsync(int appId, CancellationToken ct)
+    /// <summary>分支根文件列表（depot→gid），会话内缓存；分支不存在返回 null 文件表。
+    /// 非 404 失败（限流/断网）返回 ListOk=false，调用方记未知而非缺失；失败结果不缓存。</summary>
+    private async Task<(Dictionary<int, string>? Files, bool ListOk)> GetBranchFilesAsync(int appId, CancellationToken ct)
     {
         lock (_treeCacheLock)
         {
@@ -404,14 +476,14 @@ public class SteamManifestRepoService : ISteamManifestRepoService
         {
             NoteRateLimited(ex);
             LogService.Warn("Manifest仓库", $"获取分支文件列表失败: {ex.Message}");
-            result = new Dictionary<int, string>();
+            return (new Dictionary<int, string>(), false);
         }
-        lock (_treeCacheLock) { _treeCache[appId] = result; }
-        return result;
+        lock (_treeCacheLock) { _treeCache[appId] = (result, true); }
+        return (result, true);
     }
 
-    /// <summary>Tag 中该 depot 的最大 gid，无则返回 null。</summary>
-    private async Task<string?> GetMaxTagGidAsync(int depotId, CancellationToken ct)
+    /// <summary>Tag 中该 depot 的最大 gid；ApiOk=false 表示查询本身失败（无法确认有无）。</summary>
+    private async Task<(string? Gid, bool ApiOk)> GetMaxTagGidAsync(int depotId, CancellationToken ct)
     {
         try
         {
@@ -419,7 +491,7 @@ public class SteamManifestRepoService : ISteamManifestRepoService
             var json = await _httpClientProvider.SendWithProxyRetryAsync(
                 ClientName, ApiTimeout,
                 client => client.GetStringAsync(url, ct),
-                HttpHeaderHelper.ConfigureBrowser);
+                HttpHeaderHelper.ConfigureBrowser).WaitAsync(TagPhaseBudget, ct);
             string? best = null;
             using var doc = JsonDocument.Parse(json);
             foreach (var item in doc.RootElement.EnumerateArray())
@@ -431,14 +503,14 @@ public class SteamManifestRepoService : ISteamManifestRepoService
                 var gid = m.Groups[2].Value;
                 if (best == null || CompareGid(gid, best) > 0) best = gid;
             }
-            return best;
+            return (best, true);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
             NoteRateLimited(ex);
             LogService.Info("Manifest仓库", $"depot {depotId} 查询 Tag 失败: {ex.Message}");
-            return null;
+            return (null, false);
         }
     }
 

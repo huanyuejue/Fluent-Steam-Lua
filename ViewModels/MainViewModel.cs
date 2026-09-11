@@ -612,6 +612,12 @@ namespace SteamLuaManager.ViewModels;
 			await _luaFileManager.SetManifestPinAsync(game.AppId, true, pins);
 
 		var rateNote = result.PossiblyRateLimited ? "\n（GitHub API 可能限流，缺失或为误判，可稍后重试）" : "";
+		// 未知先行提示：这些不是缺失，不要删行，措辞与后面的移除确认区分开
+		if (result.UnknownDepots.Count > 0)
+		{
+			await ShowModernDialogAsync("部分清单未能确认",
+				$"以下 depot 因网络原因未能确认是否存在（不是缺失），请检查网络（可尝试开启 VPN 或配置代理）后重试，不要删除入库行：\n{string.Join("、", result.UnknownDepots)}");
+		}
 		if (result.MissingMainDepots.Count > 0)
 		{
 			await ShowModernDialogAsync("获取失败",
@@ -653,6 +659,8 @@ namespace SteamLuaManager.ViewModels;
 			summary.Add($"depot {id}：DLC 缺失 manifest");
 		foreach (var id in result.MissingUnknownDepots)
 			summary.Add($"depot {id}：未知归属缺失 manifest");
+		foreach (var id in result.UnknownDepots)
+			summary.Add($"depot {id}：网络原因未能确认，请重试（不是缺失）");
 		if (result.PossiblyRateLimited)
 			summary.Add("注意：GitHub API 可能限流，以上缺失或为误判，可稍后重试");
 		if (summary.Count == 0)
@@ -662,8 +670,8 @@ namespace SteamLuaManager.ViewModels;
 		}
 		if (!string.IsNullOrEmpty(result.DepotCacheDir))
 			summary.Add($"文件已放入：{result.DepotCacheDir}（{result.Fetched.Count} 个）");
-		StatusMessage = $"Manifest 获取完成：成功 {result.Fetched.Count} / 缺失 {result.MissingMainDepots.Count + result.MissingDlcDepots.Count + result.MissingUnknownDepots.Count}";
-		LogService.Info("主页", $"Manifest 获取完成 ({displayName})：成功 {result.Fetched.Count}，缺失 {result.MissingMainDepots.Count + result.MissingDlcDepots.Count + result.MissingUnknownDepots.Count}");
+		StatusMessage = $"Manifest 获取完成：成功 {result.Fetched.Count} / 缺失 {result.MissingMainDepots.Count + result.MissingDlcDepots.Count + result.MissingUnknownDepots.Count} / 未确认 {result.UnknownDepots.Count}";
+		LogService.Info("主页", $"Manifest 获取完成 ({displayName})：成功 {result.Fetched.Count}，缺失 {result.MissingMainDepots.Count + result.MissingDlcDepots.Count + result.MissingUnknownDepots.Count}，未确认 {result.UnknownDepots.Count}");
 		await ShowModernDialogAsync("获取完成", string.Join("\n", summary));
 		await QuickRefreshAsync();
 	}

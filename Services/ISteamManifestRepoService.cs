@@ -36,6 +36,7 @@ public record ManifestRepoFetchResult(
     List<int> MissingMainDepots,
     List<int> MissingDlcDepots,
     List<int> MissingUnknownDepots,
+    List<int> UnknownDepots,
     bool PossiblyRateLimited,
     string? DepotCacheDir)
 {
