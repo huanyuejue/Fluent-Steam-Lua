@@ -48,11 +48,36 @@ public class SteamManifestRepoService : ISteamManifestRepoService
         CancellationToken ct = default)
     {
         _rateLimited = 0;
-        // 1. PICS：base 仓库 gid + DLC 列表（最新性比对与主/DLC 分类都靠它）
-        var basePics = await _depotService.QueryAppAsync(appId, ct);
+        // 20s 仍未进入逐 depot 获取：大概率网络受限，提示开 VPN/代理（只提示一次，不中断；
+        // 提前返回/进入获取循环时置位抑制，避免事后误报）。
+        var hintSuppressed = 0;
+        _ = Task.Delay(TimeSpan.FromSeconds(20)).ContinueWith(_ =>
+        {
+            if (Interlocked.CompareExchange(ref hintSuppressed, 0, 0) == 0)
+            {
+                try { progress?.Report((0, 1, "等待 20s 仍未开始获取，网络可能受限，可尝试开启 VPN 或配置代理后重试…")); }
+                catch { }
+            }
+        }, TaskScheduler.Default);
+
+        // 1. PICS：base 仓库 gid + DLC 列表（最新性比对与主/DLC 分类都靠它）。
+        // PICS 查询抛异常（SSL/连接/超时等）也按查不到处理，给友好提示而非英文原文弹窗。
+        DepotQueryResult? basePics = null;
+        try
+        {
+            basePics = await _depotService.QueryAppAsync(appId, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (Exception ex)
+        {
+            LogService.Warn("Manifest仓库", $"PICS 查询失败，已按网络问题处理: {ex}");
+        }
         if (basePics == null)
-            return new ManifestRepoFetchResult(false, "无法查询该游戏的仓库信息，请检查网络后重试",
+        {
+            Interlocked.Exchange(ref hintSuppressed, 1);
+            return new ManifestRepoFetchResult(false, "无法查询该游戏的仓库信息，请检查网络（可尝试开启 VPN 或配置代理）后重试",
                 [], [], [], [], false, null);
+        }
 
         var baseMap = basePics.GameDepots
             .Where(d => !string.IsNullOrEmpty(d.ManifestId))
@@ -111,13 +136,19 @@ public class SteamManifestRepoService : ISteamManifestRepoService
         }
 
         if (needIds.Count == 0)
+        {
+            Interlocked.Exchange(ref hintSuppressed, 1);
             return new ManifestRepoFetchResult(true, null, [], [], [], [], false, null);
+        }
 
         // 2. 分支存在性：404 即整游戏缺失，直接返回
         var branchFiles = await GetBranchFilesAsync(appId, ct);
         if (branchFiles == null)
+        {
+            Interlocked.Exchange(ref hintSuppressed, 1);
             return new ManifestRepoFetchResult(false, $"仓库中没有游戏 {appId} 的分支，无法获取",
                 [], [], [], [], false, null);
+        }
 
         // 主仓库判定：base 专属 depot；其余（含 DLC 共享 depot）走 DLC 可移除流程。
         // PICS 完全无信息时无法分类，缺失统一进未知桶。
@@ -132,6 +163,7 @@ public class SteamManifestRepoService : ISteamManifestRepoService
         var missingUnknown = new List<int>();
         int done = 0;
         var resultLock = new object();
+        Interlocked.Exchange(ref hintSuppressed, 1);
 
         await Parallel.ForEachAsync(needList,
             new ParallelOptions { MaxDegreeOfParallelism = FetchParallelism, CancellationToken = ct },

@@ -1,6 +1,9 @@
 ﻿using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
+using System.Net;
+using System.Net.Http;
+using System.Net.Sockets;
 using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
@@ -551,6 +554,19 @@ namespace SteamLuaManager.ViewModels;
 		}
 	}
 
+	// 技术异常转人话：顺着 InnerException 找网络类根因，找到就只提示开 VPN/代理，不弹英文原文
+	private static string ToFriendlyFetchError(Exception ex)
+	{
+		for (var e = ex; e != null; e = e.InnerException)
+		{
+			if (e is HttpRequestException or IOException or SocketException or WebException)
+				return "网络连接失败，请检查网络（可尝试开启 VPN 或配置代理）后重试。";
+			if (e is TimeoutException)
+				return "请求超时，请检查网络（可尝试开启 VPN 或配置代理）后重试。";
+		}
+		return $"发生异常：{ex.Message}";
+	}
+
 	private async Task FetchManifestsCoreAsync(GameInfo game, string displayName, List<int> luaIds)
 	{
 		var progressWin = new Views.ManifestFetchProgressView(displayName, _settingsService.Load().SelectedBackdrop);
@@ -572,12 +588,12 @@ namespace SteamLuaManager.ViewModels;
 		catch (OperationCanceledException ex)
 		{
 			LogService.Error("主页", $"Manifest 获取被中断（非用户取消）: {ex}");
-			await ShowModernDialogAsync("获取失败", $"请求被中断：{ex.Message}");
+			await ShowModernDialogAsync("获取失败", $"请求被中断（可能是网络超时）：{ex.Message}\n可尝试开启 VPN 或配置代理后重试");
 		}
 		catch (Exception ex)
 		{
 			LogService.Error("主页", $"Manifest 获取异常: {ex}");
-			await ShowModernDialogAsync("获取失败", $"发生异常：{ex.Message}");
+			await ShowModernDialogAsync("获取失败", ToFriendlyFetchError(ex));
 		}
 		finally
 		{
