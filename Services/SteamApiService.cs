@@ -167,7 +167,7 @@ public class SteamApiService : ISteamApiService
 		}
 	}
 
-	public async Task RefreshGameInfoAsync(List<GameInfo> games, CancellationToken cancellationToken = default)
+	public async Task RefreshGameInfoAsync(List<GameInfo> games, CancellationToken cancellationToken = default, bool fetchCover = true)
 	{
 		Directory.CreateDirectory(_coversDir);
 		_selectedCdnFailCount = 0;
@@ -175,12 +175,12 @@ public class SteamApiService : ISteamApiService
 		var needInfo = games.Where(g =>
 			string.IsNullOrEmpty(g.GameName) ||
 			g.GameName == $"AppID: {g.AppId}" ||
-			!IsValidCoverFile(Path.Combine(_coversDir, $"{g.AppId}.jpg")))
+			(fetchCover && !IsValidCoverFile(Path.Combine(_coversDir, $"{g.AppId}.jpg"))))
 			.ToList();
 
 		if (needInfo.Count == 0) return;
 
-		var tasks = needInfo.Select(game => RefreshOneGameAsync(game, cancellationToken));
+		var tasks = needInfo.Select(game => RefreshOneGameAsync(game, cancellationToken, fetchCover));
 		await Task.WhenAll(tasks);
 
 		SaveCache();
@@ -213,7 +213,7 @@ public class SteamApiService : ISteamApiService
 		SaveCache();
 	}
 
-	private async Task RefreshOneGameAsync(GameInfo game, CancellationToken cancellationToken)
+	private async Task RefreshOneGameAsync(GameInfo game, CancellationToken cancellationToken, bool fetchCover = true)
 	{
 		try
 		{
@@ -231,7 +231,7 @@ public class SteamApiService : ISteamApiService
 
 			var needName = string.IsNullOrEmpty(game.GameName) || game.GameName == $"AppID: {game.AppId}";
 			var coverPath = Path.Combine(_coversDir, $"{game.AppId}.jpg");
-			var needCover = !IsValidCoverFile(coverPath);
+			var needCover = fetchCover && !IsValidCoverFile(coverPath);
 			if (needCover && File.Exists(coverPath))
 				DeleteInvalidCover(coverPath, game);
 			string? headerUrl = null;

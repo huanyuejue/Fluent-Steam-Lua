@@ -250,6 +250,13 @@ Style="{StaticResource SettingsCardStyle}">
                                              OnContent="开" OffContent="关"/>
                         </ui:SettingsCard>
 
+                        <ui:SettingsCard Header="主页游戏封面自动获取" Margin="0,0,0,8"
+                                         Description="关闭后启动和刷新时不再自动下载缺失封面（表格模式可关），卡片上的刷新按钮仍可手动获取"
+Style="{StaticResource SettingsCardStyle}">
+                            <ui:ToggleSwitch IsOn="{Binding AutoFetchCovers}"
+                                             OnContent="开" OffContent="关"/>
+                        </ui:SettingsCard>
+
                         <ui:SettingsCard Header="修改器推荐栏目" Margin="0,0,0,8"
                                          Description="修改器界面的热门推荐和最新发布栏目"
 Style="{StaticResource SettingsCardStyle}">

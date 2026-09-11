@@ -93,6 +93,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         IsAutoRefreshEnabled = _settings.AutoRefreshEnabled;
         IsFabVisible = _settings.IsFabVisible;
         IsCardRefreshVisible = _settings.IsCardRefreshVisible;
+        AutoFetchCovers = _settings.AutoFetchCovers;
         AutoCheckUpdateEnabled = _settings.AutoCheckUpdateEnabled;
         AutoRefreshKeyCache = _settings.AutoRefreshKeyCache;
         IsShowTrainerSections = _settings.ShowTrainerSections;
@@ -225,6 +226,14 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         _settingsService.Save(_settings);
         StatusMessage = value ? "卡片刷新按钮已显示" : "卡片刷新按钮已隐藏";
         LogService.Info("设置", value ? "卡片刷新按钮已显示" : "卡片刷新按钮已隐藏");
+    }
+
+    partial void OnAutoFetchCoversChanged(bool value)
+    {
+        _settings.AutoFetchCovers = value;
+        _settingsService.Save(_settings);
+        StatusMessage = value ? "主页游戏封面自动获取已开启" : "主页游戏封面自动获取已关闭";
+        LogService.Info("设置", value ? "主页游戏封面自动获取已开启" : "主页游戏封面自动获取已关闭");
     }
 
     partial void OnIsAutoRefreshEnabledChanged(bool value)
@@ -630,6 +639,9 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private bool _isCardRefreshVisible = true;
+
+    [ObservableProperty]
+    private bool _autoFetchCovers = true;
 
     [ObservableProperty]
     private bool _autoCheckUpdateEnabled = true;

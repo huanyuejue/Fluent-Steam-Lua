@@ -5,7 +5,7 @@ namespace SteamLuaManager.Services;
 public interface ISteamApiService
 {
     void PopulateFromCache(List<GameInfo> games);
-    Task RefreshGameInfoAsync(List<GameInfo> games, CancellationToken cancellationToken = default);
+    Task RefreshGameInfoAsync(List<GameInfo> games, CancellationToken cancellationToken = default, bool fetchCover = true);
     Task RefreshSingleGameAsync(GameInfo game, CancellationToken cancellationToken = default);
     int SelectedCdnIndex { get; }
     void UpdateCdnPreference(int selectedIndex);

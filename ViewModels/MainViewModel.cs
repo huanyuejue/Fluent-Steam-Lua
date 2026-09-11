@@ -234,7 +234,7 @@ namespace SteamLuaManager.ViewModels;
 			_steamApiService.PopulateFromCache(_allGames);
 			ApplyFilter();
 			UpdateStatus();
-		await _steamApiService.RefreshGameInfoAsync(_allGames, token);
+		await _steamApiService.RefreshGameInfoAsync(_allGames, token, _settingsService.Load().AutoFetchCovers);
 		if (!token.IsCancellationRequested)
 		{
 			ApplyFilter();
@@ -345,7 +345,7 @@ namespace SteamLuaManager.ViewModels;
 			_steamApiService.PopulateFromCache(_allGames);
 			ApplyFilter();
 			UpdateStatus();
-			_ = _steamApiService.RefreshGameInfoAsync(_allGames).ContinueWith(_ =>
+			_ = _steamApiService.RefreshGameInfoAsync(_allGames, default, _settingsService.Load().AutoFetchCovers).ContinueWith(_ =>
 			{
 				Application.Current.Dispatcher.Invoke(() =>
 				{
