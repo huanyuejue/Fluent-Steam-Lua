@@ -35,6 +35,7 @@
 - 快速禁用或启用 Lua 清单的游戏入库状态，无需删除 Lua 清单
 - 支持固定游戏清单版本到最新版本或当前已安装版本
 - 支持游戏的Denuvo授权信息提取和使用授权（appticket和eticket）
+- 支持手动获取 manifest 清单来修补下载无网络的问题
 
 #### 修改器
 - 搜索游戏的修改器并下载管理（风灵月影修改器）
@@ -77,3 +78,7 @@ dotnet publish -c Release -r win-x64 --self-contained false /p:PublishSingleFile
 ```bash
 dotnet publish -c Release -r win-x64
 ```
+
+## 鸣谢
+
+- [SteamManifestCache_Pro](https://github.com/P-ToyStore/SteamManifestCache_Pro)：本工具「获取 Manifest 清单」功能的上游 manifest 数据来源，感谢各个大佬的整理与分享，有能力且愿意的可以支持一下他们。
