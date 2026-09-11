@@ -1,5 +1,7 @@
 using System.Net;
 using System.Net.Http;
+using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using System.Linq;
 using Microsoft.Win32;
 
@@ -23,7 +25,20 @@ public sealed class HttpClientProvider : IHttpClientProvider, IDisposable
     // 代理快照缓存：注册表/PAC 探测代价高，避免每次 GetClient 都执行
     private ProxySnapshot? _proxySnapshot;
     private DateTime _proxySnapshotTime = DateTime.MinValue;
-    private static readonly TimeSpan ProxySnapshotLifetime = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan ProxySnapshotLifetime = TimeSpan.FromSeconds(10);
+
+    public HttpClientProvider()
+    {
+        // 梯子开/关（TUN/路由/网卡变化）时丢弃连接池与代理快照，下次请求重建；
+        // 注册表代理项变化无系统事件，靠短 TTL + 连接失败强制刷新兜底。
+        NetworkChange.NetworkAddressChanged += OnNetworkChanged;
+        NetworkChange.NetworkAvailabilityChanged += OnNetworkChanged;
+    }
+
+    private void OnNetworkChanged(object? sender, EventArgs e)
+    {
+        try { Reset(); } catch { }
+    }
 
     public HttpClient GetClient(string name, TimeSpan timeout, Action<HttpClient>? configure = null)
     {
@@ -51,6 +66,9 @@ public sealed class HttpClientProvider : IHttpClientProvider, IDisposable
             {
                 lastError = ex;
                 InvalidateIfCurrent(name, timeout, client);
+                // 连接级失败（代理挂了/梯子刚切换）时不等 TTL，直接刷新快照让下次重试读到新代理
+                if (IsConnectionFailure(ex))
+                    RefreshProxySnapshot();
             }
         }
         throw lastError!;
@@ -71,6 +89,8 @@ public sealed class HttpClientProvider : IHttpClientProvider, IDisposable
             {
                 lastError = ex;
                 InvalidateIfCurrent(name, timeout, client);
+                if (IsConnectionFailure(ex))
+                    RefreshProxySnapshot();
             }
         }
         throw lastError!;
@@ -139,8 +159,30 @@ public sealed class HttpClientProvider : IHttpClientProvider, IDisposable
         return snapshot;
     }
 
+    private void RefreshProxySnapshot()
+    {
+        lock (_lock)
+        {
+            _proxySnapshot = null;
+            _proxySnapshotTime = DateTime.MinValue;
+        }
+    }
+
+    // 顺着 InnerException 找连接级根因：直连被拒/代理失联都算，触发快照强制刷新
+    private static bool IsConnectionFailure(Exception ex)
+    {
+        for (var e = ex; e != null; e = e.InnerException)
+        {
+            if (e is SocketException) return true;
+            if (e is HttpRequestException { StatusCode: HttpStatusCode.ProxyAuthenticationRequired }) return true;
+        }
+        return false;
+    }
+
     public void Dispose()
     {
+        NetworkChange.NetworkAddressChanged -= OnNetworkChanged;
+        NetworkChange.NetworkAvailabilityChanged -= OnNetworkChanged;
         lock (_lock)
         {
             foreach (var entry in _clients.Values)
