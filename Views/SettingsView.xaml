@@ -295,13 +295,6 @@ Style="{StaticResource SettingsCardStyle}">
                             </ComboBox>
                         </ui:SettingsCard>
 
-                        <ui:SettingsCard Header="自动更新密钥缓存" Margin="0,0,0,8"
-                                         Description="启动应用时检查本地缓存更新时间，超过24小时自动刷新 V1/V2 密钥缓存"
-Style="{StaticResource SettingsCardStyle}">
-                            <ui:ToggleSwitch IsOn="{Binding AutoRefreshKeyCache}"
-                                             OnContent="开" OffContent="关"/>
-                        </ui:SettingsCard>
-
                         <ui:SettingsCard Header="镜像加速源" Margin="0,0,0,8"
                                          Description="manifest 清单与内核包文件下载的首选源；选择镜像后直连最后尝试。仅作用于文件下载，GitHub 接口查询不受影响"
 Style="{StaticResource SettingsCardStyle}">
@@ -420,6 +413,13 @@ Style="{StaticResource SettingsCardStyle}">
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
                         </Border>
+
+                        <ui:SettingsCard Header="自动更新密钥缓存" Margin="0,0,0,8"
+                                         Description="启动应用时检查本地缓存更新时间，超过24小时自动刷新 V1/V2 密钥缓存"
+Style="{StaticResource SettingsCardStyle}">
+                            <ui:ToggleSwitch IsOn="{Binding AutoRefreshKeyCache}"
+                                             OnContent="开" OffContent="关"/>
+                        </ui:SettingsCard>
 
                         <ui:SettingsCard Header="日志记录" Margin="0,0,0,8"
                                          Description="记录用户操作和运行错误，输出到软件目录的 app.log 文件"

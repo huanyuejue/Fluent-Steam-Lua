@@ -507,7 +507,9 @@ public partial class MainWindow : Window
         }
         if (tag != "Settings")
         {
+            // 两个测速结果面板的可见性都绑在集合 Count 上，切出设置页统一清空收起
             _settingsViewModel.SpeedTestResults.Clear();
+            _settingsViewModel.MirrorSpeedTestResults.Clear();
             _settingsViewModel.StatusMessage = "";
         }
         var prevIndex = Array.IndexOf(_navOrder, _prevTag);
