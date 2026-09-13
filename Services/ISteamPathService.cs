@@ -14,6 +14,8 @@ public interface ISteamPathService
     string? GetLuaConfigFile();
     bool SetConfiguredLuaPath(string path);
     bool ResetConfiguredLuaPath();
+    bool GetFriendBroadcastEnabled();
+    bool SetFriendBroadcastEnabled(bool enabled);
     void SetCustomPath(string path);
     string? GetCustomPath();
     SteamToolType DetectSteamToolType();

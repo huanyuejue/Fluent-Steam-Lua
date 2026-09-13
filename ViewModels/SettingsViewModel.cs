@@ -136,6 +136,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
 
         LuaFolderPath = steamPathService.GetLuaFolder() ?? "未配置";
 
+        RefreshFriendBroadcastToggle();
     }
 
     private void OnCdnAutoSwitched(int newIndex)
@@ -325,6 +326,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
                 _steamPathService.SetCustomPath(dir);
                 _settings.SteamPath = dir;
                 _settingsService.Save(_settings);
+                RefreshFriendBroadcastToggle();
                 StatusMessage = $"Steam路径已设置为: {dir}";
                 LogService.Info("设置", $"Steam路径已设置为: {dir}");
             }
@@ -339,6 +341,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         SteamPath = detectedPath ?? "未检测到Steam";
         _settings.SteamPath = string.Empty;
         _settingsService.Save(_settings);
+        RefreshFriendBroadcastToggle();
         StatusMessage = "已重置为自动检测路径";
         LogService.Info("设置", "已重置为自动检测路径");
     }
@@ -730,6 +733,42 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private bool _isShowTrainerSections = true;
+
+    [ObservableProperty]
+    private bool _friendBroadcastEnabled = true;
+
+    [ObservableProperty]
+    private bool _isFriendBroadcastAvailable = true;
+
+    private bool _syncingFriendBroadcast;
+
+    // 开关唯一真相在内核 toml 里，我只做镜像显示；写失败要回拨，否则开关与文件不一致
+    partial void OnFriendBroadcastEnabledChanged(bool value)
+    {
+        if (_syncingFriendBroadcast) return;
+        if (!_steamPathService.SetFriendBroadcastEnabled(value))
+        {
+            _syncingFriendBroadcast = true;
+            try { FriendBroadcastEnabled = !value; }
+            finally { _syncingFriendBroadcast = false; }
+            StatusMessage = "写入 opensteamtool.toml 失败，请检查文件权限";
+            return;
+        }
+        StatusMessage = value ? "好友游玩状态广播已开启" : "好友游玩状态广播已关闭";
+        LogService.Info("设置", StatusMessage);
+    }
+
+    private void RefreshFriendBroadcastToggle()
+    {
+        _syncingFriendBroadcast = true;
+        try
+        {
+            IsFriendBroadcastAvailable =
+                !string.IsNullOrEmpty(_steamPathService.GetCustomPath() ?? _steamPathService.DetectSteamPath());
+            FriendBroadcastEnabled = _steamPathService.GetFriendBroadcastEnabled();
+        }
+        finally { _syncingFriendBroadcast = false; }
+    }
 
     [ObservableProperty]
     private bool _isShowCopyLogButton;

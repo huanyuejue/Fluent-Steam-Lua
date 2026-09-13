@@ -288,6 +288,148 @@ public class SteamPathService : ISteamPathService
         }
     }
 
+    // 好友游玩状态广播开关，我直接读写内核的 [presence] display：只有 "none" 算关闭，
+    // 文件/节/键任一缺失都按内核缺省（广播开启）处理，读不到就当开
+    public bool GetFriendBroadcastEnabled()
+    {
+        try
+        {
+            var basePath = DetectSteamPathInternal();
+            if (string.IsNullOrEmpty(basePath)) return true;
+
+            var configFile = Path.Combine(basePath, ConfigFileName);
+            if (!File.Exists(configFile)) return true;
+
+            var lines = File.ReadAllLines(configFile);
+            var (sectionStart, sectionEnd) = FindTomlSection(lines, "presence");
+            if (sectionStart < 0) return true;
+
+            foreach (var line in lines.Skip(sectionStart + 1).Take(sectionEnd - sectionStart - 1))
+            {
+                var value = ParseTomlStringValue(line, "display");
+                if (value != null)
+                    return !value.Equals("none", StringComparison.OrdinalIgnoreCase);
+            }
+            return true;
+        }
+        catch (Exception ex)
+        {
+            LogService.Warn("Steam路径", $"读取好友广播配置失败: {ex.Message}");
+            return true;
+        }
+    }
+
+    // 文本级改 [presence] display，注释原样保留；无文件则新建、无节则底部追加
+    public bool SetFriendBroadcastEnabled(bool enabled)
+    {
+        try
+        {
+            var basePath = DetectSteamPathInternal();
+            if (string.IsNullOrEmpty(basePath)) return false;
+
+            var configFile = Path.Combine(basePath, ConfigFileName);
+            var newLine = $"display = \"{(enabled ? "spacewar" : "none")}\"";
+
+            if (!File.Exists(configFile))
+            {
+                File.WriteAllLines(configFile, ["# 由 Fluent Steam Lua 写入，内核热加载即时生效", "", "[presence]", newLine]);
+            }
+            else
+            {
+                var lines = File.ReadAllLines(configFile).ToList();
+                var (sectionStart, sectionEnd) = FindTomlSection(lines, "presence");
+
+                if (sectionStart < 0)
+                {
+                    if (lines.Count > 0 && !string.IsNullOrWhiteSpace(lines[^1]))
+                        lines.Add(string.Empty);
+                    lines.Add("[presence]");
+                    lines.Add(newLine);
+                }
+                else
+                {
+                    var displayLine = -1;
+                    for (var i = sectionStart + 1; i < sectionEnd; i++)
+                    {
+                        if (ParseTomlStringValue(lines[i], "display") != null)
+                        {
+                            displayLine = i;
+                            break;
+                        }
+                    }
+
+                    if (displayLine >= 0)
+                        lines[displayLine] = newLine;
+                    else
+                        lines.Insert(sectionStart + 1, newLine);
+                }
+
+                File.WriteAllLines(configFile, lines);
+            }
+
+            _cachedConfigFile = null;
+            LogService.Info("Steam路径", $"好友游玩状态广播已{(enabled ? "开启" : "关闭")}（{configFile}）");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            LogService.Error("Steam路径", $"写入好友广播配置失败: {ex}");
+            return false;
+        }
+    }
+
+    // 在行列表里定位指定 TOML 节的起止行（含头、不含下一个节头）
+    private static (int start, int end) FindTomlSection(List<string> lines, string section)
+    {
+        var start = -1;
+        for (var i = 0; i < lines.Count; i++)
+        {
+            var t = lines[i].Trim();
+            if (t.StartsWith('#')) continue;
+            var header = t.Split('#', 2)[0].Trim();
+            if (header.Equals($"[{section}]", StringComparison.OrdinalIgnoreCase))
+            {
+                start = i;
+                break;
+            }
+        }
+        if (start < 0) return (-1, -1);
+
+        var end = lines.Count;
+        for (var i = start + 1; i < lines.Count; i++)
+        {
+            var t = lines[i].Trim();
+            if (t.StartsWith('#') || t.Length == 0) continue;
+            if (t.StartsWith('['))
+            {
+                end = i;
+                break;
+            }
+        }
+        return (start, end);
+    }
+
+    private static (int start, int end) FindTomlSection(string[] lines, string section) =>
+        FindTomlSection(lines.ToList(), section);
+
+    // 解析 "key = value" 行的字符串值；注释行、非目标键、非字符串值返回 null
+    private static string? ParseTomlStringValue(string line, string key)
+    {
+        var s = line.TrimStart();
+        if (s.Length == 0 || s.StartsWith('#')) return null;
+        if (!s.StartsWith(key, StringComparison.OrdinalIgnoreCase)) return null;
+
+        var rest = s.Substring(key.Length).TrimStart();
+        if (!rest.StartsWith('=')) return null;
+
+        var value = rest.Substring(1).Trim();
+        if (value.StartsWith('#')) return null;
+        // 去掉行尾注释后再去引号，display 只关心裸值
+        var hash = value.IndexOf('#');
+        if (hash >= 0) value = value.Substring(0, hash).Trim();
+        return value.Trim().Trim('"', '\'');
+    }
+
     public void SetCustomPath(string path) => _customPath = path;
     public string? GetCustomPath() => _customPath;
 
