@@ -371,6 +371,8 @@ public partial class App : Application
         services.AddSingleton<SteamTicketExtractor>();
         services.AddSingleton<IAuthorizationService, AuthorizationService>();
         services.AddSingleton<IDialogService, DialogService>();
+        services.AddSingleton<IManifestHubService, ManifestHubService>();
+        services.AddSingleton<IManifestMonitorService, ManifestMonitorService>();
 
         services.AddTransient<MainViewModel>();
         services.AddTransient<SettingsViewModel>();
@@ -379,6 +381,7 @@ public partial class App : Application
         services.AddTransient<TrainerViewModel>();
         services.AddTransient<AchievementViewModel>();
         services.AddTransient<AuthorizationViewModel>();
+        services.AddTransient<ManifestViewModel>();
         services.AddTransient<MainWindow>();
     }
 }

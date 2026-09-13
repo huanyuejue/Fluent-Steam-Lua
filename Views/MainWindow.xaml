@@ -57,6 +57,11 @@
                         <ui:FontIcon Glyph="&#xE990;" FontSize="16"/>
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
+                <ui:NavigationViewItem x:Name="ManifestItem" Content="清单" Tag="Manifest" Padding="12,0">
+                    <ui:NavigationViewItem.Icon>
+                        <ui:FontIcon Glyph="&#xE9D9;" FontSize="16"/>
+                    </ui:NavigationViewItem.Icon>
+                </ui:NavigationViewItem>
                 <ui:NavigationViewItem x:Name="ExtractionItem" Content="提取" Tag="Extraction" Padding="12,0">
                     <ui:NavigationViewItem.Icon>
                         <ui:FontIcon Glyph="&#xE8B7;" FontSize="16"/>

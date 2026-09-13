@@ -28,6 +28,8 @@ public bool ShowTrainerSections { get; set; } = true;
     public string ManifestMirror { get; set; } = GitHubMirror.DirectKey;
     public List<TrainerBinding> TrainerBindings { get; set; } = new();
     public string SavedAccountName { get; set; } = string.Empty;
+    public string EncryptedManifestHubKey { get; set; } = string.Empty;
+    public string ManifestHubKeyTime { get; set; } = string.Empty;
     public string EncryptedRefreshToken { get; set; } = string.Empty;
     public string EncryptedGuardData { get; set; } = string.Empty;
 }
