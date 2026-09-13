@@ -23,7 +23,10 @@ public class OpenSteamToolService : IOpenSteamToolService
     private readonly IHttpClientProvider _httpClientProvider;
     private readonly ISteamPathService _steamPathService;
     private readonly ISettingsService _settingsService;
-    private const string GitHubLatestUrl = "https://api.github.com/repos/OpenSteam001/OpenSteamTool/releases/latest";
+    // 我自己针对本软件优化适配的 fork 仓库，不再跟随官方主仓库（功能欠缺）
+    private const string GitHubOwner = "huanyuejue";
+    private const string GitHubRepo = "OpenSteamTool";
+    private static string GitHubLatestUrl => $"https://api.github.com/repos/{GitHubOwner}/{GitHubRepo}/releases/latest";
     private static readonly string[] RequiredDlls = ["dwmapi.dll", "xinput1_4.dll", "OpenSteamTool.dll"];
     private static readonly Dictionary<string, string> EmbeddedVersionMap = new()
     {
@@ -112,7 +115,7 @@ public class OpenSteamToolService : IOpenSteamToolService
         var tag = doc.RootElement.GetProperty("tag_name").GetString() ?? "0.0.0";
         var releaseUrl = doc.RootElement.TryGetProperty("html_url", out var htmlUrl)
             ? htmlUrl.GetString() ?? ""
-            : $"https://github.com/OpenSteam001/OpenSteamTool/releases/tag/{tag}";
+            : $"https://github.com/{GitHubOwner}/{GitHubRepo}/releases/tag/{tag}";
         var downloadUrl = "";
         if (doc.RootElement.TryGetProperty("assets", out var assets))
         {
@@ -137,9 +140,26 @@ public class OpenSteamToolService : IOpenSteamToolService
         ct.ThrowIfCancellationRequested();
         var steamPath = GetSteamPath() ?? throw new InvalidOperationException("无法检测 Steam 路径");
 
+        // 目标文件被 Steam 占用时覆盖必失败，先探后下，免得白下几个包才报错
+        foreach (var dll in RequiredDlls)
+        {
+            var targetPath = Path.Combine(steamPath, dll);
+            if (!File.Exists(targetPath)) continue;
+            try
+            {
+                using var probe = new FileStream(targetPath, FileMode.Open, FileAccess.Write, FileShare.None);
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            {
+                throw new InvalidOperationException($"无法写入 {dll}，文件正被占用，请确保 Steam 已关闭后再试", ex);
+            }
+        }
+
         // 下载源：默认直连优先，用户在设置里选了镜像则该镜像首位、直连垫底
+        // 只有下载阶段允许换源重试；下载成功后的解压安装只做一次，失败直接报原因
         var sources = GitHubMirror.WithAssetMirrors(downloadUrl, _settingsService.Load().ManifestMirror);
         Exception? lastError = null;
+        string? downloadedZip = null;
         for (var i = 0; i < sources.Count; i++)
         {
             var src = sources[i];
@@ -178,42 +198,59 @@ public class OpenSteamToolService : IOpenSteamToolService
                     }
                 }
 
-                ct.ThrowIfCancellationRequested();
-                status?.Report("正在解压并安装 DLL...");
-                using var archive = ZipFile.OpenRead(tempZip);
-                var extracted = 0;
-                foreach (var entry in archive.Entries)
-                {
-                    ct.ThrowIfCancellationRequested();
-                    var fileName = Path.GetFileName(entry.Name);
-                    if (string.IsNullOrEmpty(fileName)) continue;
-                    if (!RequiredDlls.Contains(fileName, StringComparer.OrdinalIgnoreCase)) continue;
-
-                    var targetPath = Path.Combine(steamPath, fileName);
-                    entry.ExtractToFile(targetPath, overwrite: true);
-                    extracted++;
-                }
-
-                if (extracted == 0)
-                    throw new InvalidOperationException("压缩包中未找到 OpenSteamTool DLL 文件");
-
-                status?.Report("安装完成");
-                return;
+                downloadedZip = tempZip;
+                break;
             }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
-            // 包内容问题（非网络）换源也没用，直接抛
-            catch (InvalidOperationException) { throw; }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                try { File.Delete(tempZip); } catch { }
+                throw;
+            }
             catch (Exception ex)
             {
                 lastError = ex;
                 LogService.Warn("内核", $"下载源失败 ({src}): {ex.Message}");
-            }
-            finally
-            {
                 try { File.Delete(tempZip); } catch { }
             }
         }
-        throw new InvalidOperationException($"OpenSteamTool 下载失败，已尝试 {sources.Count} 个下载源：{lastError?.Message}", lastError);
+
+        if (downloadedZip == null)
+            throw new InvalidOperationException($"OpenSteamTool 下载失败，已尝试 {sources.Count} 个下载源：{lastError?.Message}", lastError);
+
+        try
+        {
+            ct.ThrowIfCancellationRequested();
+            status?.Report("正在解压并安装 DLL...");
+            using var archive = ZipFile.OpenRead(downloadedZip);
+            var extracted = 0;
+            foreach (var entry in archive.Entries)
+            {
+                ct.ThrowIfCancellationRequested();
+                var fileName = Path.GetFileName(entry.Name);
+                if (string.IsNullOrEmpty(fileName)) continue;
+                if (!RequiredDlls.Contains(fileName, StringComparer.OrdinalIgnoreCase)) continue;
+
+                var targetPath = Path.Combine(steamPath, fileName);
+                try
+                {
+                    entry.ExtractToFile(targetPath, overwrite: true);
+                }
+                catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+                {
+                    throw new InvalidOperationException($"无法写入 {fileName}，文件正被占用，请确保 Steam 已关闭后再试", ex);
+                }
+                extracted++;
+            }
+
+            if (extracted == 0)
+                throw new InvalidOperationException("压缩包中未找到 OpenSteamTool DLL 文件");
+
+            status?.Report("安装完成");
+        }
+        finally
+        {
+            try { File.Delete(downloadedZip); } catch { }
+        }
     }
 
     public Task UninstallAsync()
@@ -230,9 +267,9 @@ public class OpenSteamToolService : IOpenSteamToolService
                     File.Delete(path);
                     removed++;
                 }
-                catch (UnauthorizedAccessException)
+                catch (Exception ex) when (ex is UnauthorizedAccessException || ex is IOException)
                 {
-                    throw new InvalidOperationException($"无法删除 {dll}，请确保 Steam 已关闭后再试");
+                    throw new InvalidOperationException($"无法删除 {dll}，文件正被占用，请确保 Steam 已关闭后再试", ex);
                 }
             }
         }

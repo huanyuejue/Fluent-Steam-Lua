@@ -1190,8 +1190,9 @@ public partial class MainWindow : Window
 
             if (localVersion != "未知")
             {
-                var localVer = Version.TryParse(localVersion, out var lv) ? lv : null;
-                var remoteVer = Version.TryParse(remoteVersion, out var rv) ? rv : null;
+                // fork 仓库 tag 不带 v 前缀（如 1.4.9），老版本本地号带 v（如 v1.4.7），统一去掉前缀再比对
+                var localVer = Version.TryParse(localVersion.Trim().TrimStart('v', 'V'), out var lv) ? lv : null;
+                var remoteVer = Version.TryParse(remoteVersion.Trim().TrimStart('v', 'V'), out var rv) ? rv : null;
                 if (localVer != null && remoteVer != null && localVer >= remoteVer)
                 {
                     await ShowModernDialogAsync("无需更新", $"当前已是最新版本。\n本地：{localVersion}\n仓库：{remoteVersion}");
