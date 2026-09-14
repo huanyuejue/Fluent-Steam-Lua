@@ -438,9 +438,9 @@ public class SteamPathService : ISteamPathService
         var steamPath = !string.IsNullOrEmpty(_customPath) ? _customPath : DetectSteamPath();
         if (string.IsNullOrEmpty(steamPath)) return SteamToolType.None;
 
-        // OpenSteamTool (开源) — 独有标识
-        if (File.Exists(Path.Combine(steamPath, "OpenSteamTool.dll")) ||
-            File.Exists(Path.Combine(steamPath, "opensteamtool.toml")))
+        // OpenSteamTool (开源) — 以主 DLL 为准判已安装；toml 只是配置文件，
+        // 卸载只删 DLL 不删 toml，若把它算进来卸载后仍会误判已安装
+        if (File.Exists(Path.Combine(steamPath, "OpenSteamTool.dll")))
             return SteamToolType.OpenSteamTool;
 
         // SteamTools (闭源) — 独有标识
