@@ -368,11 +368,15 @@ public class SteamDepotService : ISteamDepotService
                     {
                         result.AppName = string.IsNullOrEmpty(result.AppName) ? full.AppName : result.AppName;
                         foreach (var depotId in full.DepotIds)
-                            result.GameDepots.Add(new DepotKeyInfo { DepotId = depotId });
+                            result.GameDepots.Add(new DepotKeyInfo
+                            {
+                                DepotId = depotId,
+                                ManifestId = full.DepotManifests.GetValueOrDefault(depotId, "")
+                            });
                         foreach (var dlcId in full.DlcAppIds)
                             if (!result.DlcAppIds.Contains(dlcId))
                                 result.DlcAppIds.Add(dlcId);
-                        LogService.Info("入库", $"AppID {appId} SteamKit2 兜底: depots={full.DepotIds.Count}, dlc={full.DlcAppIds.Count}");
+                        LogService.Info("入库", $"AppID {appId} SteamKit2 兜底: depots={full.DepotIds.Count}（带 gid {full.DepotManifests.Count} 个）, dlc={full.DlcAppIds.Count}");
                     }
                     else
                     {

@@ -304,7 +304,7 @@ Style="{StaticResource SettingsCardStyle}">
                         </ui:SettingsCard>
 
                         <ui:SettingsCard Header="镜像加速源" Margin="0,0,0,8"
-                                         Description="manifest 清单与内核包文件下载的首选源；选择镜像后直连最后尝试。仅作用于文件下载，GitHub 接口查询不受影响"
+                                         Description="内核包文件下载的首选源；选择镜像后直连最后尝试。清单获取已走直连，无需加速"
 Style="{StaticResource SettingsCardStyle}">
                             <StackPanel>
                                 <StackPanel Orientation="Horizontal">

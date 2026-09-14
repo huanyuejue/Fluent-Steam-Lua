@@ -159,6 +159,31 @@ public partial class MainWindow : Window
         NavView.SelectedItem = SettingsItem;
     }
 
+    /// <summary>供 Key 弹窗等外部调用：切到指定页面（仅支持已知 Tag）。</summary>
+    public void NavigateTo(string tag)
+    {
+        try
+        {
+            Dispatcher.Invoke(() =>
+            {
+                NavView.SelectedItem = tag switch
+                {
+                    "Home" => HomeItem,
+                    "ScriptDownload" => ScriptDownloadItem,
+                    "Manifest" => ManifestItem,
+                    "Extraction" => ExtractionItem,
+                    "Authorization" => AuthorizationItem,
+                    "Trainer" => TrainerItem,
+                    "Achievement" => AchievementItem,
+                    "Settings" => SettingsItem,
+                    "About" => AboutItem,
+                    _ => null
+                };
+            });
+        }
+        catch { }
+    }
+
     private void RestoreFromTray()
     {
         Show();

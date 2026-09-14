@@ -1,9 +1,8 @@
 namespace SteamLuaManager.Services;
 
-// GitHub 访问国内加速：raw 文件与 release 包走公共 gh-proxy 前缀链，直连永远第一位，
-// 镜像挂了自动退化成直连行为。
-// 注意：jsDelivr 指望不上——SteamManifestCache_Pro 这种规模（几千分支+几千 tag），
-// 它的包 loader 根本建不出来（包页面 0 请求、versions 接口 500），别再接回来。
+// GitHub 访问国内加速：release 包走公共 gh-proxy 前缀链，直连永远第一位，
+// 镜像挂了自动退化成直连行为（清单获取已走 ManifestHub 直连，不再经这里）。
+// 注意：jsDelivr 指望不上——大仓库规模下它的包 loader 根本建不出来，别再接回来。
 internal static class GitHubMirror
 {
     public const string DirectKey = "direct";

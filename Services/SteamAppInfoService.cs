@@ -156,7 +156,15 @@ public sealed class SteamAppInfoService : ISteamAppInfoService, IDisposable
                                 if (!string.IsNullOrEmpty(fromAppVal) && fromAppVal != appId.ToString())
                                     continue; // 跳过指向其他 app 的共享仓库
                             }
-                            if (int.TryParse(name, out var id)) result.DepotIds.Add(id);
+                            if (int.TryParse(name, out var id))
+                            {
+                                result.DepotIds.Add(id);
+                                // 同一节点直取最新 gid：之前只记 depot 号丢了 gid，
+                                // token 保护的游戏下游就只能判缺失、连试都不试
+                                var gid = depot["manifests"]?["public"]?["gid"]?.AsString();
+                                if (!string.IsNullOrEmpty(gid))
+                                    result.DepotManifests[id] = gid;
+                            }
                         }
                     }
                     else

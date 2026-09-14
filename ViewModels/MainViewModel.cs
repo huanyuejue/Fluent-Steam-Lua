@@ -28,11 +28,9 @@ namespace SteamLuaManager.ViewModels;
 	private readonly ISteamDepotService _steamDepotService;
 	private readonly IHttpClientProvider _httpClientProvider;
 	private readonly IDialogService _dialogService;
-	private readonly ISteamManifestRepoService _manifestRepoService;
 	private List<GameInfo> _allGames = new();
 	private CancellationTokenSource? _refreshCts;
 	private CancellationTokenSource? _dlcQueryCts;
-	private bool _isFetchingManifest;
 	private DispatcherTimer? _progressTimer;
 	private DispatcherTimer? _searchDebounceTimer;
 
@@ -147,8 +145,7 @@ namespace SteamLuaManager.ViewModels;
 		ISteamManifestService steamManifestService,
 		ISteamDepotService steamDepotService,
 		IHttpClientProvider httpClientProvider,
-		IDialogService dialogService,
-		ISteamManifestRepoService manifestRepoService)
+		IDialogService dialogService)
 	{
 		_steamPathService = steamPathService;
 		_luaFileManager = luaFileManager;
@@ -159,7 +156,6 @@ namespace SteamLuaManager.ViewModels;
 		_httpClientProvider = httpClientProvider;
 
 		_dialogService = dialogService;
-		_manifestRepoService = manifestRepoService;
 		_luaFileManager.FilesChanged += OnFilesChanged;
 		WeakReferenceMessenger.Default.Register<LuaFolderChangedMessage>(this, (_, _) => OnRefreshRequested());
 
@@ -514,166 +510,22 @@ namespace SteamLuaManager.ViewModels;
 		await QuickRefreshAsync();
 	}
 
+	// 手动获取已下线：统一引导去「清单监听」，成功率高还不用操心版本
 	[RelayCommand]
 	private async Task FetchManifestsAsync(GameInfo? game)
 	{
-		if (game == null || _isFetchingManifest) return;
-
-		if (game.IsDisabled)
-		{
-			await ShowModernDialogAsync("操作被阻止", "该游戏已被禁用入库，请先启用后再获取。");
-			return;
-		}
-
-		var displayName = string.IsNullOrEmpty(game.GameName) ? game.AppId.ToString() : game.GameName;
-		var lua = await _luaFileManager.ParseLuaFileAsync(game.AppId);
-		if (lua == null)
-		{
-			await ShowModernDialogAsync("获取失败", "找不到该游戏的 Lua 文件。");
-			return;
-		}
-		var luaIds = lua.Depots.Select(d => d.DepotId)
-			.Concat(lua.BareAppIds)
-			.Distinct()
-			.Where(id => id != game.AppId)
-			.ToList();
-		if (luaIds.Count == 0)
-		{
-			await ShowModernDialogAsync("无需获取", "该 Lua 中没有需要 manifest 的仓库行。");
-			return;
-		}
-
-		_isFetchingManifest = true;
+		if (game == null) return;
+		var go = await ShowModernConfirmAsync(
+			"推荐使用清单监听",
+			"手动获取 Manifest 已下线，成功率不如自动方案。\n\n请前往「清单」→ 清单监听：填入 Key 并启动监听，然后去 Steam 触发下载即可自动获取，更好用。",
+			"前往清单监听", "知道了");
+		if (!go) return;
 		try
 		{
-			await FetchManifestsCoreAsync(game, displayName, luaIds);
+			if (Application.Current.MainWindow is Views.MainWindow main)
+				main.NavigateTo("Manifest");
 		}
-		finally
-		{
-			_isFetchingManifest = false;
-		}
-	}
-
-	// 技术异常转人话：顺着 InnerException 找网络类根因，找到就只提示开 VPN/代理，不弹英文原文
-	private static string ToFriendlyFetchError(Exception ex)
-	{
-		for (var e = ex; e != null; e = e.InnerException)
-		{
-			if (e is HttpRequestException or IOException or SocketException or WebException)
-				return "网络连接失败，请检查网络（可尝试开启 VPN/代理，或在设置 → 接口设置中切换镜像加速源）后重试。";
-			if (e is TimeoutException)
-				return "请求超时，请检查网络（可尝试开启 VPN/代理，或在设置 → 接口设置中切换镜像加速源）后重试。";
-		}
-		return $"发生异常：{ex.Message}";
-	}
-
-	private async Task FetchManifestsCoreAsync(GameInfo game, string displayName, List<int> luaIds)
-	{
-		var progressWin = new Views.ManifestFetchProgressView(displayName, _settingsService.Load().SelectedBackdrop);
-		progressWin.Owner = Application.Current.MainWindow;
-		using var cts = new CancellationTokenSource();
-		progressWin.CancelRequested += (_, _) => { try { cts.Cancel(); } catch { } };
-		progressWin.Show();
-
-		ManifestRepoFetchResult? result = null;
-		try
-		{
-			var progress = new Progress<(int done, int total, string text)>(t => progressWin.Report(t.done, t.total, t.text));
-			result = await _manifestRepoService.FetchManifestsAsync(game.AppId, luaIds, progress, cts.Token);
-		}
-		catch (OperationCanceledException) when (cts.IsCancellationRequested)
-		{
-			StatusMessage = "已取消获取";
-		}
-		catch (OperationCanceledException ex)
-		{
-			LogService.Error("主页", $"Manifest 获取被中断（非用户取消）: {ex}");
-			await ShowModernDialogAsync("获取失败", $"请求被中断（可能是网络超时）：{ex.Message}\n可尝试开启 VPN/代理，或在设置 → 接口设置中切换镜像加速源后重试");
-		}
-		catch (Exception ex)
-		{
-			LogService.Error("主页", $"Manifest 获取异常: {ex}");
-			await ShowModernDialogAsync("获取失败", ToFriendlyFetchError(ex));
-		}
-		finally
-		{
-			try { progressWin.Close(); } catch { }
-		}
-
-		if (result == null || !result.Success)
-		{
-			if (result != null)
-				await ShowModernDialogAsync("获取失败", result.Error ?? "未知错误");
-			return;
-		}
-
-		var pins = result.GetPinMap();
-		if (pins.Count > 0)
-			await _luaFileManager.SetManifestPinAsync(game.AppId, true, pins);
-
-		var rateNote = result.PossiblyRateLimited ? "\n（GitHub API 可能限流，缺失或为误判，可稍后重试）" : "";
-		// 未知先行提示：这些不是缺失，不要删行，措辞与后面的移除确认区分开
-		if (result.UnknownDepots.Count > 0)
-		{
-			await ShowModernDialogAsync("部分清单未能确认",
-				$"以下 depot 因网络原因未能确认是否存在（不是缺失），请检查网络（可尝试开启 VPN/代理，或在设置 → 接口设置中切换镜像加速源）后重试，不要删除入库行：\n{string.Join("、", result.UnknownDepots)}");
-		}
-		if (result.MissingMainDepots.Count > 0)
-		{
-			await ShowModernDialogAsync("获取失败",
-				$"游戏主仓库缺少 manifest，下载仍会失败：\n{string.Join("、", result.MissingMainDepots)}{rateNote}");
-		}
-		else if (result.MissingDlcDepots.Count > 0)
-		{
-			var confirmed = await ShowModernConfirmAsync(
-				"部分DLC清单缺失",
-				$"以下 DLC 未找到 manifest，下载仍会失败：\n{string.Join("、", result.MissingDlcDepots)}\n\n可以移除这些 DLC 的入库行后正常下载本体，是否移除？{rateNote}",
-				"移除", "保留");
-			if (confirmed)
-				await _luaFileManager.RemoveAppIdsFromLuaAsync(game.AppId, result.MissingDlcDepots);
-		}
-		else if (result.MissingUnknownDepots.Count > 0)
-		{
-			var confirmed = await ShowModernConfirmAsync(
-				"部分清单缺失",
-				$"以下 id 未在仓库中找到 manifest，且无法查询游戏仓库信息区分归属：\n{string.Join("、", result.MissingUnknownDepots)}\n\n可移除这些行后重试下载（若本体无法下载请手动恢复行），是否移除？{rateNote}",
-				"移除", "保留");
-			if (confirmed)
-				await _luaFileManager.RemoveAppIdsFromLuaAsync(game.AppId, result.MissingUnknownDepots);
-		}
-
-		var summary = new List<string>();
-		foreach (var f in result.Fetched.Where(f => f.Kind == RepoDepotKind.Latest))
-			summary.Add(string.IsNullOrEmpty(f.PicsGid)
-				? $"depot {f.DepotId}：已获取仓库版 ({f.Gid})"
-				: pins.ContainsKey(f.DepotId)
-					? $"depot {f.DepotId}：已获取最新版 ({f.Gid})"
-					: $"depot {f.DepotId}：已是最新版 ({f.Gid})，未固定（随 Steam 正常更新）");
-		foreach (var f in result.Fetched.Where(f => f.Kind == RepoDepotKind.RepoStale))
-			summary.Add($"depot {f.DepotId}：仓库版落后于 Steam 最新，已固定仓库版 ({f.Gid})");
-		foreach (var f in result.Fetched.Where(f => f.Kind == RepoDepotKind.OldVersion))
-			summary.Add($"depot {f.DepotId}：无最新版，已固定旧版 ({f.Gid})，游戏将安装指定旧版本");
-		foreach (var id in result.MissingMainDepots)
-			summary.Add($"depot {id}：主仓库缺失 manifest");
-		foreach (var id in result.MissingDlcDepots)
-			summary.Add($"depot {id}：DLC 缺失 manifest");
-		foreach (var id in result.MissingUnknownDepots)
-			summary.Add($"depot {id}：未知归属缺失 manifest");
-		foreach (var id in result.UnknownDepots)
-			summary.Add($"depot {id}：网络原因未能确认，请重试（不是缺失）");
-		if (result.PossiblyRateLimited)
-			summary.Add("注意：GitHub API 可能限流，以上缺失或为误判，可稍后重试");
-		if (summary.Count == 0)
-		{
-			await ShowModernDialogAsync("无需获取", "lua 中的 id 与仓库信息均不匹配，无需获取 manifest。");
-			return;
-		}
-		if (!string.IsNullOrEmpty(result.DepotCacheDir))
-			summary.Add($"文件已放入：{result.DepotCacheDir}（{result.Fetched.Count} 个）");
-		StatusMessage = $"Manifest 获取完成：成功 {result.Fetched.Count} / 缺失 {result.MissingMainDepots.Count + result.MissingDlcDepots.Count + result.MissingUnknownDepots.Count} / 未确认 {result.UnknownDepots.Count}";
-		LogService.Info("主页", $"Manifest 获取完成 ({displayName})：成功 {result.Fetched.Count}，缺失 {result.MissingMainDepots.Count + result.MissingDlcDepots.Count + result.MissingUnknownDepots.Count}，未确认 {result.UnknownDepots.Count}");
-		await ShowModernDialogAsync("获取完成", string.Join("\n", summary));
-		await QuickRefreshAsync();
+		catch (Exception ex) { LogService.Warn("主页", $"跳转清单监听页失败: {ex.Message}"); }
 	}
 
 	[RelayCommand]

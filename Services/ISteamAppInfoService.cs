@@ -15,4 +15,6 @@ public class AppInfoQueryResult
     public string AppName { get; set; } = string.Empty;
     public List<int> DepotIds { get; set; } = new();
     public List<int> DlcAppIds { get; set; } = new();
+    /// <summary>同节点 manifests.public.gid（token 保护游戏拿不到 steamcmd 版本时就靠它）。</summary>
+    public Dictionary<int, string> DepotManifests { get; set; } = new();
 }

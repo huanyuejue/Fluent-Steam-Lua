@@ -258,8 +258,8 @@ public class ManifestMonitorService : IManifestMonitorService
     private void FinishBatch(int appId, int done, int failed)
     {
         if (failed == 0)
-            Emit($"App {appId} 清单已齐（共 {done} 个），请在 Steam 中重试下载游戏；若仍失败，可在主页游戏卡片 → 游戏信息 → 获取Manifest清单 手动获取");
+            Emit($"App {appId} 清单已齐（共 {done} 个），请在 Steam 中重试下载游戏");
         else
-            Emit($"App {appId} 清单获取结束（成功 {done} / 失败 {failed}），失败的可在主页游戏卡片 → 游戏信息 → 获取Manifest清单 手动获取");
+            Emit($"App {appId} 清单获取结束（成功 {done} / 失败 {failed}），失败的可重新触发 Steam 下载后再试");
     }
 }

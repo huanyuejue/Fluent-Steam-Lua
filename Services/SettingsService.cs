@@ -24,7 +24,7 @@ public bool ShowTrainerSections { get; set; } = true;
     public bool MinimizeToTray { get; set; }
     public bool AutoRefreshKeyCache { get; set; } = true;
     public bool AutoFetchCovers { get; set; } = true;
-    /// <summary>文件下载首选镜像源主机（direct = 直连优先），作用于 manifest 清单与内核包下载。</summary>
+    /// <summary>文件下载首选镜像源主机（direct = 直连优先），作用于内核包下载（清单获取已直连）。</summary>
     public string ManifestMirror { get; set; } = GitHubMirror.DirectKey;
     public List<TrainerBinding> TrainerBindings { get; set; } = new();
     public string SavedAccountName { get; set; } = string.Empty;

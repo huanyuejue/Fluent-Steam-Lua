@@ -373,6 +373,7 @@ public partial class App : Application
         services.AddSingleton<IDialogService, DialogService>();
         services.AddSingleton<IManifestHubService, ManifestHubService>();
         services.AddSingleton<IManifestMonitorService, ManifestMonitorService>();
+        services.AddSingleton<IManifestHubKeyService, ManifestHubKeyService>();
 
         services.AddTransient<MainViewModel>();
         services.AddTransient<SettingsViewModel>();
