@@ -31,7 +31,7 @@
 - 已入库的游戏自动读取并展示封面和中文游戏名（三种布局展示自由切换）
 - 搜索预览并入库新游戏（支持 AppId / 游戏名）
 - 查询当前游戏清单的DLC入库情况（支持一键补全DLC）
-- 从 Steam 正版账号中提取已拥有游戏的Lua清单和Bin成就文件
+- 从 Steam 正版账号中提取已拥有游戏的Lua清单,Bin成就文件和Manifest清单
 - 快速禁用或启用 Lua 清单的游戏入库状态，无需删除 Lua 清单
 - 支持固定游戏清单版本到最新版本或当前已安装版本
 - 支持游戏的Denuvo授权信息提取和使用授权（appticket和eticket）
@@ -43,9 +43,11 @@
 - 绑定后支持开启修改器的同时自动激活修改器的指定功能项
 
 #### 内核
-- 目前只适配 OpenSteamTool
+- 个人维护fork分支 OpenSteamTool
 - 支持快捷 安装/更新/卸载 OpenSteamTool 内核
 - 支持自定义 Lua 清单文件的扫描存放位置
+- 支持向好友广播Lua入库的游戏的真实游玩状态
+- 支持热切换内核使用的上游 Manifest 清单库
 
 #### Steam
 - 快捷启动和重启Steam程序
@@ -78,7 +80,3 @@ dotnet publish -c Release -r win-x64 --self-contained false /p:PublishSingleFile
 ```bash
 dotnet publish -c Release -r win-x64
 ```
-
-## 鸣谢
-
-- ManifestHub（manifesthub2.filegear-sg.me）：本工具「获取 Manifest 清单」与「清单监听」的上游 manifest 数据来源。
