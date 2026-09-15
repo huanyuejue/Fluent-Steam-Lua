@@ -18,6 +18,7 @@ public class AppSettings
     public bool IsCardRefreshVisible { get; set; } = true;
     public string SelectedTheme { get; set; } = "System";
     public bool AutoCheckUpdateEnabled { get; set; } = true;
+    public bool AutoCheckKernelUpdateEnabled { get; set; } = true;
 public bool ShowTrainerSections { get; set; } = true;
     public bool ShowCopyLogButton { get; set; }
     public bool EnableLogging { get; set; }

@@ -88,6 +88,12 @@ namespace SteamLuaManager.ViewModels;
 	[ObservableProperty]
 	private string _statusMessage = string.Empty;
 
+	[ObservableProperty]
+	private bool _isKernelUpdateBannerVisible;
+
+	[ObservableProperty]
+	private string _kernelUpdateBannerText = string.Empty;
+
 	private Timer? _statusMessageTimer;
 
 	partial void OnStatusMessageChanged(string value)
@@ -158,6 +164,7 @@ namespace SteamLuaManager.ViewModels;
 		_dialogService = dialogService;
 		_luaFileManager.FilesChanged += OnFilesChanged;
 		WeakReferenceMessenger.Default.Register<LuaFolderChangedMessage>(this, (_, _) => OnRefreshRequested());
+		WeakReferenceMessenger.Default.Register<KernelUpdateAvailableMessage>(this, (_, m) => OnKernelUpdateAvailable(m));
 
 		var settings = settingsService.Load();
 		IsAutoRefreshEnabled = settings.AutoRefreshEnabled;
@@ -181,11 +188,28 @@ namespace SteamLuaManager.ViewModels;
 		_searchDebounceTimer = null;
 		_luaFileManager.FilesChanged -= OnFilesChanged;
 		WeakReferenceMessenger.Default.Unregister<LuaFolderChangedMessage>(this);
+		WeakReferenceMessenger.Default.Unregister<KernelUpdateAvailableMessage>(this);
 	}
 
 	private void OnRefreshRequested()
 	{
 		Application.Current.Dispatcher.Invoke(() => { _ = RefreshGamesAsync(); });
+	}
+
+	// 检测仅在启动时跑一次，横幅关闭后本次启动不再显示
+	private void OnKernelUpdateAvailable(KernelUpdateAvailableMessage msg)
+	{
+		Application.Current.Dispatcher.Invoke(() =>
+		{
+			KernelUpdateBannerText = $"检测到 OST 内核新版本 {msg.RemoteVersion}（当前 {msg.LocalVersion}），请前往右下角工具栏更新";
+			IsKernelUpdateBannerVisible = true;
+		});
+	}
+
+	[RelayCommand]
+	private void DismissKernelUpdateBanner()
+	{
+		IsKernelUpdateBannerVisible = false;
 	}
 
 	[RelayCommand]

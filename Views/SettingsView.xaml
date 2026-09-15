@@ -510,6 +510,13 @@ Style="{StaticResource SettingsCardStyle}">
                             </ItemsControl>
                         </Border>
 
+                        <ui:SettingsCard Header="内核版本自动检测" Margin="0,0,0,8"
+                                          Description="启动软件时自动检测配套内核是否有新版本，有更新时在主页顶部横幅提示"
+                                          Style="{StaticResource SettingsCardStyle}">
+                            <ui:ToggleSwitch IsOn="{Binding AutoCheckKernelUpdateEnabled}"
+                                             OnContent="开" OffContent="关"/>
+                        </ui:SettingsCard>
+
                         <ui:SettingsCard Header="入库游戏的游玩状态广播" Margin="0,0,0,8"
                                           Description="开启后好友可见你入库游戏的真实游玩状态，关闭则不进行广播；该实现方法基于480，开启后会记录Spacewar时长，自行抉择是否使用该功能&#10;使用软件右下角安装的OST内核版本时，该功能才会生效"
                                           Style="{StaticResource SettingsCardStyle}">

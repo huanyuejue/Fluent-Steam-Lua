@@ -224,6 +224,33 @@
             </StackPanel>
         </Grid>
 
+        <!-- 内核更新提示横幅 -->
+        <Border Grid.Row="3" Margin="0,0,0,16" CornerRadius="8" Padding="12,8"
+                Background="{DynamicResource LayerFillColorDefaultBrush}"
+                Visibility="{Binding IsKernelUpdateBannerVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <ui:FontIcon Grid.Column="0" Glyph="&#xE895;" FontSize="14" Margin="0,0,10,0"
+                             VerticalAlignment="Center"
+                             Foreground="{DynamicResource SystemAccentColorBrush}"/>
+                <TextBlock Grid.Column="1" Text="{Binding KernelUpdateBannerText}" FontSize="13"
+                           VerticalAlignment="Center" TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                <Button Grid.Column="2" Command="{Binding DismissKernelUpdateBannerCommand}"
+                        Padding="8,4" Margin="8,0,0,0" VerticalAlignment="Center"
+                        ToolTip="本次启动不再提示">
+                    <Button.Background>
+                        <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                    </Button.Background>
+                    <TextBlock Text="×" FontSize="12" VerticalAlignment="Center"/>
+                </Button>
+            </Grid>
+        </Border>
+
         <!-- 游戏内容区域（加载时保持显示，不改变页面配色） -->
         <Grid Grid.Row="4">
 

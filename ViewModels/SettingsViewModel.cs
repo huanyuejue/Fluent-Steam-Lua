@@ -115,6 +115,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         ManifestMirror = GitHubMirror.NormalizePreferredHost(_settings.ManifestMirror);
         AutoFetchCovers = _settings.AutoFetchCovers;
         AutoCheckUpdateEnabled = _settings.AutoCheckUpdateEnabled;
+        AutoCheckKernelUpdateEnabled = _settings.AutoCheckKernelUpdateEnabled;
         AutoRefreshKeyCache = _settings.AutoRefreshKeyCache;
         IsShowTrainerSections = _settings.ShowTrainerSections;
         IsShowCopyLogButton = _settings.ShowCopyLogButton;
@@ -277,6 +278,14 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         _settingsService.Save(_settings);
         StatusMessage = value ? "启动时自动检查更新已开启" : "启动时自动检查更新已关闭";
         LogService.Info("设置", value ? "启动时自动检查更新已开启" : "启动时自动检查更新已关闭");
+    }
+
+    partial void OnAutoCheckKernelUpdateEnabledChanged(bool value)
+    {
+        _settings.AutoCheckKernelUpdateEnabled = value;
+        _settingsService.Save(_settings);
+        StatusMessage = value ? "内核启动自动检测更新已开启" : "内核启动自动检测更新已关闭";
+        LogService.Info("设置", value ? "内核启动自动检测更新已开启" : "内核启动自动检测更新已关闭");
     }
 
     partial void OnAutoRefreshKeyCacheChanged(bool value)
@@ -719,6 +728,9 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private bool _autoCheckUpdateEnabled = true;
+
+    [ObservableProperty]
+    private bool _autoCheckKernelUpdateEnabled = true;
 
     [ObservableProperty]
     private bool _autoRefreshKeyCache = true;

@@ -4,10 +4,12 @@ using System.Windows.Controls.Primitives;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
+using CommunityToolkit.Mvvm.Messaging;
 using iNKORE.UI.WPF.Modern;
 using iNKORE.UI.WPF.Modern.Controls;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Win32;
+using SteamLuaManager.Models;
 using SteamLuaManager.Services;
 using SteamLuaManager.ViewModels;
 using SteamLuaManager.Views;
@@ -140,6 +142,9 @@ public partial class App : Application
         if (settings.AutoCheckUpdateEnabled)
             _ = CheckUpdateOnStartupAsync(mainWindow);
 
+        if (settings.AutoCheckKernelUpdateEnabled)
+            _ = CheckKernelUpdateOnStartupAsync();
+
         _ = Task.Run(async () =>
         {
             try
@@ -234,6 +239,29 @@ public partial class App : Application
             if (!result.HasUpdate) return;
 
             await owner.Dispatcher.InvokeAsync(() => ShowUpdateLogDialogAsync(result));
+        }
+        catch { }
+    }
+
+    /// <summary>启动时检测配套内核更新，有新版本时通知主页显示横幅（静默失败）。</summary>
+    private static async Task CheckKernelUpdateOnStartupAsync()
+    {
+        if (ServiceProvider == null) return;
+        try
+        {
+            // 错开软件自检与主页初始化，避免启动期网络拥塞
+            await Task.Delay(3000);
+            var kernelService = ServiceProvider.GetRequiredService<IOpenSteamToolService>();
+            if (!kernelService.IsInstalled) return;
+            var localVersion = await kernelService.GetLocalVersionAsync();
+            if (string.IsNullOrEmpty(localVersion)) return;
+            var (remoteVersion, _, _) = await kernelService.GetRemoteInfoAsync();
+            // fork 仓库 tag 不带 v 前缀，老版本本地号带 v，统一去掉前缀再比对
+            var localVer = Version.TryParse(localVersion.Trim().TrimStart('v', 'V'), out var lv) ? lv : null;
+            var remoteVer = Version.TryParse(remoteVersion.Trim().TrimStart('v', 'V'), out var rv) ? rv : null;
+            if (localVer == null || remoteVer == null || remoteVer <= localVer) return;
+            LogService.Info("更新", $"检测到内核更新: 本地 {localVersion}, 远程 {remoteVersion}");
+            WeakReferenceMessenger.Default.Send(new KernelUpdateAvailableMessage(localVersion, remoteVersion));
         }
         catch { }
     }
