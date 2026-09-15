@@ -1,6 +1,7 @@
 ﻿using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
+using System.Net.Http;
 using System.Windows;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -137,6 +138,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         LuaFolderPath = steamPathService.GetLuaFolder() ?? "未配置";
 
         RefreshFriendBroadcastToggle();
+        RefreshManifestSource();
     }
 
     private void OnCdnAutoSwitched(int newIndex)
@@ -327,6 +329,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
                 _settings.SteamPath = dir;
                 _settingsService.Save(_settings);
                 RefreshFriendBroadcastToggle();
+                RefreshManifestSource();
                 StatusMessage = $"Steam路径已设置为: {dir}";
                 LogService.Info("设置", $"Steam路径已设置为: {dir}");
             }
@@ -342,6 +345,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         _settings.SteamPath = string.Empty;
         _settingsService.Save(_settings);
         RefreshFriendBroadcastToggle();
+        RefreshManifestSource();
         StatusMessage = "已重置为自动检测路径";
         LogService.Info("设置", "已重置为自动检测路径");
     }
@@ -768,6 +772,148 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             FriendBroadcastEnabled = _steamPathService.GetFriendBroadcastEnabled();
         }
         finally { _syncingFriendBroadcast = false; }
+    }
+
+    // ========== 上游清单库切换 ==========
+
+    public record ManifestSourceOption(string Id, string DisplayName, string TestUrl, string? UserAgent = null);
+
+    // 探针使用公开游戏的真实 manifest，使各上游走与内核一致的业务路径；
+    // 非法参数会导致部分上游返回业务错误而另一部分直接 502，将存活源误判为不可用
+    public List<ManifestSourceOption> ManifestSourceOptions { get; } =
+    [
+        new("20770407", "20770407", "https://20770407.xyz/manifest/481/3183503801510301321"),
+        new("wudrm", "wudrm", "http://gmrc.wudrm.com/manifest/3183503801510301321"),
+        new("opensteamtool", "opensteamtool", "https://manifest.opensteamtool.com/3183503801510301321"),
+        new("steamrun", "steamrun", "https://manifest.steam.run/api/manifest/3183503801510301321"),
+        new("manifestdex", "manifestdex", "https://manifest.manifestdex.com/3183503801510301321", "ManifestDeX/1.0"),
+    ];
+
+    [ObservableProperty]
+    private string _selectedManifestSource = "20770407";
+
+    [ObservableProperty]
+    private bool _isManifestSourceTesting;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ManifestTestProgressText))]
+    private int _manifestTestProgress;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ManifestTestProgressText))]
+    private int _manifestTestTotal;
+
+    public string ManifestTestProgressText => $"{ManifestTestProgress}/{ManifestTestTotal}";
+
+    [ObservableProperty]
+    private ObservableCollection<ManifestTestResult> _manifestTestResults = new();
+
+    public record ManifestTestResult(string Id, string DisplayName, bool IsReachable, long LatencyMs, int StatusCode)
+    {
+        // 行内状态与接口设置测速保持一致：可用带延迟，不可用只给结论
+        public string StatusText => IsReachable ? $"可用 {LatencyMs}ms" : "不可用";
+
+        // 我只用红绿两色表达连通结论，不按延迟分色，避免延迟色干扰可用性判断
+        public string ColorCode => IsReachable ? "#4CAF50" : "#F44336";
+    }
+
+    private bool _syncingManifestSource;
+
+    partial void OnSelectedManifestSourceChanged(string value)
+    {
+        if (_syncingManifestSource) return;
+        if (!_steamPathService.SetManifestSource(value))
+        {
+            _syncingManifestSource = true;
+            try { SelectedManifestSource = _steamPathService.GetManifestSource(); }
+            finally { _syncingManifestSource = false; }
+            StatusMessage = "写入 opensteamtool.toml 失败，请检查文件权限";
+            return;
+        }
+        StatusMessage = $"上游清单库已切换为 {value}";
+        LogService.Info("设置", StatusMessage);
+    }
+
+    private void RefreshManifestSource()
+    {
+        _syncingManifestSource = true;
+        try { SelectedManifestSource = _steamPathService.GetManifestSource(); }
+        finally { _syncingManifestSource = false; }
+    }
+
+    [RelayCommand]
+    private async Task TestManifestSourceAsync()
+    {
+        if (IsManifestSourceTesting) return;
+        IsManifestSourceTesting = true;
+        ManifestTestResults.Clear();
+        ManifestTestTotal = ManifestSourceOptions.Count;
+        ManifestTestProgress = 0;
+        StatusMessage = "正在测试上游清单库连通性...";
+
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
+        try
+        {
+            // 与接口设置测速同一汇报模式：各源并发探测，完成一个即实时落行并推进度
+            var progress = new Progress<ManifestTestResult>(r =>
+            {
+                ManifestTestProgress++;
+                ManifestTestResults.Add(r);
+            });
+            var tasks = ManifestSourceOptions.Select(opt => ProbeManifestSourceAsync(http, opt, progress));
+
+            var results = await Task.WhenAll(tasks);
+
+            var reachable = results.Count(r => r.IsReachable);
+            StatusMessage = $"连通性测试完成：{reachable}/{results.Length} 个可用";
+            LogService.Info("设置", $"上游清单库连通性测试：{string.Join(", ", results.Select(r => $"{r.DisplayName}={r.StatusCode}({r.LatencyMs}ms)"))}");
+        }
+        finally
+        {
+            IsManifestSourceTesting = false;
+        }
+    }
+
+    private static async Task<ManifestTestResult> ProbeManifestSourceAsync(
+        HttpClient http, ManifestSourceOption opt, IProgress<ManifestTestResult> progress)
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        ManifestTestResult result;
+        try
+        {
+            // 探活请求复刻内核发包条件，有 UA 门禁的源缺失 UA 会被直接拦截
+            using var request = new HttpRequestMessage(HttpMethod.Get, opt.TestUrl);
+            if (!string.IsNullOrEmpty(opt.UserAgent))
+                request.Headers.UserAgent.ParseAdd(opt.UserAgent);
+            using var resp = await http.SendAsync(request);
+            sw.Stop();
+            var body = await resp.Content.ReadAsStringAsync();
+            // 按内核解析请求码的口径判定：拿到有效数字才算可用，502/CF 拦截/业务错误均视为不可用
+            var ok = resp.StatusCode == System.Net.HttpStatusCode.OK && IsManifestCodeResponse(opt.Id, body);
+            result = new ManifestTestResult(opt.Id, opt.DisplayName, ok, sw.ElapsedMilliseconds, (int)resp.StatusCode);
+        }
+        catch (Exception)
+        {
+            sw.Stop();
+            result = new ManifestTestResult(opt.Id, opt.DisplayName, false, sw.ElapsedMilliseconds, 0);
+        }
+        progress.Report(result);
+        return result;
+    }
+
+    // 按各上游响应格式校验请求码有效性，与内核解析口径保持一致
+    private static bool IsManifestCodeResponse(string providerId, string body)
+    {
+        if (string.IsNullOrWhiteSpace(body)) return false;
+        if (providerId == "steamrun")
+        {
+            var key = body.IndexOf("content", StringComparison.OrdinalIgnoreCase);
+            if (key < 0) return false;
+            var digits = new string(body.Skip(key).SkipWhile(c => !char.IsDigit(c)).TakeWhile(char.IsDigit).ToArray());
+            return digits.Length > 0;
+        }
+        var text = body.Trim().Trim('"');
+        return text.Length > 0 && text.All(char.IsDigit);
     }
 
     [ObservableProperty]

@@ -134,14 +134,6 @@ Style="{StaticResource SettingsCardStyle}">
                             </StackPanel>
                         </ui:SettingsCard>
 
-                        <ui:SettingsCard Header="入库游戏的游玩状态广播" Margin="0,0,0,8"
-                                          Description="开启后好友可见你入库游戏的真实游玩状态，关闭则不进行广播；该实现方法基于480，开启后会记录Spacewar时长，自行抉择是否使用该功能&#10;使用软件右下角安装的OST内核版本时，该功能才会生效"
-Style="{StaticResource SettingsCardStyle}">
-                            <ui:ToggleSwitch IsOn="{Binding FriendBroadcastEnabled}"
-                                             IsEnabled="{Binding IsFriendBroadcastAvailable}"
-                                             OnContent="开" OffContent="关"/>
-                        </ui:SettingsCard>
-
                         <ui:SettingsCard Header="自动检查更新" Margin="0,0,0,8"
                                  Description="启动软件时自动检查是否有新版本"
 Style="{StaticResource SettingsCardStyle}">
@@ -440,6 +432,89 @@ Style="{StaticResource SettingsCardStyle}">
                                          Description="文件变更时自动刷新游戏列表"
 Style="{StaticResource SettingsCardStyle}">
                             <ui:ToggleSwitch IsOn="{Binding IsAutoRefreshEnabled}"
+                                             OnContent="开" OffContent="关"/>
+                        </ui:SettingsCard>
+
+                    </StackPanel>
+                </controls:SmoothScrollViewer>
+            </TabItem>
+
+            <!-- 内核设置 -->
+            <TabItem Header="内核设置">
+                <controls:SmoothScrollViewer VerticalScrollBarVisibility="Auto" BorderThickness="0"
+                              Background="Transparent" Padding="0,0,20,0">
+                    <StackPanel Margin="0,8,0,16">
+
+                        <ui:InfoBar Style="{StaticResource InfoBarStyle}"
+                                    IsOpen="True"
+                                    Severity="Warning"
+                                    IsClosable="False"
+                                    Margin="0,0,0,8"
+                                    Message="该界面的内核设置仅在使用当前软件配套的内核（右下角工具栏里安装的 OST 内核）时才可用，其他内核不可用；需要使用这里的功能时，请在右下角重新安装配套内核（该内核为本软件作者维护的 OST 内核 fork 分支）"/>
+
+                        <ui:SettingsCard Header="上游清单库" Margin="0,0,0,8"
+                                          Description="切换内核请求的Manifest清单的上游数据源，切换前建议做连通性测试，内核热加载即时生效"
+                                          Style="{StaticResource SettingsCardStyle}">
+                            <StackPanel Orientation="Horizontal">
+                                <Button Content="连通测试" Padding="12,6" Margin="0,0,4,0"
+                                        Command="{Binding TestManifestSourceCommand}"
+                                        IsEnabled="{Binding IsManifestSourceTesting, Converter={StaticResource BoolInvertConverter}}">
+                                    <Button.Background>
+                                        <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                                    </Button.Background>
+                                </Button>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,8,0"
+                                            VerticalAlignment="Center"
+                                            Visibility="{Binding IsManifestSourceTesting, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <ProgressBar Value="{Binding ManifestTestProgress}"
+                                                 Maximum="{Binding ManifestTestTotal}"
+                                                 Width="100" Height="3" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding ManifestTestProgressText}" FontSize="12"
+                                               Margin="6,0,0,0" VerticalAlignment="Center"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                </StackPanel>
+                                <ComboBox ItemsSource="{Binding ManifestSourceOptions}"
+                                          SelectedValue="{Binding SelectedManifestSource}"
+                                          SelectedValuePath="Id" DisplayMemberPath="DisplayName"
+                                          HorizontalAlignment="Left" Padding="8,4" MinWidth="140">
+                                    <ComboBox.Background>
+                                        <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                                    </ComboBox.Background>
+                                </ComboBox>
+                            </StackPanel>
+                        </ui:SettingsCard>
+
+                        <!-- 连通测试结果 -->
+                        <Border CornerRadius="8" Background="{DynamicResource LayerFillColorDefaultBrush}"
+                                Margin="0,0,0,8" Padding="12,8"
+                                Visibility="{Binding ManifestTestResults.Count, Converter={StaticResource NonZeroToVisibilityConverter}}">
+                            <ItemsControl ItemsSource="{Binding ManifestTestResults}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,4,0,4">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Ellipse Grid.Column="0" Width="8" Height="8" Fill="{Binding ColorCode}"
+                                                     Margin="0,0,10,0" VerticalAlignment="Center" Opacity="0.9"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding DisplayName}" FontSize="13"
+                                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="2" Text="{Binding StatusText}" FontSize="13"
+                                                       FontWeight="Medium"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Border>
+
+                        <ui:SettingsCard Header="入库游戏的游玩状态广播" Margin="0,0,0,8"
+                                          Description="开启后好友可见你入库游戏的真实游玩状态，关闭则不进行广播；该实现方法基于480，开启后会记录Spacewar时长，自行抉择是否使用该功能&#10;使用软件右下角安装的OST内核版本时，该功能才会生效"
+                                          Style="{StaticResource SettingsCardStyle}">
+                            <ui:ToggleSwitch IsOn="{Binding FriendBroadcastEnabled}"
+                                             IsEnabled="{Binding IsFriendBroadcastAvailable}"
                                              OnContent="开" OffContent="关"/>
                         </ui:SettingsCard>
 

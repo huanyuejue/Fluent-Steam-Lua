@@ -430,6 +430,94 @@ public class SteamPathService : ISteamPathService
         return value.Trim().Trim('"', '\'');
     }
 
+    // 清单库切换：读 [manifest] url 值，缺省 "20770407"（内核默认值）
+    public string GetManifestSource()
+    {
+        try
+        {
+            var basePath = DetectSteamPathInternal();
+            if (string.IsNullOrEmpty(basePath)) return "20770407";
+
+            var configFile = Path.Combine(basePath, ConfigFileName);
+            if (!File.Exists(configFile)) return "20770407";
+
+            var lines = File.ReadAllLines(configFile);
+            var (sectionStart, sectionEnd) = FindTomlSection(lines, "manifest");
+            if (sectionStart < 0) return "20770407";
+
+            foreach (var line in lines.Skip(sectionStart + 1).Take(sectionEnd - sectionStart - 1))
+            {
+                var value = ParseTomlStringValue(line, "url");
+                if (value != null && value.Length > 0)
+                    return value;
+            }
+            return "20770407";
+        }
+        catch (Exception ex)
+        {
+            LogService.Warn("Steam路径", $"读取上游清单库配置失败: {ex.Message}");
+            return "20770407";
+        }
+    }
+
+    // 文本级改 [manifest] url，与 SetFriendBroadcastEnabled 同模式
+    public bool SetManifestSource(string source)
+    {
+        try
+        {
+            var basePath = DetectSteamPathInternal();
+            if (string.IsNullOrEmpty(basePath)) return false;
+
+            var configFile = Path.Combine(basePath, ConfigFileName);
+            var newLine = $"url = \"{source}\"";
+
+            if (!File.Exists(configFile))
+            {
+                File.WriteAllLines(configFile, ["# 由 Fluent Steam Lua 写入，内核热加载即时生效", "", "[manifest]", newLine]);
+            }
+            else
+            {
+                var lines = File.ReadAllLines(configFile).ToList();
+                var (sectionStart, sectionEnd) = FindTomlSection(lines, "manifest");
+
+                if (sectionStart < 0)
+                {
+                    if (lines.Count > 0 && !string.IsNullOrWhiteSpace(lines[^1]))
+                        lines.Add(string.Empty);
+                    lines.Add("[manifest]");
+                    lines.Add(newLine);
+                }
+                else
+                {
+                    var urlLine = -1;
+                    for (var i = sectionStart + 1; i < sectionEnd; i++)
+                    {
+                        if (ParseTomlStringValue(lines[i], "url") != null)
+                        {
+                            urlLine = i;
+                            break;
+                        }
+                    }
+                    if (urlLine >= 0)
+                        lines[urlLine] = newLine;
+                    else
+                        lines.Insert(sectionStart + 1, newLine);
+                }
+
+                File.WriteAllLines(configFile, lines);
+            }
+
+            _cachedConfigFile = null;
+            LogService.Info("Steam路径", $"上游清单库已切换为 {source}（{configFile}）");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            LogService.Error("Steam路径", $"写入上游清单库配置失败: {ex}");
+            return false;
+        }
+    }
+
     public void SetCustomPath(string path) => _customPath = path;
     public string? GetCustomPath() => _customPath;
 
