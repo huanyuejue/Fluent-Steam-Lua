@@ -49,12 +49,10 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private bool _pinManifest;
 
-    public bool IsDepotKeyMode => _currentDownloadMode == "DepotKey";
-    public bool IsLocalCacheMode => _currentDownloadMode == "DepotKey" || _currentDownloadMode == "DepotKey2";
+    public bool IsLocalCacheMode => _currentDownloadMode == "DepotKey";
     public string CurrentDataSourceLabel => _currentDownloadMode switch
     {
-        "DepotKey" => "本地缓存仓库V1",
-        "DepotKey2" => "本地缓存仓库V2",
+        "DepotKey" => "本地缓存仓库",
         _ => "远程清单仓库"
     };
 
@@ -89,7 +87,6 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
     {
         if (_currentDownloadMode == settings.DownloadMode) return;
         _currentDownloadMode = settings.DownloadMode;
-        OnPropertyChanged(nameof(IsDepotKeyMode));
         OnPropertyChanged(nameof(IsLocalCacheMode));
         OnPropertyChanged(nameof(CurrentDataSourceLabel));
         OnPropertyChanged(nameof(LastUpdateTimeText));

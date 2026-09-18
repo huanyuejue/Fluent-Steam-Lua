@@ -63,6 +63,9 @@ public class SettingsService : ISettingsService
                 var settings = JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
                 if (string.IsNullOrWhiteSpace(settings.DownloadMode))
                     settings.DownloadMode = "DepotKey";
+                // 本地缓存仓库 V2 已废弃，老配置迁移到唯一保留的本地缓存仓库
+                else if (settings.DownloadMode == "DepotKey2")
+                    settings.DownloadMode = "DepotKey";
                 if (string.IsNullOrWhiteSpace(settings.ManifestMirror))
                     settings.ManifestMirror = GitHubMirror.DirectKey;
                 return settings;

@@ -18,13 +18,12 @@ public class SteamDepotService : ISteamDepotService
     private string _currentSource = "DepotKey";
     private readonly Dictionary<string, (string DepotKeysUrl, string TokenKeysUrl)> _resolvedUrls = new();
 
-    private const string KeyIndexUrl = "https://pan.qzyun.net/f/d/MlArs0/key.txt";
-    private const string Source2DepotKeysUrl = "https://api.993499094.xyz/depotkeys.json";
-    private const string Source2TokenKeysUrl = "https://api.993499094.xyz/appaccesstokens.json";
+    private const string DefaultDepotKeysUrl = "https://api.993499094.xyz/depotkeys.json";
+    private const string DefaultTokenKeysUrl = "https://api.993499094.xyz/appaccesstokens.json";
     private const string LastUpdateStampFileName = ".lastupdate";
     private static readonly TimeSpan AutoRefreshInterval = TimeSpan.FromHours(24);
 
-    private static readonly string[] SourceNames = ["DepotKey", "DepotKey2"];
+    private static readonly string[] SourceNames = ["DepotKey"];
 
     // 懒加载常驻字典：首次入库时建，后续复用，文件更新后失效
     private Dictionary<string, string>? _cachedDepotKeys;
@@ -54,20 +53,20 @@ public class SteamDepotService : ISteamDepotService
     }
 
     private string GetSourceCacheDir() =>
-        Path.Combine(_cacheFolder, _currentSource == "DepotKey2" ? "v2" : "v1");
+        Path.Combine(_cacheFolder, "v1");
 
-    private static string SourceCacheDirOf(string cacheFolder, string source) =>
-        Path.Combine(cacheFolder, source == "DepotKey2" ? "v2" : "v1");
+    private static string SourceCacheDirOf(string cacheFolder) =>
+        Path.Combine(cacheFolder, "v1");
 
-    private static string LastUpdateStampPathOf(string cacheFolder, string source) =>
-        Path.Combine(SourceCacheDirOf(cacheFolder, source), LastUpdateStampFileName);
+    private static string LastUpdateStampPathOf(string cacheFolder) =>
+        Path.Combine(SourceCacheDirOf(cacheFolder), LastUpdateStampFileName);
 
     /// <summary>某数据源上次成功更新缓存的时间（本地时区），无时间戳则返回 null。</summary>
     public DateTime? GetLastUpdateTime(string source)
     {
         try
         {
-            var path = LastUpdateStampPathOf(_cacheFolder, source);
+            var path = LastUpdateStampPathOf(_cacheFolder);
             if (!File.Exists(path)) return null;
             var text = File.ReadAllText(path);
             if (DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
@@ -78,16 +77,16 @@ public class SteamDepotService : ISteamDepotService
         return null;
     }
 
-    private static void WriteLastUpdateStamp(string cacheFolder, string source)
+    private static void WriteLastUpdateStamp(string cacheFolder)
     {
         try
         {
-            var dir = SourceCacheDirOf(cacheFolder, source);
+            var dir = SourceCacheDirOf(cacheFolder);
             if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
-            File.WriteAllText(LastUpdateStampPathOf(cacheFolder, source),
+            File.WriteAllText(LastUpdateStampPathOf(cacheFolder),
                 DateTime.UtcNow.ToString("O", System.Globalization.CultureInfo.InvariantCulture));
         }
-        catch (Exception ex) { LogService.Warn("入库", $"写入更新时间戳失败 ({source}): {ex.Message}"); }
+        catch (Exception ex) { LogService.Warn("入库", $"写入更新时间戳失败: {ex.Message}"); }
     }
 
     // 轻量计数 JSON 顶层属性数，避免反序列化整个大字典
@@ -121,47 +120,15 @@ public class SteamDepotService : ISteamDepotService
     private string GetTokenKeysPath() =>
         Path.Combine(GetSourceCacheDir(), "appaccesstokens.json");
 
-    private async Task<bool> ResolveKeyUrlsAsync(CancellationToken ct = default)
+    private Task<bool> ResolveKeyUrlsAsync(CancellationToken ct = default)
     {
         if (_resolvedUrls.TryGetValue(_currentSource, out var cached) &&
             !string.IsNullOrEmpty(cached.DepotKeysUrl) &&
             !string.IsNullOrEmpty(cached.TokenKeysUrl))
-            return true;
+            return Task.FromResult(true);
 
-        if (_currentSource == "DepotKey")
-        {
-            _resolvedUrls[_currentSource] = (Source2DepotKeysUrl, Source2TokenKeysUrl);
-            return true;
-        }
-
-        try
-        {
-            var depotKeysUrl = string.Empty;
-            var tokenKeysUrl = string.Empty;
-            var content = await _httpClientProvider.SendWithProxyRetryAsync(
-                $"steam-depot-{_currentSource}",
-                TimeSpan.FromSeconds(30),
-                client => client.GetStringAsync(KeyIndexUrl, ct),
-                HttpHeaderHelper.ConfigureBrowser);
-            var lines = content.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            foreach (var line in lines)
-            {
-                var url = line.Trim();
-                if (url.EndsWith("depotkeys.json", StringComparison.OrdinalIgnoreCase))
-                    depotKeysUrl = url;
-                else if (url.EndsWith("appaccesstokens.json", StringComparison.OrdinalIgnoreCase))
-                    tokenKeysUrl = url;
-            }
-
-            if (!string.IsNullOrEmpty(depotKeysUrl) && !string.IsNullOrEmpty(tokenKeysUrl))
-            {
-                _resolvedUrls[_currentSource] = (depotKeysUrl, tokenKeysUrl);
-                return true;
-            }
-        }
-        catch (Exception ex) { LogService.Warn("入库", $"解析密钥仓库地址失败 ({_currentSource}): {ex.Message}"); }
-
-        return false;
+        _resolvedUrls[_currentSource] = (DefaultDepotKeysUrl, DefaultTokenKeysUrl);
+        return Task.FromResult(true);
     }
 
     public async Task<bool> EnsureKeyFilesAsync(CancellationToken ct = default)
@@ -251,7 +218,7 @@ public class SteamDepotService : ISteamDepotService
             GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
 
             result.Success = true;
-            WriteLastUpdateStamp(_cacheFolder, _currentSource);
+            WriteLastUpdateStamp(_cacheFolder);
             return result;
         }
         catch (Exception ex)
@@ -705,7 +672,7 @@ public class SteamDepotService : ISteamDepotService
                 return result;
             }
 
-            // 2. 有独立 depot → 需要密钥，从本地密钥仓库 v1 搜索
+            // 2. 有独立 depot → 需要密钥，从本地密钥仓库搜索
             result.NeedKey = true;
 
             var prevSource = _currentSource;
@@ -743,7 +710,7 @@ public class SteamDepotService : ISteamDepotService
                 }
                 else
                 {
-                    result.Message = $"无法获取 DLC {dlcAppId} 的密钥信息（本地密钥仓库 v1 中未找到），获取失败";
+                    result.Message = $"无法获取 DLC {dlcAppId} 的密钥信息（本地密钥仓库中未找到），获取失败";
                 }
             }
             finally
