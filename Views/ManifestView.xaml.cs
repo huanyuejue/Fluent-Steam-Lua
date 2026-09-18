@@ -1,5 +1,7 @@
 using System.Diagnostics;
+using System.Windows;
 using System.Windows.Controls;
+using SteamLuaManager.Services;
 using SteamLuaManager.ViewModels;
 
 namespace SteamLuaManager.Views;
@@ -21,7 +23,39 @@ public partial class ManifestView : UserControl
                 ApiKeyBox.Password = FakePassword;
                 _pwdDirty = false;
             }
+            RefreshCopyLogButtonVisibility();
+            if (DataContext is ManifestViewModel logVm)
+                logVm.LogLines.CollectionChanged += (_, _) => RefreshCopyLogButtonVisibility();
         };
+    }
+
+    // 复制日志按钮跟随设置开关与日志条数，和入库/提取界面保持一致
+    private void RefreshCopyLogButtonVisibility()
+    {
+        try
+        {
+            var settings = App.ServiceProvider?.GetService(typeof(ISettingsService)) is ISettingsService s
+                ? s.Load() : null;
+            var showInSetting = settings is { ShowCopyLogButton: true };
+            if (showInSetting && DataContext is ManifestViewModel vm)
+                CopyLogButton.Visibility = vm.LogLines.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            else
+                CopyLogButton.Visibility = Visibility.Collapsed;
+        }
+        catch { CopyLogButton.Visibility = Visibility.Collapsed; }
+    }
+
+    private void CopyLogButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is ManifestViewModel vm && vm.LogLines.Count > 0)
+        {
+            try
+            {
+                var text = string.Join(Environment.NewLine, vm.LogLines);
+                Clipboard.SetText(text);
+            }
+            catch { }
+        }
     }
 
     private void ApiKeyBox_PasswordChanged(object sender, System.Windows.RoutedEventArgs e)

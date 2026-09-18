@@ -91,20 +91,29 @@
                         <TextBlock Grid.Column="0" Text="{Binding StatusMessage}" FontSize="12"
                                    VerticalAlignment="Center"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                        <Button Grid.Column="1" Content="清空日志" Padding="12,4"
-                                Command="{Binding ClearLogCommand}"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <Button x:Name="CopyLogButton" Content="复制日志" Padding="12,4" Margin="0,0,8,0"
+                                    Click="CopyLogButton_Click" Visibility="Collapsed"/>
+                            <Button Content="清空日志" Padding="12,4"
+                                    Command="{Binding ClearLogCommand}"
+                                    Visibility="{Binding LogLines.Count, Converter={StaticResource NonZeroToVisibilityConverter}}"/>
+                        </StackPanel>
                     </Grid>
-                    <ScrollViewer MaxHeight="320" VerticalScrollBarVisibility="Auto">
-                        <ItemsControl ItemsSource="{Binding LogLines}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding}" FontFamily="Consolas,微软雅黑" FontSize="12"
-                                               TextWrapping="Wrap" Margin="0,1"
-                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </ScrollViewer>
+                    <Grid>
+                        <TextBlock Text="暂无日志" Style="{StaticResource LogEmptyStyle}"
+                                   Visibility="{Binding LogLines.Count, Converter={StaticResource ZeroToVisibilityConverter}}"/>
+                        <ScrollViewer MaxHeight="320" VerticalScrollBarVisibility="Auto">
+                            <ItemsControl ItemsSource="{Binding LogLines}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding}" FontFamily="Consolas,微软雅黑" FontSize="12"
+                                                   TextWrapping="Wrap" Margin="0,1"
+                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Grid>
                 </StackPanel>
             </Border>
 

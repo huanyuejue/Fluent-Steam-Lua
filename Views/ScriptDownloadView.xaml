@@ -29,7 +29,7 @@
             <TextBlock Text="如出现搜索不出结果可尝试开VPN或代理"
                        FontSize="12" Margin="0,0,0,2"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-            <TextBlock Text="如入库失败，可在设置-接口设置中切换入库接口后重试；刚发售的新游戏清单同步稍慢，可过一段时间再试"
+            <TextBlock Text="如出现入库失败，可尝试点击更新密钥缓存后重试；刚发售的新游戏清单可能同步不及时，可过一段时间再试"
                        FontSize="12" Margin="0,0,0,24"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
 

@@ -182,7 +182,7 @@ Style="{StaticResource SettingsCardStyle}">
                         </ui:SettingsCard>
 
                         <ui:SettingsCard Header="缓存管理" Margin="0,0,0,8"
-                                         Description="清理软件运行的本地缓存文件（游戏名称 封面 修改器 本地缓存密钥）"
+                                         Description="清理软件运行所产生的本地缓存文件（游戏名称 封面 修改器 本地缓存密钥）"
 Style="{StaticResource SettingsCardStyle}">
                             <StackPanel Orientation="Horizontal">
                                 <Button Content="清理缓存" Command="{Binding ClearCacheCommand}"
@@ -282,7 +282,7 @@ Style="{StaticResource SettingsCardStyle}">
                     <StackPanel Margin="0,8,0,16">
 
                         <ui:SettingsCard Header="入库接口" Margin="0,0,0,8"
-                                         Description="选择游戏入库方式"
+                                         Description="游戏入库使用的仓库接口选择"
 Style="{StaticResource SettingsCardStyle}">
                             <ComboBox SelectedValue="{Binding DownloadMode, Mode=TwoWay}"
                                        SelectedValuePath="Tag" HorizontalAlignment="Left" Padding="8,4">
@@ -295,7 +295,7 @@ Style="{StaticResource SettingsCardStyle}">
                         </ui:SettingsCard>
 
                         <ui:SettingsCard Header="镜像加速源" Margin="0,0,0,8"
-                                         Description="内核包文件下载的首选源；选择镜像后直连最后尝试。清单获取已走直连，无需加速"
+                                         Description="软件和内核包更新下载的首选源；选择镜像后直连最后尝试"
 Style="{StaticResource SettingsCardStyle}">
                             <StackPanel>
                                 <StackPanel Orientation="Horizontal">
@@ -517,7 +517,7 @@ Style="{StaticResource SettingsCardStyle}">
                         </ui:SettingsCard>
 
                         <ui:SettingsCard Header="入库游戏的游玩状态广播" Margin="0,0,0,8"
-                                          Description="开启后好友可见你入库游戏的真实游玩状态，关闭则不进行广播；该实现方法基于480，开启后会记录Spacewar时长，自行抉择是否使用该功能&#10;使用软件右下角安装的OST内核版本时，该功能才会生效"
+                                          Description="开启后好友可见你入库游戏的真实游玩状态，关闭则不进行广播；该实现方法基于480，开启后会记录Spacewar时长，自行抉择是否使用该功能"
                                           Style="{StaticResource SettingsCardStyle}">
                             <ui:ToggleSwitch IsOn="{Binding FriendBroadcastEnabled}"
                                              IsEnabled="{Binding IsFriendBroadcastAvailable}"
