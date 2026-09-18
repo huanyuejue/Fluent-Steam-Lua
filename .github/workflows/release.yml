@@ -21,11 +21,11 @@ jobs:
       LOOSE_ZIP: Fluent-Steam-Lua-${{ inputs.version }}-loose-file.zip
       SINGLE_ZIP: Fluent-Steam-Lua-${{ inputs.version }}-single-file.zip
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: main
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 8.0.x
 
@@ -59,10 +59,10 @@ jobs:
           git push origin '${{ inputs.version }}'
 
       - name: Publish loose-file version
-        run: dotnet publish SteamLuaManager.csproj -c Release -r win-x64 --self-contained false -p:Version=${{ inputs.version }} -o publish/loose
+        run: dotnet publish SteamLuaManager.csproj -c Release -r win-x64 --self-contained false -p:DebugType=none -p:Version=${{ inputs.version }} -o publish/loose
 
       - name: Publish single-file version
-        run: dotnet publish SteamLuaManager.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -p:Version=${{ inputs.version }} -o publish/single
+        run: dotnet publish SteamLuaManager.csproj -c Release -r win-x64 --self-contained false -p:DebugType=none -p:AssemblyName="Fluent Steam Lua" -p:PublishSingleFile=true -p:Version=${{ inputs.version }} -o publish/single
 
       - name: Pack archives
         shell: pwsh
