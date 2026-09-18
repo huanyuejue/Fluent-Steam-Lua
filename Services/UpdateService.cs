@@ -6,7 +6,7 @@ using System.Text.RegularExpressions;
 
 namespace SteamLuaManager.Services;
 
-public sealed record UpdateCheckResult(bool HasUpdate, Version CurrentVersion, Version LatestVersion, string TagName, string ReleaseUrl, string ReleaseNotes);
+public sealed record UpdateCheckResult(bool HasUpdate, Version CurrentVersion, Version LatestVersion, string TagName, string ReleaseUrl, string ReleaseNotes, string LooseAssetUrl, string SingleAssetUrl);
 
 public interface IUpdateService
 {
@@ -40,13 +40,50 @@ public class UpdateService : IUpdateService
             doc.RootElement.TryGetProperty("body", out var bodyElem)
                 ? bodyElem.GetString() ?? string.Empty
                 : string.Empty);
+        var (looseAssetUrl, singleAssetUrl) = ExtractAssetUrls(doc.RootElement);
 
         var latestVersion = ParseReleaseVersion(tagName)
             ?? throw new InvalidOperationException($"无法识别最新版本号：{tagName}");
         var assemblyVersion = Assembly.GetExecutingAssembly().GetName().Version ?? new Version(1, 0, 0);
         var currentVersion = new Version(assemblyVersion.Major, assemblyVersion.Minor, assemblyVersion.Build);
 
-        return new UpdateCheckResult(latestVersion > currentVersion, currentVersion, latestVersion, tagName, releaseUrl, releaseNotes);
+        return new UpdateCheckResult(latestVersion > currentVersion, currentVersion, latestVersion, tagName, releaseUrl, releaseNotes, looseAssetUrl, singleAssetUrl);
+    }
+
+    // 按包名匹配散文件与单文件包的下载地址：新规范后缀优先命中，
+    // 老命名（loose-file.*.zip）当前缀兜底，匹配不到留空由调用方回退手动更新
+    private static (string Loose, string Single) ExtractAssetUrls(JsonElement root)
+    {
+        var loose = string.Empty;
+        var single = string.Empty;
+        try
+        {
+            if (!root.TryGetProperty("assets", out var assets)) return (loose, single);
+            foreach (var asset in assets.EnumerateArray())
+            {
+                var name = asset.TryGetProperty("name", out var nameElem)
+                    ? nameElem.GetString() ?? string.Empty
+                    : string.Empty;
+                var url = asset.TryGetProperty("browser_download_url", out var urlElem)
+                    ? urlElem.GetString() ?? string.Empty
+                    : string.Empty;
+                if (string.IsNullOrEmpty(url)) continue;
+                if (name.EndsWith("-loose-file.zip", StringComparison.OrdinalIgnoreCase))
+                    loose = url;
+                else if (name.EndsWith("-single-file.zip", StringComparison.OrdinalIgnoreCase))
+                    single = url;
+                else if (string.IsNullOrEmpty(loose)
+                    && name.StartsWith("loose-file", StringComparison.OrdinalIgnoreCase)
+                    && name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                    loose = url;
+                else if (string.IsNullOrEmpty(single)
+                    && name.StartsWith("single-file", StringComparison.OrdinalIgnoreCase)
+                    && name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                    single = url;
+            }
+        }
+        catch { }
+        return (loose, single);
     }
 
     // 仅提取 "## 更新内容" 到首个分隔线之间的区域，跳过标题行

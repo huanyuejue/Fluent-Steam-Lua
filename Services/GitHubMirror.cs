@@ -25,14 +25,17 @@ internal static class GitHubMirror
             : DirectKey;
     }
 
-    // 源显示名：直连与各镜像主机（测速与进度文案共用；镜像 URL 里含 raw 域名，必须前缀判断）
+    // 源显示名：直连与各镜像主机（测速与进度文案共用）。
+    // 镜像 URL 里嵌着源站域名，先取实际 host 再比对，否则代理地址会被误标为直连
     public static string SourceDisplayName(string url)
     {
-        if (url.StartsWith("https://raw.githubusercontent.com/", StringComparison.OrdinalIgnoreCase))
-            return "raw 直连";
-        if (url.Contains("github.com", StringComparison.OrdinalIgnoreCase))
-            return "GitHub 直连";
         var host = url.Split(["://"], 2, StringSplitOptions.None).Last().Split('/').First();
+        if (host.Equals("raw.githubusercontent.com", StringComparison.OrdinalIgnoreCase))
+            return "raw 直连";
+        if (host.Equals("github.com", StringComparison.OrdinalIgnoreCase)
+            || host.Equals("objects.githubusercontent.com", StringComparison.OrdinalIgnoreCase)
+            || host.Equals("api.github.com", StringComparison.OrdinalIgnoreCase))
+            return "GitHub 直连";
         return host;
     }
 

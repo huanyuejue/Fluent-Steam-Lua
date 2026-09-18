@@ -42,10 +42,14 @@
     <Compile Remove="SvcMonitor\**\*" />
     <EmbeddedResource Remove="SvcMonitor\**\*" />
     <None Remove="SvcMonitor\**\*" />
+    <Compile Remove="Updater\**\*" />
+    <EmbeddedResource Remove="Updater\**\*" />
+    <None Remove="Updater\**\*" />
   </ItemGroup>
 
   <ItemGroup>
     <EmbeddedResource Include="Resources\SvcMonitor.zip" />
+    <EmbeddedResource Include="Resources\Updater.zip" />
   </ItemGroup>
 
   <Target Name="BuildSvcMonitorForEmbed" BeforeTargets="BeforeBuild">
@@ -54,6 +58,14 @@
                   DestinationFile="$(ProjectDir)Resources\SvcMonitor.zip"
                   Overwrite="true" />
     <RemoveDir Directories="$(ProjectDir)Resources\SvcMonitorPublish" />
+  </Target>
+
+  <Target Name="BuildUpdaterForEmbed" BeforeTargets="BeforeBuild">
+    <Exec Command="dotnet publish $(ProjectDir)Updater\Updater.csproj -c $(Configuration) -o $(ProjectDir)Resources\UpdaterPublish" />
+    <ZipDirectory SourceDirectory="$(ProjectDir)Resources\UpdaterPublish"
+                  DestinationFile="$(ProjectDir)Resources\Updater.zip"
+                  Overwrite="true" />
+    <RemoveDir Directories="$(ProjectDir)Resources\UpdaterPublish" />
   </Target>
 
 </Project>

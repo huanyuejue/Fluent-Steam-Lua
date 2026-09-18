@@ -113,6 +113,12 @@ public partial class App : Application
         var settings = settingsService.Load();
 
         LogService.SetEnabled(settings.EnableLogging);
+        try
+        {
+            // 新版首次启动打扫更新残留（备份目录、暂存目录、临时包），静默失败
+            ServiceProvider.GetRequiredService<IAppUpdateService>().CleanupLeftoverUpdateFiles();
+        }
+        catch { }
         LogService.Info("系统", $"程序启动，版本 {System.Reflection.Assembly.GetExecutingAssembly().GetName().Version}");
         LogService.Info("系统", $"操作系统: {Environment.OSVersion.VersionString}, .NET: {Environment.Version}, 进程: {(Environment.Is64BitProcess ? "x64" : "x86")}");
         var steamPathService = ServiceProvider.GetRequiredService<ISteamPathService>();
@@ -358,13 +364,106 @@ public partial class App : Application
         {
             Title = result.HasUpdate ? "发现新版本" : "版本信息",
             Content = content,
-            PrimaryButtonText = "打开下载页",
+            PrimaryButtonText = result.HasUpdate ? "立即更新" : "打开下载页",
             CloseButtonText = "稍后再说",
             DefaultButton = ContentDialogButton.Primary
         };
+        if (result.HasUpdate)
+            dialog.SecondaryButtonText = "打开下载页";
 
-        if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+        var dialogResult = await dialog.ShowAsync();
+        if (dialogResult == ContentDialogResult.Secondary
+            || (!result.HasUpdate && dialogResult == ContentDialogResult.Primary))
             Process.Start(new ProcessStartInfo(result.ReleaseUrl) { UseShellExecute = true });
+        else if (result.HasUpdate && dialogResult == ContentDialogResult.Primary)
+            await RunAppUpdateAsync(result);
+    }
+
+    /// <summary>自更新流程：下载分包→暂存→启动更新器→退出，失败与取消留在框内提示。</summary>
+    private static async Task RunAppUpdateAsync(UpdateCheckResult result)
+    {
+        if (ServiceProvider == null) return;
+        IAppUpdateService appUpdate;
+        try
+        {
+            appUpdate = ServiceProvider.GetRequiredService<IAppUpdateService>();
+        }
+        catch { return; }
+
+        var versionText = new TextBlock
+        {
+            Text = $"当前版本：{result.CurrentVersion} → 最新版本：{result.TagName}",
+            Margin = new Thickness(0, 0, 0, 4)
+        };
+        versionText.SetResourceReference(TextBlock.ForegroundProperty, "TextFillColorPrimaryBrush");
+        var statusText = new TextBlock
+        {
+            Text = "准备更新...",
+            TextWrapping = TextWrapping.Wrap
+        };
+        statusText.SetResourceReference(TextBlock.ForegroundProperty, "TextFillColorPrimaryBrush");
+        var progressBar = new System.Windows.Controls.ProgressBar
+        {
+            Minimum = 0,
+            Maximum = 100,
+            Value = 0,
+            IsIndeterminate = true,
+            Margin = new Thickness(0, 12, 0, 0)
+        };
+        var stack = new StackPanel { MaxWidth = 440 };
+        stack.Children.Add(versionText);
+        stack.Children.Add(statusText);
+        stack.Children.Add(progressBar);
+
+        // 进度框只留关闭键充当取消；成功时随进程退出而消失，无需编程式关闭
+        var dialog = new ContentDialog
+        {
+            Title = "正在更新",
+            Content = stack,
+            CloseButtonText = "取消"
+        };
+        using var cts = new CancellationTokenSource();
+        dialog.Closing += (_, _) => { try { cts.Cancel(); } catch { } };
+        var showTask = dialog.ShowAsync();
+
+        var status = new Progress<string>(msg => statusText.Text = msg);
+        var progress = new Progress<int>(pct =>
+        {
+            progressBar.IsIndeterminate = false;
+            progressBar.Value = pct;
+        });
+        try
+        {
+            var staged = await appUpdate.DownloadAndStageAsync(result, status, progress, cts.Token);
+            statusText.Text = "正在启动更新程序，程序即将退出...";
+            progressBar.IsIndeterminate = true;
+            if (!appUpdate.TryStartUpdater(staged))
+            {
+                statusText.Text = "启动更新程序失败，请前往 GitHub 手动下载覆盖更新。";
+                progressBar.IsIndeterminate = false;
+                progressBar.Value = 0;
+                dialog.CloseButtonText = "关闭";
+                await showTask;
+                return;
+            }
+            // 更新程序已接管，直接退出
+            Application.Current?.Shutdown();
+            await showTask;
+        }
+        catch (OperationCanceledException)
+        {
+            LogService.Info("更新", "用户取消更新");
+            await showTask;
+        }
+        catch (Exception ex)
+        {
+            LogService.Warn("更新", $"自更新失败: {ex.Message}");
+            statusText.Text = $"更新失败：{ex.Message}\n可前往 GitHub 手动下载覆盖更新。";
+            progressBar.IsIndeterminate = false;
+            progressBar.Value = 0;
+            dialog.CloseButtonText = "关闭";
+            await showTask;
+        }
     }
 
     private static TextBlock BuildVersionRow(string label, string value)
@@ -393,6 +492,7 @@ public partial class App : Application
         services.AddSingleton<ISteamAccountService, SteamAccountService>();
         services.AddSingleton<IOpenSteamToolService, OpenSteamToolService>();
         services.AddSingleton<IUpdateService, UpdateService>();
+        services.AddSingleton<IAppUpdateService, AppUpdateService>();
         services.AddSingleton<ITrainerService, TrainerService>();
         services.AddSingleton<ITrainerAutoLaunchService, TrainerAutoLaunchService>();
         services.AddSingleton<ISteamAchievementService, SteamAchievementService>();
