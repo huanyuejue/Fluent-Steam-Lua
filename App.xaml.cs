@@ -492,6 +492,7 @@ public partial class App : Application
         services.AddSingleton<ISteamAccountService, SteamAccountService>();
         services.AddSingleton<IOpenSteamToolService, OpenSteamToolService>();
         services.AddSingleton<IUpdateService, UpdateService>();
+        services.AddSingleton<IFeedbackService, FeedbackService>();
         services.AddSingleton<IAppUpdateService, AppUpdateService>();
         services.AddSingleton<ITrainerService, TrainerService>();
         services.AddSingleton<ITrainerAutoLaunchService, TrainerAutoLaunchService>();

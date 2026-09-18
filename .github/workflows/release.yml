@@ -20,6 +20,7 @@ jobs:
     env:
       LOOSE_ZIP: Fluent-Steam-Lua-${{ inputs.version }}-loose-file.zip
       SINGLE_ZIP: Fluent-Steam-Lua-${{ inputs.version }}-single-file.zip
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
     steps:
       - uses: actions/checkout@v5
         with:

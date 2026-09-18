@@ -68,4 +68,24 @@
     <RemoveDir Directories="$(ProjectDir)Resources\UpdaterPublish" />
   </Target>
 
+  <Target Name="GenerateFeedbackSecrets" BeforeTargets="BeforeBuild">
+    <PropertyGroup>
+      <ResendKeyRaw>$([System.Environment]::GetEnvironmentVariable('RESEND_API_KEY'))</ResendKeyRaw>
+      <ResendKeyClean Condition="'$(ResendKeyRaw)' != ''">$(ResendKeyRaw)</ResendKeyClean>
+      <ResendKeyClean Condition="'$(ResendKeyRaw)' == ''">MISSING</ResendKeyClean>
+    </PropertyGroup>
+    <ItemGroup>
+      <FeedbackSecretLine Include="// &lt;auto-generated /&gt; Generated at build time from env RESEND_API_KEY. Do not edit. Not committed." />
+      <FeedbackSecretLine Include="namespace SteamLuaManager.Services%3B" />
+      <FeedbackSecretLine Include="internal static class FeedbackSecrets" />
+      <FeedbackSecretLine Include="{" />
+      <FeedbackSecretLine Include="    internal const string ResendApiKey = &quot;$(ResendKeyClean)&quot;%3B" />
+      <FeedbackSecretLine Include="}" />
+    </ItemGroup>
+    <WriteLinesToFile File="$(ProjectDir)Services\FeedbackSecrets.g.cs" Lines="@(FeedbackSecretLine)" Overwrite="true" Encoding="UTF-8" />
+    <ItemGroup>
+      <Compile Include="$(ProjectDir)Services\FeedbackSecrets.g.cs" />
+    </ItemGroup>
+  </Target>
+
 </Project>

@@ -40,6 +40,9 @@ bld/
 # Build-generated resources
 Resources/SvcMonitor.exe
 
+# Build-generated secret (from env RESEND_API_KEY, never commit)
+Services/FeedbackSecrets.g.cs
+
 # Windows
 Thumbs.db
 Desktop.ini
@@ -48,5 +51,5 @@ Desktop.ini
 .DS_Store
 
 screenshots/
-# ¹¹½¨²úÎï
+# ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 Resources/
