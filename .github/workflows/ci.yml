@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Publish loose-file version
+        run: dotnet publish SteamLuaManager.csproj -c Release -r win-x64 --self-contained false -o publish/loose
+
+      - name: Publish single-file version
+        run: dotnet publish SteamLuaManager.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o publish/single
+
+      - name: Upload loose-file artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: loose-file
+          path: publish/loose/
+          retention-days: 7
+
+      - name: Upload single-file artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: single-file
+          path: publish/single/
+          retention-days: 7

@@ -1,0 +1,93 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "版本号（例如 1.4.5）"
+        required: true
+      prerelease:
+        description: "预发布版本"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    env:
+      LOOSE_ZIP: Fluent-Steam-Lua-${{ inputs.version }}-loose-file.zip
+      SINGLE_ZIP: Fluent-Steam-Lua-${{ inputs.version }}-single-file.zip
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Validate version and tag
+        shell: pwsh
+        run: |
+          if ('${{ inputs.version }}' -notmatch '^\d+\.\d+\.\d+$') { throw "版本号格式非法，应为 x.y.z" }
+          git fetch --tags --quiet
+          if (git tag --list '${{ inputs.version }}') { throw "tag ${{ inputs.version }} 已存在，停止" }
+
+      - name: Bump csproj version and push
+        shell: pwsh
+        run: |
+          $csproj = 'SteamLuaManager.csproj'
+          $text = [System.IO.File]::ReadAllText((Resolve-Path $csproj).Path)
+          $updated = [System.Text.RegularExpressions.Regex]::Replace(
+            $text, '<Version>[^<]*</Version>', '<Version>${{ inputs.version }}</Version>')
+          if ($updated -eq $text) { throw 'csproj 中未找到 <Version> 节点' }
+          [System.IO.File]::WriteAllText(
+            (Resolve-Path $csproj).Path, $updated, (New-Object System.Text.UTF8Encoding($false)))
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add SteamLuaManager.csproj
+          git commit -m 'update: 版本号更新${{ inputs.version }}'
+          git push origin HEAD:main
+
+      - name: Create tag
+        shell: pwsh
+        run: |
+          git tag '${{ inputs.version }}'
+          git push origin '${{ inputs.version }}'
+
+      - name: Publish loose-file version
+        run: dotnet publish SteamLuaManager.csproj -c Release -r win-x64 --self-contained false -p:Version=${{ inputs.version }} -o publish/loose
+
+      - name: Publish single-file version
+        run: dotnet publish SteamLuaManager.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -p:Version=${{ inputs.version }} -o publish/single
+
+      - name: Pack archives
+        shell: pwsh
+        run: |
+          Compress-Archive -Path publish/loose/* -DestinationPath $env:LOOSE_ZIP
+          Compress-Archive -Path publish/single/* -DestinationPath $env:SINGLE_ZIP
+          Get-ChildItem *.zip | Select-Object Name, Length
+
+      - name: Compose release notes
+        shell: pwsh
+        run: |
+          $header = '# Fluent Steam Lua 管理工具 ${{ inputs.version }}'
+          $footer = Get-Content .github/RELEASE_FOOTER.md -Raw -Encoding utf8NoBOM
+          $footer = $footer.Replace('{LOOSE_ZIP}', $env:LOOSE_ZIP).Replace('{SINGLE_ZIP}', $env:SINGLE_ZIP)
+          Set-Content release-notes.md -Value ($header + "`n`n" + $footer) -Encoding utf8NoBOM
+          Get-Content release-notes.md -Encoding utf8NoBOM
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.version }}
+          name: ${{ inputs.version }}
+          body_path: release-notes.md
+          prerelease: ${{ inputs.prerelease }}
+          fail_on_unmatched_files: true
+          files: |
+            ${{ env.LOOSE_ZIP }}
+            ${{ env.SINGLE_ZIP }}
