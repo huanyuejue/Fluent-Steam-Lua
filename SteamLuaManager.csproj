@@ -38,6 +38,12 @@
     <Using Remove="System.Windows.Forms" />
   </ItemGroup>
 
+  <PropertyGroup>
+    <!-- CloudRedirect 原生 DLL 版本钉死：构建时自动拉取官方 Release 成品并验签，仓库内不存放源码与二进制 -->
+    <CloudRedirectVersion>v2.6.5</CloudRedirectVersion>
+    <CloudRedirectDllDir>$(ProjectDir)obj\CloudRedirectDll\$(CloudRedirectVersion)</CloudRedirectDllDir>
+  </PropertyGroup>
+
   <ItemGroup>
     <Compile Remove="SvcMonitor\**\*" />
     <EmbeddedResource Remove="SvcMonitor\**\*" />
@@ -50,6 +56,7 @@
   <ItemGroup>
     <EmbeddedResource Include="Resources\SvcMonitor.zip" />
     <EmbeddedResource Include="Resources\Updater.zip" />
+    <EmbeddedResource Include="Resources\CloudRedirectDll.zip" />
     <Compile Include="obj\Generated\FeedbackSecrets.g.cs" />
   </ItemGroup>
 
@@ -67,6 +74,73 @@
                   DestinationFile="$(ProjectDir)Resources\Updater.zip"
                   Overwrite="true" />
     <RemoveDir Directories="$(ProjectDir)Resources\UpdaterPublish" />
+  </Target>
+
+  <!-- 构建时拉取官方 Release 成品并验签：纯内联任务，不依赖外部脚本与 C++ 工具链 -->
+  <UsingTask TaskName="FetchCloudRedirectDll" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <Version ParameterType="System.String" Required="true" />
+      <DestDir ParameterType="System.String" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System" />
+      <Using Namespace="System.IO" />
+      <Using Namespace="System.Net.Http" />
+      <Using Namespace="System.Security.Cryptography" />
+      <Code Type="Fragment" Language="cs">
+        <![CDATA[
+        var dllName = "cloud_redirect.dll";
+        var marker = Path.Combine(DestDir, ".fetch-ok");
+        if (File.Exists(marker) && File.ReadAllText(marker).Trim() == Version && File.Exists(Path.Combine(DestDir, dllName)))
+        {
+            Log.LogMessage(MessageImportance.High, $"cloud_redirect.dll {Version} 已缓存，跳过下载。");
+            return true;
+        }
+        var baseUrl = $"https://github.com/Selectively11/CloudRedirect/releases/download/{Version}";
+        var tmpRoot = Path.Combine(Path.GetTempPath(), "cloudredirect_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(tmpRoot);
+            Log.LogMessage(MessageImportance.High, $"正在下载 cloud_redirect.dll {Version} ...");
+            using var http = new HttpClient();
+            var dllBytes = http.GetByteArrayAsync($"{baseUrl}/{dllName}").GetAwaiter().GetResult();
+            var shaText = http.GetStringAsync($"{baseUrl}/{dllName}.sha256").GetAwaiter().GetResult();
+            var expected = shaText.Split((char[])null, StringSplitOptions.RemoveEmptyEntries)[0].Trim().ToUpperInvariant();
+            using var sha = SHA256.Create();
+            var actual = BitConverter.ToString(sha.ComputeHash(dllBytes)).Replace("-", "").ToUpperInvariant();
+            if (expected != actual)
+            {
+                Log.LogError($"SHA256 校验失败（期望 {expected}，实得 {actual}）");
+                return false;
+            }
+            if (Directory.Exists(DestDir)) Directory.Delete(DestDir, true);
+            Directory.CreateDirectory(DestDir);
+            File.WriteAllBytes(Path.Combine(DestDir, dllName), dllBytes);
+            File.WriteAllText(marker, Version);
+            Log.LogMessage(MessageImportance.High, $"cloud_redirect.dll {Version} 已就绪（SHA256 已验证）。");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Log.LogError($"拉取 cloud_redirect.dll 失败：{ex.Message}，请检查网络后重试。");
+            return false;
+        }
+        finally
+        {
+            try { if (Directory.Exists(tmpRoot)) Directory.Delete(tmpRoot, true); } catch { }
+        }
+        ]]>
+      </Code>
+    </Task>
+  </UsingTask>
+
+  <Target Name="FetchCloudRedirectDll" BeforeTargets="BeforeBuild">
+    <FetchCloudRedirectDll Version="$(CloudRedirectVersion)" DestDir="$(CloudRedirectDllDir)" />
+    <Copy SourceFiles="$(CloudRedirectDllDir)\cloud_redirect.dll" DestinationFolder="$(ProjectDir)Resources\CloudRedirectDllPublish" />
+    <ZipDirectory SourceDirectory="$(ProjectDir)Resources\CloudRedirectDllPublish"
+                  DestinationFile="$(ProjectDir)Resources\CloudRedirectDll.zip"
+                  Overwrite="true" />
+    <RemoveDir Directories="$(ProjectDir)Resources\CloudRedirectDllPublish" />
   </Target>
 
   <Target Name="GenerateFeedbackSecrets" BeforeTargets="BeforeBuild">

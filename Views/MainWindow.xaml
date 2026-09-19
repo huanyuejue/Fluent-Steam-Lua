@@ -82,6 +82,11 @@
                         <ui:FontIcon Glyph="&#xE734;" FontSize="16"/>
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
+                <ui:NavigationViewItem x:Name="CloudSaveItem" Content="云存档" Tag="CloudSave" Padding="12,0">
+                    <ui:NavigationViewItem.Icon>
+                        <ui:FontIcon Glyph="&#xE753;" FontSize="16"/>
+                    </ui:NavigationViewItem.Icon>
+                </ui:NavigationViewItem>
             </ui:NavigationView.MenuItems>
 
             <ui:NavigationView.FooterMenuItems>

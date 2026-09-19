@@ -430,6 +430,24 @@ public class SteamPathService : ISteamPathService
         return value.Trim().Trim('"', '\'');
     }
 
+    // 解析 "key = true/false" 裸布尔值；注释行、非目标键、非布尔值返回 null
+    private static bool? ParseTomlBoolValue(string line, string key)
+    {
+        var s = line.TrimStart();
+        if (s.Length == 0 || s.StartsWith('#')) return null;
+        if (!s.StartsWith(key, StringComparison.OrdinalIgnoreCase)) return null;
+
+        var rest = s.Substring(key.Length).TrimStart();
+        if (!rest.StartsWith('=')) return null;
+
+        var value = rest.Substring(1).Trim();
+        var hash = value.IndexOf('#');
+        if (hash >= 0) value = value.Substring(0, hash).Trim();
+        if (value.Equals("true", StringComparison.OrdinalIgnoreCase)) return true;
+        if (value.Equals("false", StringComparison.OrdinalIgnoreCase)) return false;
+        return null;
+    }
+
     // 清单库切换：读 [manifest] url 值，缺省 "20770407"（内核默认值）
     public string GetManifestSource()
     {
@@ -520,6 +538,130 @@ public class SteamPathService : ISteamPathService
 
     public void SetCustomPath(string path) => _customPath = path;
     public string? GetCustomPath() => _customPath;
+
+    // 云存档开关：读 [cloud] enabled 裸值，缺省 false（内核默认关闭）
+    public bool GetCloudEnabled()
+    {
+        try
+        {
+            var basePath = DetectSteamPathInternal();
+            if (string.IsNullOrEmpty(basePath)) return false;
+
+            var configFile = Path.Combine(basePath, ConfigFileName);
+            if (!File.Exists(configFile)) return false;
+
+            var lines = File.ReadAllLines(configFile);
+            var (sectionStart, sectionEnd) = FindTomlSection(lines, "cloud");
+            if (sectionStart < 0) return false;
+
+            foreach (var line in lines.Skip(sectionStart + 1).Take(sectionEnd - sectionStart - 1))
+            {
+                var value = ParseTomlBoolValue(line, "enabled");
+                if (value != null) return value.Value;
+            }
+            return false;
+        }
+        catch (Exception ex)
+        {
+            LogService.Warn("Steam路径", $"读取云存档开关失败: {ex.Message}");
+            return false;
+        }
+    }
+
+    // 文本级改 [cloud] enabled，注释原样保留；无文件则新建、无节则底部追加；开关变更需重启 Steam 生效
+    public bool SetCloudEnabled(bool enabled)
+    {
+        try
+        {
+            var basePath = DetectSteamPathInternal();
+            if (string.IsNullOrEmpty(basePath)) return false;
+
+            var configFile = Path.Combine(basePath, ConfigFileName);
+            var newLine = $"enabled = {(enabled ? "true" : "false")}";
+            List<string> lines;
+
+            if (!File.Exists(configFile))
+            {
+                lines = ["# 由 Fluent Steam Lua 写入，云存档开关变更需重启 Steam 生效", "", "[cloud]", newLine];
+            }
+            else
+            {
+                lines = File.ReadAllLines(configFile).ToList();
+                var (sectionStart, sectionEnd) = FindTomlSection(lines, "cloud");
+
+                if (sectionStart < 0)
+                {
+                    if (lines.Count > 0 && !string.IsNullOrWhiteSpace(lines[^1]))
+                        lines.Add(string.Empty);
+                    lines.Add("[cloud]");
+                    lines.Add(newLine);
+                }
+                else
+                {
+                    // 任意 enabled 赋值行（合法与否）都整体替换，避免重复键
+                    var enabledLine = -1;
+                    for (var i = sectionStart + 1; i < sectionEnd; i++)
+                    {
+                        var t = lines[i].TrimStart();
+                        if (t.Length == 0 || t.StartsWith('#')) continue;
+                        if (!t.StartsWith("enabled", StringComparison.OrdinalIgnoreCase)) continue;
+                        var rest = t.Substring("enabled".Length).TrimStart();
+                        if (!rest.StartsWith('=')) continue;
+                        enabledLine = i;
+                        break;
+                    }
+
+                    if (enabledLine >= 0)
+                        lines[enabledLine] = newLine;
+                    else
+                        lines.Insert(sectionStart + 1, newLine);
+                }
+            }
+
+            // 原子落盘：崩溃只丢 tmp，不截断原文件
+            var tmp = configFile + ".new";
+            File.WriteAllLines(tmp, lines);
+            File.Move(tmp, configFile, overwrite: true);
+
+            _cachedConfigFile = null;
+            LogService.Info("Steam路径", $"云存档已{(enabled ? "开启" : "关闭")}（{configFile}）");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            LogService.Error("Steam路径", $"写入云存档开关失败: {ex}");
+            return false;
+        }
+    }
+
+    // [cloud] library 原始值（绝对路径或相对 Steam 根目录）；未配置返回 null，走内核默认位置
+    public string? GetCloudLibraryPath()
+    {
+        try
+        {
+            var basePath = DetectSteamPathInternal();
+            if (string.IsNullOrEmpty(basePath)) return null;
+
+            var configFile = Path.Combine(basePath, ConfigFileName);
+            if (!File.Exists(configFile)) return null;
+
+            var lines = File.ReadAllLines(configFile);
+            var (sectionStart, sectionEnd) = FindTomlSection(lines, "cloud");
+            if (sectionStart < 0) return null;
+
+            foreach (var line in lines.Skip(sectionStart + 1).Take(sectionEnd - sectionStart - 1))
+            {
+                var value = ParseTomlStringValue(line, "library");
+                if (!string.IsNullOrEmpty(value)) return value;
+            }
+            return null;
+        }
+        catch (Exception ex)
+        {
+            LogService.Warn("Steam路径", $"读取云存档库路径失败: {ex.Message}");
+            return null;
+        }
+    }
 
     public SteamToolType DetectSteamToolType()
     {

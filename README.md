@@ -54,12 +54,21 @@
 - 快捷切换登录本地已有凭证的Steam账号
 - 一键管理当前库里已拥有游戏的成就数据并保存云端（解锁/回锁）
 
+#### 云存档重定向
+- 基于 [CloudRedirect](https://github.com/Selectively11/CloudRedirect) 实现
+- 将 Lua 入库的游戏的 Steam 云存档重定向到本地目录，修复云存档报错问题
+- 开关与目录变更需重启 Steam 生效，成就与时长跟随云端同步
+- 重定向的本地目录支持自定义路今后与一键重置默认路径，切换目录自动迁移旧存档
+- 展示并管理已重定向的游戏，支持一键打开路径和清空存档（游戏恢复最初状态）
+- 支持删除存档：先完整备份并验数，通过后才删，备份手动拷回恢复
+
 #### 特性
 - 文件变更自动监控并刷新缓存
 - 基于 Fluent Design 的现代化界面，使用WPF编译，方便调试
 - 主题支持 跟随系统/深色模式/浅色模式
 - 背景色支持 亚克力/云母/无效果
 - 支持自动检测更新（可关闭）
+- 内置问题反馈通道
 
 
 ## 系统要求
@@ -69,14 +78,25 @@
 
 ## 构建方法
 
+前置要求：[.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)，构建时自动拉取 CloudRedirect 原生 DLL（版本钉在 csproj 的 CloudRedirectVersion，需联网，带 SHA256 校验）。
+
+### 一键构建
+
+双击运行仓库根目录下的脚本（产物分别输出到 `publish/loose` 与 `publish/single`）：
+
+- 打包散文件：`dotnet publish` 普通目录版
+- 打包单文件：`dotnet publish` 单文件版，输出文件名为 `Fluent Steam Lua.exe`
+
+### 手动构建
+
 发布为单文件可执行程序：
 
-```bash
-dotnet publish -c Release -r win-x64 --self-contained false /p:PublishSingleFile=true /p:DebugType=None /p:DebugFullType=None
+```cmd
+dotnet publish SteamLuaManager.csproj -c Release -r win-x64 --self-contained false -p:DebugType=none -p:AssemblyName="Fluent Steam Lua" -p:PublishSingleFile=true -o publish/single
 ```
 
 发布为散文件可执行程序：
 
-```bash
-dotnet publish -c Release -r win-x64
+```cmd
+dotnet publish SteamLuaManager.csproj -c Release -r win-x64 --self-contained false -p:DebugType=none -o publish/loose
 ```

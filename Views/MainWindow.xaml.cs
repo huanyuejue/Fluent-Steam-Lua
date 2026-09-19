@@ -25,7 +25,7 @@ namespace SteamLuaManager.Views;
 
 public partial class MainWindow : Window
 {
-    private readonly string[] _navOrder = ["Home", "ScriptDownload", "Manifest", "Extraction", "Authorization", "Trainer", "Achievement", "Settings", "About"];
+    private readonly string[] _navOrder = ["Home", "ScriptDownload", "Manifest", "Extraction", "Authorization", "Trainer", "Achievement", "CloudSave", "Settings", "About"];
     private string _prevTag = "Home";
 
     /// <summary>当前页面 tag，供全局操作日志标注上下文。</summary>
@@ -41,6 +41,7 @@ public partial class MainWindow : Window
     private readonly AchievementViewModel _achievementViewModel;
     private readonly AuthorizationViewModel _authorizationViewModel;
     private readonly ManifestViewModel _manifestViewModel;
+    private readonly CloudSaveViewModel _cloudSaveViewModel;
     private readonly HomeView _homeView;
     private readonly SettingsView _settingsView;
     private readonly ScriptDownloadView _scriptDownloadView;
@@ -49,6 +50,7 @@ public partial class MainWindow : Window
     private readonly AchievementView _achievementView;
     private readonly AuthorizationView _authorizationView;
     private readonly ManifestView _manifestView;
+    private readonly CloudSaveView _cloudSaveView;
     private readonly AboutView _aboutView;
     private readonly IOpenSteamToolService _openSteamToolService;
     private CancellationTokenSource? _kernelCts;
@@ -67,7 +69,7 @@ public partial class MainWindow : Window
     private const double FabSize = 44;
     private const double FabPanelGap = 8;
 
-    public MainWindow(MainViewModel viewModel, SettingsViewModel settingsViewModel, ScriptDownloadViewModel scriptDownloadViewModel, ExtractionViewModel extractionViewModel, TrainerViewModel trainerViewModel, AchievementViewModel achievementViewModel, AuthorizationViewModel authorizationViewModel, ManifestViewModel manifestViewModel, ISettingsService settingsService, ISteamPathService steamPathService, IOpenSteamToolService openSteamToolService)
+    public MainWindow(MainViewModel viewModel, SettingsViewModel settingsViewModel, ScriptDownloadViewModel scriptDownloadViewModel, ExtractionViewModel extractionViewModel, TrainerViewModel trainerViewModel, AchievementViewModel achievementViewModel, AuthorizationViewModel authorizationViewModel, ManifestViewModel manifestViewModel, CloudSaveViewModel cloudSaveViewModel, ISettingsService settingsService, ISteamPathService steamPathService, IOpenSteamToolService openSteamToolService)
     {
         InitializeComponent();
         CurrentPage = "Home";
@@ -83,6 +85,7 @@ public partial class MainWindow : Window
         _achievementViewModel = achievementViewModel;
         _authorizationViewModel = authorizationViewModel;
         _manifestViewModel = manifestViewModel;
+        _cloudSaveViewModel = cloudSaveViewModel;
         _settingsService = settingsService;
         _steamPathService = steamPathService;
         DataContext = _viewModel;
@@ -100,6 +103,7 @@ public partial class MainWindow : Window
         _achievementView = new AchievementView { DataContext = achievementViewModel };
         _authorizationView = new AuthorizationView { DataContext = authorizationViewModel };
         _manifestView = new ManifestView { DataContext = manifestViewModel };
+        _cloudSaveView = new CloudSaveView { DataContext = cloudSaveViewModel };
         _aboutView = new AboutView();
         ContentTransition.Content = _homeView;
         SteamMenuList.ItemsSource = new[]
@@ -175,6 +179,7 @@ public partial class MainWindow : Window
                     "Authorization" => AuthorizationItem,
                     "Trainer" => TrainerItem,
                     "Achievement" => AchievementItem,
+                    "CloudSave" => CloudSaveItem,
                     "Settings" => SettingsItem,
                     "About" => AboutItem,
                     _ => null
@@ -572,6 +577,7 @@ public partial class MainWindow : Window
             "Trainer" => _trainerView,
             "Achievement" => _achievementView,
             "Authorization" => _authorizationView,
+            "CloudSave" => _cloudSaveView,
             "About" => _aboutView,
             _ => null
         };
@@ -592,6 +598,10 @@ public partial class MainWindow : Window
         else if (tag == "Manifest")
         {
             _manifestViewModel.OnNavigatedTo();
+        }
+        else if (tag == "CloudSave")
+        {
+            _cloudSaveViewModel.OnNavigatedTo();
         }
     }
 
@@ -840,57 +850,17 @@ public partial class MainWindow : Window
         {
             case "start":
                 SteamPanel.Visibility = Visibility.Collapsed;
-                await LaunchSteamAsync();
+                var startResult = SteamProcess.LaunchSteam(_steamPathService);
+                if (!startResult.Ok)
+                    await ShowModernDialogAsync(startResult.Title, startResult.Message);
                 break;
             case "restart":
                 SteamPanel.Visibility = Visibility.Collapsed;
-                KillSteamProcesses();
-                await LaunchSteamAsync();
+                var restartResult = SteamProcess.RestartSteam(_steamPathService);
+                if (!restartResult.Ok)
+                    await ShowModernDialogAsync(restartResult.Title, restartResult.Message);
                 break;
         }
-    }
-
-    private async Task LaunchSteamAsync()
-    {
-        try
-        {
-            var path = _steamPathService.DetectSteamPath();
-            if (string.IsNullOrEmpty(path))
-            {
-                await ShowModernDialogAsync("提示", "未检测到 Steam 安装路径，请先在设置页面配置");
-                return;
-            }
-
-            var exePath = System.IO.Path.Combine(path, "steam.exe");
-            if (!System.IO.File.Exists(exePath))
-            {
-                await ShowModernDialogAsync("提示", $"未找到 steam.exe：{exePath}");
-                return;
-            }
-
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = exePath,
-                UseShellExecute = true
-            });
-        }
-        catch (Exception ex)
-        {
-            await ShowModernDialogAsync("错误", $"启动 Steam 失败：{ex.Message}");
-        }
-    }
-
-    private static void KillSteamProcesses()
-    {
-        try
-        {
-            foreach (var proc in Process.GetProcessesByName("steam"))
-            {
-                if (proc.Id != 0)
-                    proc.Kill();
-            }
-        }
-        catch { }
     }
 
     // ========== Steam 账号切换 ==========
@@ -995,7 +965,7 @@ public partial class MainWindow : Window
     {
         try
         {
-            KillSteamProcesses();
+            SteamProcess.KillSteamProcesses();
             using (var key = Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam", writable: true))
             {
                 if (key == null)
@@ -1005,7 +975,9 @@ public partial class MainWindow : Window
                 }
                 key.SetValue("AutoLoginUser", target.AccountName, RegistryValueKind.String);
             }
-            await LaunchSteamAsync();
+            var launchResult = SteamProcess.LaunchSteam(_steamPathService);
+            if (!launchResult.Ok)
+                await ShowModernDialogAsync(launchResult.Title, launchResult.Message);
         }
         catch (Exception ex)
         {

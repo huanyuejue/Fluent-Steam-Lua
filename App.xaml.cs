@@ -494,6 +494,7 @@ public partial class App : Application
         services.AddSingleton<IUpdateService, UpdateService>();
         services.AddSingleton<IFeedbackService, FeedbackService>();
         services.AddSingleton<IAppUpdateService, AppUpdateService>();
+        services.AddSingleton<ICloudRedirectService, CloudRedirectService>();
         services.AddSingleton<ITrainerService, TrainerService>();
         services.AddSingleton<ITrainerAutoLaunchService, TrainerAutoLaunchService>();
         services.AddSingleton<ISteamAchievementService, SteamAchievementService>();
@@ -511,6 +512,7 @@ public partial class App : Application
         services.AddTransient<TrainerViewModel>();
         services.AddTransient<AchievementViewModel>();
         services.AddTransient<AuthorizationViewModel>();
+        services.AddTransient<CloudSaveViewModel>();
         services.AddTransient<ManifestViewModel>();
         services.AddTransient<MainWindow>();
     }

@@ -18,6 +18,9 @@ public interface ISteamPathService
     bool SetFriendBroadcastEnabled(bool enabled);
     string GetManifestSource();
     bool SetManifestSource(string source);
+    bool GetCloudEnabled();
+    bool SetCloudEnabled(bool enabled);
+    string? GetCloudLibraryPath();
     void SetCustomPath(string path);
     string? GetCustomPath();
     SteamToolType DetectSteamToolType();

@@ -1,0 +1,150 @@
+<UserControl xmlns:controls="clr-namespace:SteamLuaManager.Controls" x:Class="SteamLuaManager.Views.CloudSaveView"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.inkore.net/lib/ui/wpf/modern"
+        Background="Transparent"
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="Grayscale"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True">
+
+    <controls:SmoothScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="36,24,36,24">
+
+            <TextBlock Text="云存档重定向" FontSize="28" FontWeight="SemiBold" Margin="0,0,0,4"
+                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+            <StackPanel Margin="0,0,0,24">
+                <TextBlock Text="将Lua游戏的Steam云存档重定向到本地目录，以修复云存档报错问题；启用前请先备份重要存档以防出错；开关与目录变更需重启Steam生效"
+                           FontSize="12" TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                <TextBlock Text="成就与时长跟随云端同步"
+                           FontSize="12" TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+            </StackPanel>
+
+            <ui:SettingsCard Header="云存档" Margin="0,0,0,8"
+                             Description="开启后 Lua 游戏存档将重定向到本地目录"
+                             Style="{StaticResource SettingsCardStyle}">
+                <ui:ToggleSwitch IsOn="{Binding IsCloudEnabled, Mode=TwoWay}"
+                                 IsEnabled="{Binding IsBusy, Converter={StaticResource BoolInvertConverter}}"
+                                 OnContent="开" OffContent="关"/>
+            </ui:SettingsCard>
+
+            <ui:SettingsCard Header="本地重定向目录" Margin="0,0,0,8"
+                             Description="云存档在本地的落盘位置"
+                             Style="{StaticResource SettingsCardStyle}">
+                <StackPanel Orientation="Horizontal">
+                    <TextBox Text="{Binding SyncPathText, Mode=OneWay}"
+                             ToolTip="{Binding SyncPathText}"
+                             IsReadOnly="True" Width="240" Padding="8,6" Margin="0,0,4,0">
+                        <TextBox.Background>
+                            <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                        </TextBox.Background>
+                    </TextBox>
+                    <Button Content="自定义" Command="{Binding BrowseSyncPathCommand}"
+                            Padding="12,6" Margin="4,0"
+                            IsEnabled="{Binding IsBusy, Converter={StaticResource BoolInvertConverter}}">
+                        <Button.Background>
+                            <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                        </Button.Background>
+                    </Button>
+                    <Button Content="重置" Command="{Binding ResetSyncPathCommand}"
+                            Padding="12,6" Margin="4,0"
+                            IsEnabled="{Binding IsBusy, Converter={StaticResource BoolInvertConverter}}">
+                        <Button.Background>
+                            <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                        </Button.Background>
+                    </Button>
+                    <TextBlock VerticalAlignment="Center" FontSize="12" Margin="12,0,0,0"
+                               Text="{Binding StatusMessage}"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                </StackPanel>
+            </ui:SettingsCard>
+
+            <Border CornerRadius="10" Padding="16" Margin="0,0,0,8"
+                    BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1">
+                <Border.Background>
+                    <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
+                </Border.Background>
+                <StackPanel>
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0"
+                                   Text="{Binding RedirectedGames.Count, StringFormat=已重定向游戏（共 {0} 个）}"
+                                   FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                        <Button Grid.Column="1" Content="刷新" Padding="12,6"
+                                Command="{Binding RefreshCommand}"
+                                IsEnabled="{Binding IsBusy, Converter={StaticResource BoolInvertConverter}}">
+                            <Button.Background>
+                                <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                            </Button.Background>
+                        </Button>
+                    </Grid>
+                    <TextBlock Text="暂无已重定向游戏：启用云存档后进游戏存一次档即会出现在列表"
+                               FontSize="12"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Visibility="{Binding RedirectedGames.Count, Converter={StaticResource ZeroToVisibilityConverter}}"/>
+                    <ItemsControl ItemsSource="{Binding RedirectedGames}"
+                                  Visibility="{Binding RedirectedGames.Count, Converter={StaticResource NonZeroToVisibilityConverter}}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border CornerRadius="10" Padding="12" Margin="0,0,0,8"
+                                        BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1">
+                                    <Border.Background>
+                                        <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
+                                    </Border.Background>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Border Grid.Column="0" Width="120" Height="52"
+                                                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
+                                            <Border.Clip>
+                                                <RectangleGeometry Rect="0,0,120,52" RadiusX="6" RadiusY="6"/>
+                                            </Border.Clip>
+                                            <Image Source="{Binding CoverImagePath}" Stretch="UniformToFill"
+                                                   RenderOptions.BitmapScalingMode="HighQuality"/>
+                                        </Border>
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="14,0,0,0">
+                                            <TextBlock Text="{Binding GameName}" FontSize="14" FontWeight="SemiBold"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                            <TextBlock Text="{Binding AppId, StringFormat=AppID: {0}}" FontSize="12"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                            <Button Content="打开路径" Padding="12,6"
+                                                    Command="{Binding DataContext.OpenSaveFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding AppId}">
+                                                <Button.Background>
+                                                    <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                                                </Button.Background>
+                                            </Button>
+                                            <Button Content="删除存档" Padding="12,6" Margin="8,0,0,0"
+                                                    Command="{Binding DataContext.DeleteGameCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding}">
+                                                <Button.Background>
+                                                    <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                                                </Button.Background>
+                                                <Button.Foreground>
+                                                    <SolidColorBrush Color="#E74856"/>
+                                                </Button.Foreground>
+                                            </Button>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
+        </StackPanel>
+    </controls:SmoothScrollViewer>
+</UserControl>

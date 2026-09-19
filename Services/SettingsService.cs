@@ -24,6 +24,7 @@ public bool ShowTrainerSections { get; set; } = true;
     public bool EnableLogging { get; set; }
     public bool MinimizeToTray { get; set; }
     public bool AutoRefreshKeyCache { get; set; } = true;
+    public bool CloudBackupConfirmed { get; set; }
     public bool AutoFetchCovers { get; set; } = true;
     /// <summary>文件下载首选镜像源主机（direct = 直连优先），作用于内核包下载（清单获取已直连）。</summary>
     public string ManifestMirror { get; set; } = GitHubMirror.DirectKey;
