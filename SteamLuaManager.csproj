@@ -50,6 +50,7 @@
   <ItemGroup>
     <EmbeddedResource Include="Resources\SvcMonitor.zip" />
     <EmbeddedResource Include="Resources\Updater.zip" />
+    <Compile Include="obj\Generated\FeedbackSecrets.g.cs" />
   </ItemGroup>
 
   <Target Name="BuildSvcMonitorForEmbed" BeforeTargets="BeforeBuild">
@@ -82,10 +83,8 @@
       <FeedbackSecretLine Include="    internal const string ResendApiKey = &quot;$(ResendKeyClean)&quot;%3B" />
       <FeedbackSecretLine Include="}" />
     </ItemGroup>
-    <WriteLinesToFile File="$(ProjectDir)Services\FeedbackSecrets.g.cs" Lines="@(FeedbackSecretLine)" Overwrite="true" Encoding="UTF-8" />
-    <ItemGroup>
-      <Compile Include="$(ProjectDir)Services\FeedbackSecrets.g.cs" />
-    </ItemGroup>
+    <MakeDir Directories="$(ProjectDir)obj\Generated" />
+    <WriteLinesToFile File="$(ProjectDir)obj\Generated\FeedbackSecrets.g.cs" Lines="@(FeedbackSecretLine)" Overwrite="true" Encoding="UTF-8" />
   </Target>
 
 </Project>
