@@ -12,7 +12,7 @@ public sealed record CloudSaveStatus(
     bool CloudEnabled,
     string SyncPath);
 
-public sealed record RedirectedApp(int AppId, string SaveDir);
+public sealed record RedirectedApp(int AppId, string SaveDir, DateTime? LastSaveTime);
 
 public sealed record MigrateResult(int MovedFiles, long MovedBytes, List<string> FailedFiles);
 
@@ -365,7 +365,7 @@ public class CloudRedirectService : ICloudRedirectService
     // 账号目录只认数字，appid 为 0 的是账号级元数据目录，跳过；同 app 取首个命中的目录
     public List<RedirectedApp> GetRedirectedApps()
     {
-        var found = new Dictionary<int, string>();
+        var found = new Dictionary<int, RedirectedApp>();
         try
         {
             var syncPath = ResolveSyncPath();
@@ -377,7 +377,7 @@ public class CloudRedirectService : ICloudRedirectService
                 foreach (var appDir in Directory.GetDirectories(accountDir))
                 {
                     if (!int.TryParse(Path.GetFileName(appDir), out var appId) || appId == 0) continue;
-                    found.TryAdd(appId, appDir);
+                    found.TryAdd(appId, new RedirectedApp(appId, appDir, ReadCnTime(appDir)));
                 }
             }
         }
@@ -385,7 +385,21 @@ public class CloudRedirectService : ICloudRedirectService
         {
             LogService.Warn("云存档", $"扫描已重定向游戏失败: {ex.Message}");
         }
-        return found.OrderBy(kv => kv.Key).Select(kv => new RedirectedApp(kv.Key, kv.Value)).ToList();
+        return found.OrderBy(kv => kv.Key).Select(kv => kv.Value).ToList();
+    }
+
+    // 上次存档时间：appid 目录下 cn.cloudredirect 的修改时间；缺失返回空
+    private static DateTime? ReadCnTime(string appDir)
+    {
+        try
+        {
+            var cn = Path.Combine(appDir, "cn.cloudredirect");
+            return File.Exists(cn) ? File.GetLastWriteTime(cn) : null;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     // 删除预览：收拢同一 appId 在所有账号下的三类目录并统计；只收录存在的目录

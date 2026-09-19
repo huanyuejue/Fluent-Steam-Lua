@@ -96,10 +96,13 @@ public partial class CloudSaveViewModel : ObservableObject
             foreach (var s in scanned)
             {
                 _saveDirs[s.AppId] = s.SaveDir;
+                GameInfo g;
                 if (luaById.TryGetValue(s.AppId, out var lg))
-                    list.Add(lg);
+                    g = lg;
                 else
-                    list.Add(new GameInfo { AppId = s.AppId, GameName = $"AppID: {s.AppId}" });
+                    g = new GameInfo { AppId = s.AppId, GameName = $"AppID: {s.AppId}" };
+                g.LastSaveTime = s.LastSaveTime;
+                list.Add(g);
             }
             _steamApiService.PopulateFromCache(list);
             RedirectedGames.Clear();

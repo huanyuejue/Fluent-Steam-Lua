@@ -6,6 +6,7 @@ namespace SteamLuaManager.Models;
 public partial class GameInfo : ObservableObject
 {
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SaveSubtitle))]
     private int _appId;
 
     [ObservableProperty]
@@ -18,7 +19,16 @@ public partial class GameInfo : ObservableObject
     private string _coverImagePath = string.Empty;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SaveSubtitle))]
+    private DateTime? _lastSaveTime;
+
+    [ObservableProperty]
     private DateTime _luaFileTime;
+
+    // 云存档行副标题：无存档时间时只显示 AppID
+    public string SaveSubtitle => LastSaveTime.HasValue
+        ? $"AppID: {AppId} • 上次存档: {LastSaveTime:yyyy-MM-dd HH:mm}"
+        : $"AppID: {AppId}";
 
     [ObservableProperty]
     private bool _isLoading;

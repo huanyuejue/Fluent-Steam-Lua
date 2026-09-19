@@ -115,7 +115,7 @@
                                             <TextBlock Text="{Binding GameName}" FontSize="14" FontWeight="SemiBold"
                                                        TextTrimming="CharacterEllipsis"
                                                        Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-                                            <TextBlock Text="{Binding AppId, StringFormat=AppID: {0}}" FontSize="12"
+                                            <TextBlock Text="{Binding SaveSubtitle}" FontSize="12"
                                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                                         </StackPanel>
                                         <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
