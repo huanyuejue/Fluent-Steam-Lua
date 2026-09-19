@@ -80,15 +80,6 @@
 
 前置要求：[.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)，构建时自动拉取 CloudRedirect 原生 DLL（版本钉在 csproj 的 CloudRedirectVersion，需联网，带 SHA256 校验）。
 
-### 一键构建
-
-双击运行仓库根目录下的脚本（产物分别输出到 `publish/loose` 与 `publish/single`）：
-
-- 打包散文件：`dotnet publish` 普通目录版
-- 打包单文件：`dotnet publish` 单文件版，输出文件名为 `Fluent Steam Lua.exe`
-
-### 手动构建
-
 发布为单文件可执行程序：
 
 ```cmd
