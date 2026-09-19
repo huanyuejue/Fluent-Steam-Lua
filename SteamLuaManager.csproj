@@ -91,44 +91,49 @@
         <![CDATA[
         var dllName = "cloud_redirect.dll";
         var marker = Path.Combine(DestDir, ".fetch-ok");
-        if (File.Exists(marker) && File.ReadAllText(marker).Trim() == Version && File.Exists(Path.Combine(DestDir, dllName)))
+        var cached = File.Exists(marker) && File.ReadAllText(marker).Trim() == Version && File.Exists(Path.Combine(DestDir, dllName));
+        if (cached)
         {
             Log.LogMessage(MessageImportance.High, $"cloud_redirect.dll {Version} 已缓存，跳过下载。");
-            return true;
         }
-        var baseUrl = $"https://github.com/Selectively11/CloudRedirect/releases/download/{Version}";
-        var tmpRoot = Path.Combine(Path.GetTempPath(), "cloudredirect_" + Guid.NewGuid().ToString("N"));
-        try
+        else
         {
-            Directory.CreateDirectory(tmpRoot);
-            Log.LogMessage(MessageImportance.High, $"正在下载 cloud_redirect.dll {Version} ...");
-            using var http = new HttpClient();
-            var dllBytes = http.GetByteArrayAsync($"{baseUrl}/{dllName}").GetAwaiter().GetResult();
-            var shaText = http.GetStringAsync($"{baseUrl}/{dllName}.sha256").GetAwaiter().GetResult();
-            var expected = shaText.Split((char[])null, StringSplitOptions.RemoveEmptyEntries)[0].Trim().ToUpperInvariant();
-            using var sha = SHA256.Create();
-            var actual = BitConverter.ToString(sha.ComputeHash(dllBytes)).Replace("-", "").ToUpperInvariant();
-            if (expected != actual)
+            var baseUrl = $"https://github.com/Selectively11/CloudRedirect/releases/download/{Version}";
+            var tmpRoot = Path.Combine(Path.GetTempPath(), "cloudredirect_" + Guid.NewGuid().ToString("N"));
+            try
             {
-                Log.LogError($"SHA256 校验失败（期望 {expected}，实得 {actual}）");
-                return false;
+                Directory.CreateDirectory(tmpRoot);
+                Log.LogMessage(MessageImportance.High, $"正在下载 cloud_redirect.dll {Version} ...");
+                using var http = new HttpClient();
+                var dllBytes = http.GetByteArrayAsync($"{baseUrl}/{dllName}").GetAwaiter().GetResult();
+                var shaText = http.GetStringAsync($"{baseUrl}/{dllName}.sha256").GetAwaiter().GetResult();
+                var expected = shaText.Split((char[])null, StringSplitOptions.RemoveEmptyEntries)[0].Trim().ToUpperInvariant();
+                using var sha = SHA256.Create();
+                var actual = BitConverter.ToString(sha.ComputeHash(dllBytes)).Replace("-", "").ToUpperInvariant();
+                if (expected != actual)
+                {
+                    Log.LogError($"SHA256 校验失败（期望 {expected}，实得 {actual}）");
+                }
+                else
+                {
+                    if (Directory.Exists(DestDir)) Directory.Delete(DestDir, true);
+                    Directory.CreateDirectory(DestDir);
+                    File.WriteAllBytes(Path.Combine(DestDir, dllName), dllBytes);
+                    File.WriteAllText(marker, Version);
+                    Log.LogMessage(MessageImportance.High, $"cloud_redirect.dll {Version} 已就绪（SHA256 已验证）。");
+                }
             }
-            if (Directory.Exists(DestDir)) Directory.Delete(DestDir, true);
-            Directory.CreateDirectory(DestDir);
-            File.WriteAllBytes(Path.Combine(DestDir, dllName), dllBytes);
-            File.WriteAllText(marker, Version);
-            Log.LogMessage(MessageImportance.High, $"cloud_redirect.dll {Version} 已就绪（SHA256 已验证）。");
-            return true;
+            catch (Exception ex)
+            {
+                Log.LogError($"拉取 cloud_redirect.dll 失败：{ex.Message}，请检查网络后重试。");
+            }
+            finally
+            {
+                try { if (Directory.Exists(tmpRoot)) Directory.Delete(tmpRoot, true); } catch { }
+            }
         }
-        catch (Exception ex)
-        {
-            Log.LogError($"拉取 cloud_redirect.dll 失败：{ex.Message}，请检查网络后重试。");
-            return false;
-        }
-        finally
-        {
-            try { if (Directory.Exists(tmpRoot)) Directory.Delete(tmpRoot, true); } catch { }
-        }
+        // 无显式 return：收尾的 return !Log.HasLoggedErrors 由任务工厂自动追加，
+        // 成功只记 Message（返回 true），失败已记 Error（返回 false）；显式 return 会让它变死代码报 CS0162
         ]]>
       </Code>
     </Task>
