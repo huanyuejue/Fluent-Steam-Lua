@@ -23,6 +23,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     private readonly ISteamApiService _steamApiService;
     private readonly ISteamManifestRepoService _manifestRepoService;
     private readonly IDialogService _dialogService;
+    private readonly IHttpClientProvider _httpClientProvider;
     private AppSettings _settings;
 
     [ObservableProperty]
@@ -98,7 +99,8 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
 
     public SettingsViewModel(ISteamPathService steamPathService, ILuaFileManager luaFileManager,
         ISettingsService settingsService, ISteamApiService steamApiService,
-        ISteamManifestRepoService manifestRepoService, IDialogService dialogService)
+        ISteamManifestRepoService manifestRepoService, IDialogService dialogService,
+        IHttpClientProvider httpClientProvider)
     {
         _steamPathService = steamPathService;
         _luaFileManager = luaFileManager;
@@ -106,6 +108,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         _steamApiService = steamApiService;
         _manifestRepoService = manifestRepoService;
         _dialogService = dialogService;
+        _httpClientProvider = httpClientProvider;
         _settings = settingsService.Load();
 
         SteamPath = _settings.SteamPath;
@@ -820,12 +823,12 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private ObservableCollection<ManifestTestResult> _manifestTestResults = new();
 
-    public record ManifestTestResult(string Id, string DisplayName, bool IsReachable, long LatencyMs, int StatusCode)
+    public record ManifestTestResult(string Id, string DisplayName, bool IsReachable, long LatencyMs, int StatusCode, string FailReason = "")
     {
-        // 行内状态与接口设置测速保持一致：可用带延迟，不可用只给结论
-        public string StatusText => IsReachable ? $"可用 {LatencyMs}ms" : "不可用";
+        // 行内状态与接口设置测速保持一致：可用带延迟，不可用给原因（状态码/超时/连接失败）
+        public string StatusText => IsReachable ? $"可用 {LatencyMs}ms" : $"不可用 ({FailReason})";
 
-        // 我只用红绿两色表达连通结论，不按延迟分色，避免延迟色干扰可用性判断
+        // 只用红绿两色表达连通结论，不按延迟分色，避免延迟色干扰可用性判断
         public string ColorCode => IsReachable ? "#4CAF50" : "#F44336";
     }
 
@@ -863,7 +866,6 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         ManifestTestProgress = 0;
         StatusMessage = "正在测试上游清单库连通性...";
 
-        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
         try
         {
             // 与接口设置测速同一汇报模式：各源并发探测，完成一个即实时落行并推进度
@@ -872,13 +874,13 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
                 ManifestTestProgress++;
                 ManifestTestResults.Add(r);
             });
-            var tasks = ManifestSourceOptions.Select(opt => ProbeManifestSourceAsync(http, opt, progress));
+            var tasks = ManifestSourceOptions.Select(opt => ProbeManifestSourceAsync(opt, progress));
 
             var results = await Task.WhenAll(tasks);
 
             var reachable = results.Count(r => r.IsReachable);
             StatusMessage = $"连通性测试完成：{reachable}/{results.Length} 个可用";
-            LogService.Info("设置", $"上游清单库连通性测试：{string.Join(", ", results.Select(r => $"{r.DisplayName}={r.StatusCode}({r.LatencyMs}ms)"))}");
+            LogService.Info("设置", $"上游清单库连通性测试：{string.Join(", ", results.Select(r => $"{r.DisplayName}={(r.IsReachable ? r.StatusCode.ToString() : r.FailReason)}({r.LatencyMs}ms)"))}");
         }
         finally
         {
@@ -886,28 +888,48 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         }
     }
 
-    private static async Task<ManifestTestResult> ProbeManifestSourceAsync(
-        HttpClient http, ManifestSourceOption opt, IProgress<ManifestTestResult> progress)
+    private async Task<ManifestTestResult> ProbeManifestSourceAsync(
+        ManifestSourceOption opt, IProgress<ManifestTestResult> progress)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
         ManifestTestResult result;
         try
         {
-            // 探活请求复刻内核发包条件，有 UA 门禁的源缺失 UA 会被直接拦截
-            using var request = new HttpRequestMessage(HttpMethod.Get, opt.TestUrl);
-            if (!string.IsNullOrEmpty(opt.UserAgent))
-                request.Headers.UserAgent.ParseAdd(opt.UserAgent);
-            using var resp = await http.SendAsync(request);
+            // 走代理重试链：直连失败的用户靠这里兜底，连接级抖动自动重试；
+            // 各源独立客户端命名，避免默认 UA 在共享实例间串味
+            var (statusCode, body) = await _httpClientProvider.SendWithProxyRetryAsync(
+                $"manifest-probe-{opt.Id}",
+                TimeSpan.FromSeconds(8),
+                async client =>
+                {
+                    using var request = new HttpRequestMessage(HttpMethod.Get, opt.TestUrl);
+                    using var resp = await client.SendAsync(request);
+                    var text = await resp.Content.ReadAsStringAsync();
+                    return (resp.StatusCode, text);
+                },
+                client =>
+                {
+                    if (client.DefaultRequestHeaders.UserAgent.Any()) return;
+                    // 探活请求复刻内核发包条件，有 UA 门禁的源缺失 UA 会被直接拦截
+                    if (!string.IsNullOrEmpty(opt.UserAgent))
+                        client.DefaultRequestHeaders.UserAgent.ParseAdd(opt.UserAgent);
+                    else
+                        HttpHeaderHelper.ConfigureApp(client);
+                });
             sw.Stop();
-            var body = await resp.Content.ReadAsStringAsync();
             // 按内核解析请求码的口径判定：拿到有效数字才算可用，502/CF 拦截/业务错误均视为不可用
-            var ok = resp.StatusCode == System.Net.HttpStatusCode.OK && IsManifestCodeResponse(opt.Id, body);
-            result = new ManifestTestResult(opt.Id, opt.DisplayName, ok, sw.ElapsedMilliseconds, (int)resp.StatusCode);
+            var ok = statusCode == System.Net.HttpStatusCode.OK && IsManifestCodeResponse(opt.Id, body);
+            result = new ManifestTestResult(opt.Id, opt.DisplayName, ok, sw.ElapsedMilliseconds, (int)statusCode, ok ? "" : ((int)statusCode).ToString());
+        }
+        catch (TaskCanceledException)
+        {
+            sw.Stop();
+            result = new ManifestTestResult(opt.Id, opt.DisplayName, false, sw.ElapsedMilliseconds, 0, "超时");
         }
         catch (Exception)
         {
             sw.Stop();
-            result = new ManifestTestResult(opt.Id, opt.DisplayName, false, sw.ElapsedMilliseconds, 0);
+            result = new ManifestTestResult(opt.Id, opt.DisplayName, false, sw.ElapsedMilliseconds, 0, "连接失败");
         }
         progress.Report(result);
         return result;
