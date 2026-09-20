@@ -28,6 +28,7 @@ namespace SteamLuaManager.ViewModels;
 	private readonly ISteamDepotService _steamDepotService;
 	private readonly IHttpClientProvider _httpClientProvider;
 	private readonly IDialogService _dialogService;
+	private readonly IArchiveImportService _archiveImport;
 	private List<GameInfo> _allGames = new();
 	private CancellationTokenSource? _refreshCts;
 	private CancellationTokenSource? _dlcQueryCts;
@@ -151,7 +152,8 @@ namespace SteamLuaManager.ViewModels;
 		ISteamManifestService steamManifestService,
 		ISteamDepotService steamDepotService,
 		IHttpClientProvider httpClientProvider,
-		IDialogService dialogService)
+		IDialogService dialogService,
+		IArchiveImportService archiveImport)
 	{
 		_steamPathService = steamPathService;
 		_luaFileManager = luaFileManager;
@@ -162,6 +164,7 @@ namespace SteamLuaManager.ViewModels;
 		_httpClientProvider = httpClientProvider;
 
 		_dialogService = dialogService;
+		_archiveImport = archiveImport;
 		_luaFileManager.FilesChanged += OnFilesChanged;
 		WeakReferenceMessenger.Default.Register<LuaFolderChangedMessage>(this, (_, _) => OnRefreshRequested());
 		WeakReferenceMessenger.Default.Register<KernelUpdateAvailableMessage>(this, (_, m) => OnKernelUpdateAvailable(m));
@@ -453,7 +456,7 @@ namespace SteamLuaManager.ViewModels;
 	{
 		var dialog = new Microsoft.Win32.OpenFileDialog
 		{
-			Filter = "游戏文件 (*.lua;*.bin;*.manifest)|*.lua;*.bin;*.manifest",
+			Filter = "游戏文件 (*.lua;*.bin;*.manifest;*.zip;*.tar;*.7z;*.rar)|*.lua;*.bin;*.manifest;*.zip;*.tar;*.7z;*.rar",
 			Multiselect = true,
 			Title = "选择游戏文件"
 		};
@@ -463,8 +466,14 @@ namespace SteamLuaManager.ViewModels;
 			var luaCount = 0;
 			var binCount = 0;
 			var manifestCount = 0;
+			var msgs = new List<string>();
 			foreach (var file in dialog.FileNames)
 			{
+				if (_archiveImport.IsArchive(file))
+				{
+					msgs.AddRange(await ImportArchiveFileAsync(file));
+					continue;
+				}
 				try
 				{
 					if (file.EndsWith(".lua", StringComparison.OrdinalIgnoreCase))
@@ -485,7 +494,6 @@ namespace SteamLuaManager.ViewModels;
 				}
 				catch (Exception ex) { StatusText = $"添加失败: {ex.Message}"; LogService.Error("主页", $"添加文件失败: {ex}"); }
 			}
-			var msgs = new List<string>();
 			if (luaCount > 0) msgs.Add($"导入游戏成功 ({luaCount})");
 			if (binCount > 0) msgs.Add($"导入成就成功 ({binCount})");
 			if (manifestCount > 0) msgs.Add($"导入清单成功 ({manifestCount})");
@@ -496,6 +504,24 @@ namespace SteamLuaManager.ViewModels;
 			}
 			await QuickRefreshAsync();
 		}
+	}
+
+	// 压缩包：解压后按内容计入三类；同名跳过与单文件失败如实报告
+	private async Task<List<string>> ImportArchiveFileAsync(string file)
+	{
+		var lines = new List<string>();
+		try
+		{
+			var r = await _archiveImport.ImportAsync(file, null);
+			if (r.LuaCount > 0) lines.Add($"导入游戏成功 ({r.LuaCount})");
+			if (r.BinCount > 0) lines.Add($"导入成就成功 ({r.BinCount})");
+			if (r.ManifestCount > 0) lines.Add($"导入清单成功 ({r.ManifestCount})");
+			if (r.SkippedCount > 0) lines.Add($"跳过同名文件 ({r.SkippedCount}：{string.Join("、", r.SkippedFiles.Take(5))}{(r.SkippedFiles.Count > 5 ? "…" : "")})");
+			foreach (var f in r.FailedFiles) lines.Add($"导入失败：{f}");
+			if (lines.Count == 0) lines.Add("压缩包内没有可导入的游戏文件");
+		}
+		catch (Exception ex) { StatusText = $"压缩包导入失败: {ex.Message}"; LogService.Error("主页", $"压缩包导入失败: {ex}"); }
+		return lines;
 	}
 
 	[RelayCommand]
@@ -915,8 +941,14 @@ namespace SteamLuaManager.ViewModels;
 		var luaCount = 0;
 		var binCount = 0;
 		var manifestCount = 0;
+		var extraMsgs = new List<string>();
 		foreach (var file in files)
 		{
+			if (_archiveImport.IsArchive(file))
+			{
+				extraMsgs.AddRange(await ImportArchiveFileAsync(file));
+				continue;
+			}
 			if (file.EndsWith(".lua", StringComparison.OrdinalIgnoreCase))
 			{
 				try { await _luaFileManager.AddLuaFileAsync(file); luaCount++; }
@@ -933,12 +965,13 @@ namespace SteamLuaManager.ViewModels;
 				catch (Exception ex) { StatusText = $"拖拽添加 manifest 失败: {ex.Message}"; LogService.Error("主页", $"拖拽添加 manifest 失败: {ex}"); }
 			}
 		}
-		if (luaCount > 0 || binCount > 0 || manifestCount > 0)
+		if (luaCount > 0 || binCount > 0 || manifestCount > 0 || extraMsgs.Count > 0)
 		{
 			var msgs = new List<string>();
 			if (luaCount > 0) msgs.Add($"导入游戏成功 ({luaCount})");
 			if (binCount > 0) msgs.Add($"导入成就成功 ({binCount})");
 			if (manifestCount > 0) msgs.Add($"导入清单成功 ({manifestCount})");
+			msgs.AddRange(extraMsgs);
 			StatusMessage = string.Join("，", msgs);
 			LogService.Info("主页", $"拖拽导入: {string.Join("，", msgs)}");
 		}

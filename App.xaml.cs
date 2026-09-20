@@ -482,6 +482,7 @@ public partial class App : Application
     {
         services.AddSingleton<ISteamPathService, SteamPathService>();
         services.AddSingleton<ILuaFileManager, LuaFileManager>();
+        services.AddSingleton<IArchiveImportService, ArchiveImportService>();
         services.AddSingleton<ISteamApiService, SteamApiService>();
         services.AddSingleton<ISteamManifestService, SteamManifestService>();
         services.AddSingleton<ISettingsService, SettingsService>();
