@@ -1065,26 +1065,32 @@ public partial class MainWindow : Window
             ? new SolidColorBrush(Color.FromArgb(0x5C, 0x00, 0x00, 0x00))
             : new SolidColorBrush(Color.FromArgb(0x5E, 0xFF, 0xFF, 0xFF));
         var isInstalled = _openSteamToolService.IsInstalled;
+        var hasDisabled = _openSteamToolService.HasDisabledKernel;
 
         KernelList.ItemsSource = new[]
         {
-            new KernelMenuItem("install", "安装", isInstalled ? "已安装" : "下载并安装到 Steam 目录", "\uE737",
-                !isInstalled ? primaryBrush : disabledBrush,
-                !isInstalled ? secondaryBrush : disabledBrush,
-                !isInstalled),
+            new KernelMenuItem("install", "安装", hasDisabled ? "存在被临时禁用的内核" : (isInstalled ? "已安装" : "下载并安装到 Steam 目录"), "\uE737",
+                !isInstalled && !hasDisabled ? primaryBrush : disabledBrush,
+                !isInstalled && !hasDisabled ? secondaryBrush : disabledBrush,
+                !isInstalled && !hasDisabled),
             KernelMenuItem.Separator(),
-            new KernelMenuItem("update", "更新", isInstalled ? $"本地版本：{localVersion}" : "请先安装", "\uE777",
-                isInstalled ? primaryBrush : disabledBrush,
-                isInstalled ? secondaryBrush : disabledBrush,
-                isInstalled),
+            new KernelMenuItem("update", "更新", hasDisabled ? "存在被临时禁用的内核" : (isInstalled ? $"本地版本：{localVersion}" : "请先安装"), "\uE777",
+                isInstalled && !hasDisabled ? primaryBrush : disabledBrush,
+                isInstalled && !hasDisabled ? secondaryBrush : disabledBrush,
+                isInstalled && !hasDisabled),
             KernelMenuItem.Separator(),
-            new KernelMenuItem("uninstall", "卸载", isInstalled ? "移除 OpenSteamTool" : "未安装", "\uE74D",
-                isInstalled ? criticalBrush : disabledBrush,
-                isInstalled ? secondaryBrush : disabledBrush,
-                isInstalled)
+            new KernelMenuItem("toggle-disable", hasDisabled ? "启用内核" : "禁用内核", hasDisabled ? "恢复被临时禁用的内核" : (isInstalled ? "临时禁用内核生效" : "请先安装"), "\uE7E8",
+                isInstalled || hasDisabled ? primaryBrush : disabledBrush,
+                isInstalled || hasDisabled ? secondaryBrush : disabledBrush,
+                isInstalled || hasDisabled),
+            KernelMenuItem.Separator(),
+            new KernelMenuItem("uninstall", "卸载", hasDisabled ? "存在被临时禁用的内核" : (isInstalled ? "移除 OpenSteamTool" : "未安装"), "\uE74D",
+                isInstalled && !hasDisabled ? criticalBrush : disabledBrush,
+                isInstalled && !hasDisabled ? secondaryBrush : disabledBrush,
+                isInstalled && !hasDisabled)
         };
 
-        PositionSubmenuRelative(KernelSubmenu, trigger, KernelList, 180, 160);
+        PositionSubmenuRelative(KernelSubmenu, trigger, KernelList, 180, 200);
         KernelSubmenu.Visibility = Visibility.Visible;
         ((Storyboard)KernelSubmenu.Resources["OpenSubmenu"]).Begin(KernelSubmenu);
     }
@@ -1103,6 +1109,9 @@ public partial class MainWindow : Window
                 break;
             case "update":
                 await UpdateKernelAsync();
+                break;
+            case "toggle-disable":
+                await ToggleKernelAsync();
                 break;
             case "uninstall":
                 await UninstallKernelAsync();
@@ -1239,6 +1248,47 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             await ShowModernDialogAsync("错误", $"检查更新失败：{ex.Message}");
+        }
+    }
+
+    private async Task ToggleKernelAsync()
+    {
+        // 启用：.disabled 文件未被加载，重命名随时安全
+        if (_openSteamToolService.HasDisabledKernel)
+        {
+            try
+            {
+                var done = await _openSteamToolService.EnableKernelAsync();
+                await ShowModernDialogAsync("启用完成", $"已恢复 {done} 个内核文件。重启 Steam 后生效。");
+                RefreshTitle();
+            }
+            catch (Exception ex)
+            {
+                await ShowModernDialogAsync("错误", $"启用失败：{ex.Message}");
+            }
+            return;
+        }
+
+        if (!_openSteamToolService.IsInstalled)
+        {
+            await ShowModernDialogAsync("提示", "未检测到已安装的 OpenSteamTool。");
+            return;
+        }
+        // 禁用：重命名被加载的 DLL 不可靠，Steam 关闭门禁
+        if (SteamProcess.IsSteamRunning())
+        {
+            await ShowModernDialogAsync("Steam 正在运行", "文件被占用，临时禁用前请先完全退出 Steam。");
+            return;
+        }
+        try
+        {
+            var done = await _openSteamToolService.DisableKernelAsync();
+            await ShowModernDialogAsync("禁用完成", $"已临时禁用 {done} 个内核文件。Steam 将加载原版。");
+            RefreshTitle();
+        }
+        catch (Exception ex)
+        {
+            await ShowModernDialogAsync("错误", $"禁用失败：{ex.Message}");
         }
     }
 

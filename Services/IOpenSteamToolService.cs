@@ -11,11 +11,14 @@ namespace SteamLuaManager.Services;
 public interface IOpenSteamToolService
 {
     bool IsInstalled { get; }
+    bool HasDisabledKernel { get; }
     string? GetSteamPath();
     Task<string?> GetLocalVersionAsync();
     Task<(string version, string downloadUrl, string releaseUrl)> GetRemoteInfoAsync();
     Task InstallAsync(string downloadUrl, IProgress<string>? status = null, IProgress<int>? downloadProgress = null, CancellationToken ct = default);
     Task UninstallAsync();
+    Task<int> DisableKernelAsync();
+    Task<int> EnableKernelAsync();
 }
 
 public class OpenSteamToolService : IOpenSteamToolService
@@ -56,6 +59,24 @@ public class OpenSteamToolService : IOpenSteamToolService
 
 
     public bool IsInstalled => _steamPathService.DetectSteamToolType() == SteamToolType.OpenSteamTool;
+
+    // 任一内核 DLL 存在 .disabled 后缀即视为有被临时禁用的内核
+    public bool HasDisabledKernel
+    {
+        get
+        {
+            try
+            {
+                var steamPath = GetSteamPath();
+                if (string.IsNullOrEmpty(steamPath)) return false;
+                return RequiredDlls.Any(dll => File.Exists(Path.Combine(steamPath, dll + ".disabled")));
+            }
+            catch
+            {
+                return false;
+            }
+        }
+    }
 
     public string? GetSteamPath()
     {
@@ -276,6 +297,75 @@ public class OpenSteamToolService : IOpenSteamToolService
         if (removed == 0)
             throw new InvalidOperationException("未检测到已安装的 OpenSteamTool 文件");
         return Task.CompletedTask;
+    }
+
+    // 临时禁用：逐个给已存在的内核 DLL 加 .disabled 后缀，返回实际处理数；
+    // 已是禁用态或目标后缀已存在的跳过，调用方负责 Steam 关闭门禁
+    public Task<int> DisableKernelAsync()
+    {
+        var steamPath = GetSteamPath() ?? throw new InvalidOperationException("无法检测 Steam 路径");
+        var done = 0;
+        var skipped = new List<string>();
+        foreach (var dll in RequiredDlls)
+        {
+            var path = Path.Combine(steamPath, dll);
+            var disabledPath = path + ".disabled";
+            if (!File.Exists(path)) continue;
+            if (File.Exists(disabledPath))
+            {
+                skipped.Add(dll);
+                continue;
+            }
+            try
+            {
+                File.Move(path, disabledPath);
+                done++;
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException || ex is IOException)
+            {
+                throw new InvalidOperationException($"无法禁用 {dll}，文件正被占用，请确保 Steam 已关闭后再试", ex);
+            }
+        }
+        if (done == 0 && skipped.Count == 0)
+            throw new InvalidOperationException("未检测到已安装的 OpenSteamTool 文件");
+        if (skipped.Count > 0)
+            LogService.Warn("内核", $"以下文件已处于禁用态，已跳过：{string.Join(", ", skipped)}");
+        LogService.Info("内核", $"已临时禁用 {done} 个内核文件");
+        return Task.FromResult(done);
+    }
+
+    // 启用：去掉所有已存在的 .disabled 后缀，返回实际处理数；目标原名已存在的跳过，避免覆盖
+    public Task<int> EnableKernelAsync()
+    {
+        var steamPath = GetSteamPath() ?? throw new InvalidOperationException("无法检测 Steam 路径");
+        var done = 0;
+        var skipped = new List<string>();
+        foreach (var dll in RequiredDlls)
+        {
+            var path = Path.Combine(steamPath, dll);
+            var disabledPath = path + ".disabled";
+            if (!File.Exists(disabledPath)) continue;
+            if (File.Exists(path))
+            {
+                skipped.Add(dll);
+                continue;
+            }
+            try
+            {
+                File.Move(disabledPath, path);
+                done++;
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException || ex is IOException)
+            {
+                throw new InvalidOperationException($"无法启用 {dll}：{ex.Message}", ex);
+            }
+        }
+        if (done == 0 && skipped.Count == 0)
+            throw new InvalidOperationException("未检测到被临时禁用的内核文件");
+        if (skipped.Count > 0)
+            LogService.Warn("内核", $"以下文件原名已存在，保留禁用副本未覆盖：{string.Join(", ", skipped)}");
+        LogService.Info("内核", $"已启用 {done} 个内核文件");
+        return Task.FromResult(done);
     }
 
     // ========== 辅助方法 ==========
