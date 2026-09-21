@@ -79,8 +79,7 @@ public partial class HomeView : UserControl
             return;
         }
         if (sv.VerticalOffset + sv.ViewportHeight < sv.ScrollableHeight - 600) return;
-        if (DataContext is MainViewModel vm)
-            vm.LoadMoreGames();
+        TryAppendGames(sender);
     }
 
     private void TryFillViewport(object sender)
@@ -88,8 +87,47 @@ public partial class HomeView : UserControl
         if (sender is not System.Windows.Controls.ScrollViewer sv) return;
         if (!sv.IsVisible || sv.ViewportWidth <= 0 || sv.ViewportHeight <= 0) return;
         if (sv.ScrollableHeight > 0) return;
-        if (DataContext is MainViewModel vm)
-            vm.LoadMoreGames();
+        TryAppendGames(sender);
+    }
+
+    // 分页门闩（按视图隔离）：Extent 单调推进才放行——同一布局周期的重复事件、
+    // 切页/启动瞬间的过期小读数到此为止；数量缩水=换了新源，门闩复位
+    private readonly Dictionary<object, (double Extent, int Count)> _appendGates = new();
+    private bool _fillRecheckQueued;
+
+    private static bool IsKnownViewMode(string? mode) =>
+        mode is "卡片" or "列表" or "表格";
+
+    private void TryAppendGames(object sender)
+    {
+        if (sender is not System.Windows.Controls.ScrollViewer sv) return;
+        if (DataContext is not MainViewModel vm) return;
+        // 非当前模式的视图不参与追加（切页/启动瞬间的过期读数到此为止），排一次后台复核防饿死；
+        // 模式名对不上已知三态时直接放行，避免手改配置文件导致永久空白
+        if (sender is FrameworkElement fe && fe.Tag is string tag
+            && IsKnownViewMode(tag) && IsKnownViewMode(vm.SelectedViewMode)
+            && !string.Equals(tag, vm.SelectedViewMode, StringComparison.Ordinal))
+        {
+            QueueFillRecheck(sender);
+            return;
+        }
+        _appendGates.TryGetValue(sender, out var gate);
+        if (vm.Games.Count < gate.Count)
+            gate = (double.MinValue, vm.Games.Count);
+        if (sv.ExtentHeight <= gate.Extent) return;
+        vm.LoadMoreGames();
+        _appendGates[sender] = (sv.ExtentHeight, vm.Games.Count);
+    }
+
+    private void QueueFillRecheck(object sender)
+    {
+        if (_fillRecheckQueued) return;
+        _fillRecheckQueued = true;
+        Dispatcher.BeginInvoke(() =>
+        {
+            _fillRecheckQueued = false;
+            TryFillViewport(sender);
+        }, System.Windows.Threading.DispatcherPriority.Background);
     }
 
     private void MoreButton_Click(object sender, RoutedEventArgs e)

@@ -262,7 +262,7 @@
         <Grid Grid.Row="4">
 
             <!-- 卡片模式 -->
-            <controls:SmoothScrollViewer x:Name="CardScrollViewer"
+            <controls:SmoothScrollViewer x:Name="CardScrollViewer" Tag="卡片"
                            VerticalScrollBarVisibility="Auto"
                            HorizontalScrollBarVisibility="Disabled"
                            Loaded="ViewModeContainer_Loaded"
@@ -427,7 +427,7 @@
             </controls:SmoothScrollViewer>
 
             <!-- 列表模式 -->
-            <controls:SmoothScrollViewer VerticalScrollBarVisibility="Auto"
+            <controls:SmoothScrollViewer Tag="列表" VerticalScrollBarVisibility="Auto"
                            HorizontalScrollBarVisibility="Disabled"
                            Loaded="ViewModeContainer_Loaded"
                            ScrollChanged="GamesScrollViewer_ScrollChanged"
@@ -557,7 +557,7 @@
             </controls:SmoothScrollViewer>
 
             <!-- 表格模式 -->
-            <controls:SmoothScrollViewer VerticalScrollBarVisibility="Auto"
+            <controls:SmoothScrollViewer Tag="表格" VerticalScrollBarVisibility="Auto"
                            HorizontalScrollBarVisibility="Disabled"
                            Loaded="ViewModeContainer_Loaded"
                            ScrollChanged="GamesScrollViewer_ScrollChanged"
