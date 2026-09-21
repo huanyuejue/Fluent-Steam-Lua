@@ -46,22 +46,33 @@
                            HorizontalAlignment="Center" Margin="0,16,0,0"
                            Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
 
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,12,0,0">
+                <StackPanel HorizontalAlignment="Center" Margin="0,12,0,0">
                     <Button Content="检查更新"
                             Click="CheckUpdate_Click"
                             Padding="16,6"
-                            Margin="0,0,8,0">
+                            Margin="0,0,0,8"
+                            HorizontalAlignment="Center">
                         <Button.Background>
                             <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                         </Button.Background>
                     </Button>
-                    <Button Content="问题反馈"
-                            Click="Feedback_Click"
-                            Padding="16,6">
-                        <Button.Background>
-                            <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
-                        </Button.Background>
-                    </Button>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <Button Content="聊天反馈群"
+                                Click="QqGroup_Click"
+                                Padding="16,6"
+                                Margin="0,0,8,0">
+                            <Button.Background>
+                                <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                            </Button.Background>
+                        </Button>
+                        <Button Content="问题反馈"
+                                Click="Feedback_Click"
+                                Padding="16,6">
+                            <Button.Background>
+                                <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                            </Button.Background>
+                        </Button>
+                    </StackPanel>
                 </StackPanel>
 
             </StackPanel>

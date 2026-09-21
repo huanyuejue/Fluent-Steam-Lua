@@ -15,6 +15,9 @@ namespace SteamLuaManager.Views;
 public partial class AboutView : UserControl
 {
     private const string ProjectUrl = "https://github.com/huanyuejue/Fluent-Steam-Lua";
+    private const string QqGroupNumber = "1054228162";
+    // 群官方 H5 分享链接：浏览器打开后调起 QQ 加群（mqqapi 私有协议新版 QQ 已不支持）
+    private const string QqGroupShareUrl = "https://qun.qq.com/universal-share/share?ac=1&authKey=MQ1TVyxN4lUMerzDnHMsl6bp7noFeScwL%2F6C7AhW12PJx9fBlfJt7k%2BJ9uo%2B1SGY&busi_data=eyJncm91cENvZGUiOiIxMDU0MjI4MTYyIiwidG9rZW4iOiJjOGZHRHJKemF4Qytwa1lyMUgxbHdKYnRRcjFqS0plWFBEb3VJVFFqWXc4NzBYUFlMNDlRcUludHJRZ3ovRW5yIiwidWluIjoiNjMwOTExODEzIn0%3D&data=Z5XGMODvXtiqhqhOreDKo3DW9BAsa1W-WfOUjRaP6twkkcvauHBJIJxmahQU2kaAwpyJB5wcxgVqlkIRpQRG1w&svctype=4&tempid=h5_group_info";
 
     // 附件列表项：存完整路径用于读取，界面只显示文件名
     private sealed class AttachedFileItem
@@ -57,6 +60,55 @@ public partial class AboutView : UserControl
         catch (Exception ex)
         {
             await ShowDialogAsync("检查更新失败", $"无法获取最新版本信息：{ex.Message}");
+        }
+    }
+
+    private async void QqGroup_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new ContentDialog
+        {
+            Title = "聊天反馈群",
+            Content = new TextBlock
+            {
+                Text = "要加入QQ的聊天反馈群吗？",
+                TextWrapping = TextWrapping.Wrap,
+                MaxWidth = 420
+            },
+            PrimaryButtonText = "跳转群聊",
+            SecondaryButtonText = "复制群号",
+            CloseButtonText = "取消",
+            DefaultButton = ContentDialogButton.Primary
+        };
+        var result = await dialog.ShowAsync();
+        if (result == ContentDialogResult.Primary)
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo(QqGroupShareUrl) { UseShellExecute = true });
+            }
+            catch (Exception ex)
+            {
+                await ShowDialogAsync("跳转失败", $"未能打开加群链接：{ex.Message}\n可复制群号 {QqGroupNumber} 手动加群。");
+            }
+        }
+        else if (result == ContentDialogResult.Secondary)
+        {
+            var numberBox = new TextBox
+            {
+                Text = QqGroupNumber,
+                IsReadOnly = true,
+                FontSize = 16,
+                Padding = new Thickness(8, 6, 8, 6),
+                MinWidth = 280
+            };
+            numberBox.Loaded += (_, _) => { numberBox.Focus(); numberBox.SelectAll(); };
+            await new ContentDialog
+            {
+                Title = "复制群号",
+                Content = numberBox,
+                CloseButtonText = "关闭",
+                DefaultButton = ContentDialogButton.Close
+            }.ShowAsync();
         }
     }
 
