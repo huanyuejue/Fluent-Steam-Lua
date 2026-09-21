@@ -431,24 +431,16 @@ namespace SteamLuaManager.ViewModels;
 		_settingsService.Save(settings);
 	}
 
-	// 分页渐进：首屏默认 20 张，视口能摆下更多时由视图按实际容量上调；
-	// 滚动到底部再按页追加，避免千级列表一次性实例化卡死 UI
-	private int _gamesPageSize = 20;
+	// 分页渐进：固定每页 20 个，首屏不满视口时由视图多次补足直到填满；
+	// 滚动到底部前追加下一页，避免千级列表一次性实例化卡死 UI
+	private const int GamesPageSize = 20;
 	private List<GameInfo> _filteredCache = new();
 
 	public void LoadMoreGames()
 	{
 		if (Games.Count >= _filteredCache.Count) return;
-		foreach (var game in _filteredCache.Skip(Games.Count).Take(_gamesPageSize))
+		foreach (var game in _filteredCache.Skip(Games.Count).Take(GamesPageSize))
 			Games.Add(game);
-	}
-
-	// 视图按可视区域能摆下的卡片数上调首屏容量（只增不减），并立即补足
-	public void EnsureFirstPageCapacity(int capacity)
-	{
-		if (capacity <= _gamesPageSize) return;
-		_gamesPageSize = capacity;
-		LoadMoreGames();
 	}
 
 	private void ApplyFilter()
@@ -481,7 +473,7 @@ namespace SteamLuaManager.ViewModels;
 		};
 
 		_filteredCache = filtered.ToList();
-		Games = new ObservableCollection<GameInfo>(_filteredCache.Take(_gamesPageSize));
+		Games = new ObservableCollection<GameInfo>(_filteredCache.Take(GamesPageSize));
 		NotifySelectionChanged();
 	}
 

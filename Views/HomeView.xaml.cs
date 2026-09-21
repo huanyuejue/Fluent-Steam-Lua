@@ -62,23 +62,32 @@ public partial class HomeView : UserControl
         };
     }
 
-    // 首屏自适应：按视口实际能摆下的卡片数上调首屏容量（保底 20），摆不满不加
-    private void CardScrollViewer_SizeChanged(object sender, SizeChangedEventArgs e)
+    // 首屏补足：内容撑不满视口（无滚动条、下方留白）时补一页，直到填满或取完；
+    // 布局完成后 Extent 变化会再次触发 ScrollChanged，链式补足，不会一次全加
+    private void GamesScrollViewer_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        TryFillViewport(sender);
+    }
+
+    // 分页渐进：无滚动条时补页填满；有滚动条时滚到底部前 600px 追加下一页
+    private void GamesScrollViewer_ScrollChanged(object sender, ScrollChangedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.ScrollViewer sv) return;
+        if (sv.ScrollableHeight <= 0)
+        {
+            TryFillViewport(sender);
+            return;
+        }
+        if (sv.VerticalOffset + sv.ViewportHeight < sv.ScrollableHeight - 600) return;
+        if (DataContext is MainViewModel vm)
+            vm.LoadMoreGames();
+    }
+
+    private void TryFillViewport(object sender)
     {
         if (sender is not System.Windows.Controls.ScrollViewer sv) return;
         if (!sv.IsVisible || sv.ViewportWidth <= 0 || sv.ViewportHeight <= 0) return;
-        if (DataContext is not MainViewModel vm) return;
-        var columns = Math.Max(1, (int)(sv.ViewportWidth / 236));
-        var rows = Math.Max(1, (int)Math.Ceiling(sv.ViewportHeight / 240)) + 1;
-        vm.EnsureFirstPageCapacity(Math.Max(20, columns * rows));
-    }
-
-    // 分页渐进：卡片滚到底部前追加下一页，避免千级列表一次性实例化
-    private void CardScrollViewer_ScrollChanged(object sender, ScrollChangedEventArgs e)
-    {
-        if (sender is not System.Windows.Controls.ScrollViewer sv) return;
-        if (sv.ScrollableHeight <= 0) return;
-        if (sv.VerticalOffset + sv.ViewportHeight < sv.ScrollableHeight - 600) return;
+        if (sv.ScrollableHeight > 0) return;
         if (DataContext is MainViewModel vm)
             vm.LoadMoreGames();
     }

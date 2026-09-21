@@ -266,8 +266,8 @@
                            VerticalScrollBarVisibility="Auto"
                            HorizontalScrollBarVisibility="Disabled"
                            Loaded="ViewModeContainer_Loaded"
-                           ScrollChanged="CardScrollViewer_ScrollChanged"
-                           SizeChanged="CardScrollViewer_SizeChanged"
+                           ScrollChanged="GamesScrollViewer_ScrollChanged"
+                           SizeChanged="GamesScrollViewer_SizeChanged"
                            Visibility="{Binding SelectedViewMode, Converter={StaticResource EqualityToVisibilityConverter}, ConverterParameter=卡片}">
                 <ItemsControl x:Name="CardItemsControl" ItemsSource="{Binding Games}" Margin="0,0,-16,16"
                               HorizontalAlignment="Left">
@@ -428,10 +428,12 @@
 
             <!-- 列表模式 -->
             <controls:SmoothScrollViewer VerticalScrollBarVisibility="Auto"
-                          HorizontalScrollBarVisibility="Disabled"
-                          Loaded="ViewModeContainer_Loaded"
-                          Padding="0,0,20,0"
-                          Visibility="{Binding SelectedViewMode, Converter={StaticResource EqualityToVisibilityConverter}, ConverterParameter=列表}">
+                           HorizontalScrollBarVisibility="Disabled"
+                           Loaded="ViewModeContainer_Loaded"
+                           ScrollChanged="GamesScrollViewer_ScrollChanged"
+                           SizeChanged="GamesScrollViewer_SizeChanged"
+                           Padding="0,0,20,0"
+                           Visibility="{Binding SelectedViewMode, Converter={StaticResource EqualityToVisibilityConverter}, ConverterParameter=列表}">
                 <StackPanel Margin="0,0,0,16">
                     <ItemsControl ItemsSource="{Binding Games}">
                         <ItemsControl.ItemTemplate>
@@ -556,9 +558,11 @@
 
             <!-- 表格模式 -->
             <controls:SmoothScrollViewer VerticalScrollBarVisibility="Auto"
-                          HorizontalScrollBarVisibility="Disabled"
-                          Loaded="ViewModeContainer_Loaded"
-                          Visibility="{Binding SelectedViewMode, Converter={StaticResource EqualityToVisibilityConverter}, ConverterParameter=表格}">
+                           HorizontalScrollBarVisibility="Disabled"
+                           Loaded="ViewModeContainer_Loaded"
+                           ScrollChanged="GamesScrollViewer_ScrollChanged"
+                           SizeChanged="GamesScrollViewer_SizeChanged"
+                           Visibility="{Binding SelectedViewMode, Converter={StaticResource EqualityToVisibilityConverter}, ConverterParameter=表格}">
                 <Grid VerticalAlignment="Top" Margin="0,0,0,16">
                     <controls:ClippingBorder CornerRadius="8">
                         <controls:ClippingBorder.Background>
