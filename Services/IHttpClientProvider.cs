@@ -201,7 +201,9 @@ public sealed class HttpClientProvider : IHttpClientProvider, IDisposable
             Proxy = proxy.Proxy,
             PooledConnectionLifetime = TimeSpan.FromMinutes(2),
             AutomaticDecompression = DecompressionMethods.All,
-            ConnectTimeout = TimeSpan.FromSeconds(10)
+            ConnectTimeout = TimeSpan.FromSeconds(10),
+            // 批量获取时同站并发高，默认单站 HTTP/1.1 连接数不足会排队拖慢
+            MaxConnectionsPerServer = 20
         };
         if (handler.Proxy != null)
             handler.Proxy.Credentials = CredentialCache.DefaultCredentials;

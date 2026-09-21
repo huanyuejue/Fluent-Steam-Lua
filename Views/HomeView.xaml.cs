@@ -42,23 +42,45 @@ public partial class HomeView : UserControl
         }
     }
 
+    // 入场淡入只播一次：切页/切视图会反复触发 Loaded，在此重复挂 handler 越积越多，
+    // 且每次切回主页都重播 250ms 全子树淡入，是切换卡顿的来源之一
     private void ViewModeContainer_Loaded(object sender, RoutedEventArgs e)
     {
-        if (sender is FrameworkElement fe)
+        if (sender is not FrameworkElement fe || fe.Tag is true) return;
+        fe.Tag = true;
+        var firstShow = true;
+        fe.IsVisibleChanged += (_, args) =>
         {
-            fe.IsVisibleChanged += (_, args) =>
+            if (args.NewValue is not true || !firstShow) return;
+            firstShow = false;
+            fe.Opacity = 0;
+            var animation = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(250))
             {
-                if (args.NewValue is true)
-                {
-                    fe.Opacity = 0;
-                    var animation = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(250))
-                    {
-                        EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-                    };
-                    fe.BeginAnimation(OpacityProperty, animation);
-                }
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
             };
-        }
+            fe.BeginAnimation(OpacityProperty, animation);
+        };
+    }
+
+    // 首屏自适应：按视口实际能摆下的卡片数上调首屏容量（保底 20），摆不满不加
+    private void CardScrollViewer_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.ScrollViewer sv) return;
+        if (!sv.IsVisible || sv.ViewportWidth <= 0 || sv.ViewportHeight <= 0) return;
+        if (DataContext is not MainViewModel vm) return;
+        var columns = Math.Max(1, (int)(sv.ViewportWidth / 236));
+        var rows = Math.Max(1, (int)Math.Ceiling(sv.ViewportHeight / 240)) + 1;
+        vm.EnsureFirstPageCapacity(Math.Max(20, columns * rows));
+    }
+
+    // 分页渐进：卡片滚到底部前追加下一页，避免千级列表一次性实例化
+    private void CardScrollViewer_ScrollChanged(object sender, ScrollChangedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.ScrollViewer sv) return;
+        if (sv.ScrollableHeight <= 0) return;
+        if (sv.VerticalOffset + sv.ViewportHeight < sv.ScrollableHeight - 600) return;
+        if (DataContext is MainViewModel vm)
+            vm.LoadMoreGames();
     }
 
     private void MoreButton_Click(object sender, RoutedEventArgs e)

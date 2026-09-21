@@ -59,6 +59,10 @@ namespace SteamLuaManager.ViewModels;
 	[ObservableProperty]
 	private bool _isRefreshing;
 
+	// 后台正在获取封面/名字：不阻塞操作，仅驱动顶部内联提示与取消按钮
+	[ObservableProperty]
+	private bool _isFetchingInfo;
+
 	[ObservableProperty]
 	private string _selectedSortOption = "名称 A-Z";
 
@@ -238,64 +242,86 @@ namespace SteamLuaManager.ViewModels;
 	private async Task RefreshGamesAsync()
 	{
 		if (IsRefreshing) return;
+		CancelFetch();
 
-		_refreshCts?.Cancel();
-		_refreshCts?.Dispose();
-		_refreshCts = new CancellationTokenSource();
-		var token = _refreshCts.Token;
-
-		IsRefreshSlow = false;
-		RefreshProgressText = $"正在获取... | {GetCurrentCdnName()}";
-
+		IsRefreshing = true;
+		var scanOk = false;
 		try
 		{
-			IsRefreshing = true;
-
-			_ = SlowTimerAsync(token);
-
 			_allGames = await _luaFileManager.ScanLuaFilesAsync();
-			_steamApiService.PopulateFromCache(_allGames);
+			await Task.Run(() => _steamApiService.PopulateFromCache(_allGames));
 			ApplyFilter();
 			UpdateStatus();
-		await _steamApiService.RefreshGameInfoAsync(_allGames, token, _settingsService.Load().AutoFetchCovers);
-		if (!token.IsCancellationRequested)
-		{
-			ApplyFilter();
-			UpdateStatus();
+			scanOk = true;
 		}
-
-		foreach (var game in _allGames)
-		{
-			var refreshed = await _luaFileManager.ParseLuaFileAsync(game.AppId);
-			if (refreshed != null)
-			{
-				game.IsManifestPinned = refreshed.IsManifestPinned;
-				game.Token = refreshed.Token;
-			}
-		}
-		ApplyFilter();
-	}
 		catch (Exception ex) { StatusText = $"刷新失败: {ex.Message}"; LogService.Error("主页", $"刷新游戏信息失败: {ex}"); }
 		finally
 		{
 			IsRefreshing = false;
-			StopProgressTimer();
-			var wasCancelled = token.IsCancellationRequested;
-			if (_refreshCts != null)
-			{
-				_refreshCts.Cancel();
-				_refreshCts.Dispose();
-				_refreshCts = null;
-			}
-			if (wasCancelled)
-			{
-				StatusText = "已取消刷新";
-				LogService.Info("主页", "刷新已取消");
-			}
-			IsRefreshSlow = false;
-			if (!wasCancelled)
-				RefreshProgressText = $"共 {_allGames.Count} 个游戏";
 		}
+
+		if (scanOk)
+			StartBackgroundFetch();
+	}
+
+	// 封面/名字后台获取：首屏已绘制，本方法立即返回；按 AppId 快照工作，
+	// 回填只写仍在列表中的对象，中途删游戏/新一轮刷新不会互相踩
+	private void StartBackgroundFetch()
+	{
+		CancelFetch();
+		_refreshCts = new CancellationTokenSource();
+		var token = _refreshCts.Token;
+		var snapshot = _allGames.ToList();
+
+		IsFetchingInfo = true;
+		IsRefreshSlow = false;
+		RefreshProgressText = "正在获取游戏信息…";
+		StartProgressTimer();
+		_ = SlowTimerAsync(token);
+		_ = FetchGameInfoBackgroundAsync(snapshot, token);
+	}
+
+	private async Task FetchGameInfoBackgroundAsync(List<GameInfo> snapshot, CancellationToken token)
+	{
+		try
+		{
+			await _steamApiService.RefreshGameInfoAsync(snapshot, token, _settingsService.Load().AutoFetchCovers);
+			if (token.IsCancellationRequested) return;
+
+			var backfills = await Task.WhenAll(snapshot.Select(g => _luaFileManager.ParseLuaFileAsync(g.AppId)));
+			if (token.IsCancellationRequested) return;
+			foreach (var (game, refreshed) in snapshot.Zip(backfills))
+			{
+				if (refreshed != null)
+				{
+					game.IsManifestPinned = refreshed.IsManifestPinned;
+					game.Token = refreshed.Token;
+				}
+			}
+			// 不重建分页（回填走绑定逐项更新），仅刷新计数
+			UpdateStatus();
+		}
+		catch (OperationCanceledException) { }
+		catch (Exception ex) { StatusText = $"刷新失败: {ex.Message}"; LogService.Error("主页", $"后台获取游戏信息失败: {ex}"); }
+		finally
+		{
+			if (_refreshCts?.Token == token)
+			{
+				var wasCancelled = token.IsCancellationRequested;
+				CancelFetch();
+				IsFetchingInfo = false;
+				StopProgressTimer();
+				IsRefreshSlow = false;
+				RefreshProgressText = wasCancelled ? "已取消获取" : $"共 {_allGames.Count} 个游戏";
+			}
+		}
+	}
+
+	private void CancelFetch()
+	{
+		try { _refreshCts?.Cancel(); } catch { }
+		try { _refreshCts?.Dispose(); } catch { }
+		_refreshCts = null;
 	}
 
 	[RelayCommand]
@@ -304,19 +330,12 @@ namespace SteamLuaManager.ViewModels;
 		_refreshCts?.Cancel();
 	}
 
-	[RelayCommand]
-	private void DismissSlowOverlay()
-	{
-		IsRefreshSlow = false;
-		IsRefreshing = false;
-	}
-
 	private async Task SlowTimerAsync(CancellationToken token)
 	{
 		try
 		{
 			await Task.Delay(20000, token);
-			if (IsRefreshing)
+			if (IsFetchingInfo)
 			{
 				await Application.Current.Dispatcher.InvokeAsync(() =>
 				{
@@ -326,6 +345,7 @@ namespace SteamLuaManager.ViewModels;
 			}
 		}
 		catch (OperationCanceledException) { }
+		catch (Exception ex) { LogService.Warn("主页", $"慢速提示计时异常: {ex.Message}"); }
 	}
 
 	private void StartProgressTimer()
@@ -355,29 +375,35 @@ namespace SteamLuaManager.ViewModels;
 			return;
 		}
 		var done = _allGames.Count(g => !string.IsNullOrEmpty(g.CoverImagePath));
-		RefreshProgressText = $"{done} / {_allGames.Count} 个游戏已获取 | {GetCurrentCdnName()}";
+		RefreshProgressText = IsRefreshSlow
+			? $"{done} / {_allGames.Count} 个游戏已获取 | 获取较慢，可点取消"
+			: $"{done} / {_allGames.Count} 个游戏已获取 | {GetCurrentCdnName()}";
 	}
 
 	private async Task QuickRefreshAsync()
 	{
 		if (IsRefreshing) return;
+		CancelFetch();
+
+		IsRefreshing = true;
+		var scanOk = false;
 		try
 		{
 			var newGames = await _luaFileManager.ScanLuaFilesAsync();
 			_allGames = newGames;
-			_steamApiService.PopulateFromCache(_allGames);
+			await Task.Run(() => _steamApiService.PopulateFromCache(_allGames));
 			ApplyFilter();
 			UpdateStatus();
-			_ = _steamApiService.RefreshGameInfoAsync(_allGames, default, _settingsService.Load().AutoFetchCovers).ContinueWith(_ =>
-			{
-				Application.Current.Dispatcher.Invoke(() =>
-				{
-					ApplyFilter();
-					UpdateStatus();
-				});
-			});
+			scanOk = true;
 		}
 		catch (Exception ex) { StatusText = $"刷新失败: {ex.Message}"; LogService.Error("主页", $"快速刷新失败: {ex}"); }
+		finally
+		{
+			IsRefreshing = false;
+		}
+
+		if (scanOk)
+			StartBackgroundFetch();
 	}
 
 	partial void OnSearchTextChanged(string value)
@@ -403,6 +429,26 @@ namespace SteamLuaManager.ViewModels;
 		var settings = _settingsService.Load();
 		settings.SelectedViewMode = value;
 		_settingsService.Save(settings);
+	}
+
+	// 分页渐进：首屏默认 20 张，视口能摆下更多时由视图按实际容量上调；
+	// 滚动到底部再按页追加，避免千级列表一次性实例化卡死 UI
+	private int _gamesPageSize = 20;
+	private List<GameInfo> _filteredCache = new();
+
+	public void LoadMoreGames()
+	{
+		if (Games.Count >= _filteredCache.Count) return;
+		foreach (var game in _filteredCache.Skip(Games.Count).Take(_gamesPageSize))
+			Games.Add(game);
+	}
+
+	// 视图按可视区域能摆下的卡片数上调首屏容量（只增不减），并立即补足
+	public void EnsureFirstPageCapacity(int capacity)
+	{
+		if (capacity <= _gamesPageSize) return;
+		_gamesPageSize = capacity;
+		LoadMoreGames();
 	}
 
 	private void ApplyFilter()
@@ -434,11 +480,12 @@ namespace SteamLuaManager.ViewModels;
 			_ => filtered.OrderBy(g => g.GameName)
 		};
 
-		Games = new ObservableCollection<GameInfo>(filtered);
+		_filteredCache = filtered.ToList();
+		Games = new ObservableCollection<GameInfo>(_filteredCache.Take(_gamesPageSize));
 		NotifySelectionChanged();
 	}
 
-	private void UpdateStatus() => StatusText = $"共 {Games.Count} 个游戏";
+	private void UpdateStatus() => StatusText = $"共 {_filteredCache.Count} 个游戏";
 
 	private Task ShowModernDialogAsync(string title, string message)
 		=> _dialogService.ShowAlertAsync(title, message);

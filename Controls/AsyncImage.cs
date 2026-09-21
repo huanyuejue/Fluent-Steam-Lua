@@ -36,6 +36,7 @@ public class AsyncImage : Image
 
     private static readonly ConcurrentDictionary<string, BitmapImage> Cache = new();
     private static readonly SemaphoreSlim Throttle = new(4);
+    private const int MaxCacheCount = 600;
 
     private string _pendingUrl = "";
     private bool _started;
@@ -123,6 +124,14 @@ public class AsyncImage : Image
                     if (bitmap != null) break;
                     continue;
                 }
+                // 主页直接绑定本地封面路径（无 file:// 前缀）：后台读盘解码，不占 UI 线程
+                if (!candidate.Contains("://") && File.Exists(candidate))
+                {
+                    try { bitmap = TryLoadLocalFile(new Uri(candidate).AbsoluteUri); }
+                    catch { bitmap = null; }
+                    if (bitmap != null) break;
+                    continue;
+                }
                 if (candidate.StartsWith("storeapi://", StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
@@ -167,6 +176,8 @@ public class AsyncImage : Image
             return;
         }
 
+        if (Cache.Count >= MaxCacheCount)
+            Cache.Clear();
         Cache[url] = bitmap;
         await dispatcher.InvokeAsync(() =>
         {
@@ -184,6 +195,8 @@ public class AsyncImage : Image
             var bitmap = new BitmapImage();
             bitmap.BeginInit();
             bitmap.CacheOption = BitmapCacheOption.OnLoad;
+            // 卡片最大 220pt，按 2x 解码足够，显存/CPU 占用降数倍
+            bitmap.DecodePixelWidth = 460;
             bitmap.StreamSource = new MemoryStream(bytes);
             bitmap.EndInit();
             bitmap.Freeze();

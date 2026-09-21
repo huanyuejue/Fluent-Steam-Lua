@@ -75,8 +75,7 @@ public partial class MainWindow : Window
         CurrentPage = "Home";
         _openSteamToolService = openSteamToolService;
         _dropHintHideTimer.Tick += (_, _) => { _dropHintHideTimer.Stop(); HideDropHint(DropHintGrid); HideDropHint(DropAuthHintGrid); };
-        HookOverlayFade(RefreshOverlayBorder);
-        HookOverlayFade(SlowOverlayBorder);
+
         _viewModel = viewModel;
         _settingsViewModel = settingsViewModel;
         _scriptDownloadViewModel = scriptDownloadViewModel;
@@ -630,24 +629,6 @@ public partial class MainWindow : Window
         {
             return false;
         }
-    }
-
-    // 遮罩层淡入淡出：显示 150ms EaseOut，隐藏即时复位
-    private static void HookOverlayFade(FrameworkElement element)
-    {
-        element.IsVisibleChanged += (_, args) =>
-        {
-            element.BeginAnimation(OpacityProperty, null);
-            element.Opacity = (bool)args.NewValue ? 0 : 1;
-            if ((bool)args.NewValue)
-            {
-                var fade = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(150))
-                {
-                    EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-                };
-                element.BeginAnimation(OpacityProperty, fade);
-            }
-        };
     }
 
     private static bool IsTicketDrop(IDataObject data)

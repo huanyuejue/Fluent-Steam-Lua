@@ -14,7 +14,11 @@ public class SteamApiService : ISteamApiService
 	private readonly string _coversDir;
 	private readonly string _cacheFilePath;
 	private ConcurrentDictionary<int, string> _nameCache = new();
-	private readonly SemaphoreSlim _apiGate = new(4, 4);
+	// 元数据与封面下载分开限流：名字/Store API 走 8 并发，封面下载走 6 并发
+	private readonly SemaphoreSlim _metaGate = new(8, 8);
+	private readonly SemaphoreSlim _coverGate = new(6, 6);
+	private readonly object _saveCacheLock = new();
+	private int _completedSinceSave;
 	private readonly ISettingsService _settingsService;
 	private int _selectedCdnIndex;
 	private int _selectedCdnFailCount;
@@ -143,12 +147,16 @@ public class SteamApiService : ISteamApiService
 
 	private void SaveCache()
 	{
-		try
+		// 增量落盘与批量结束可能并发触发，串行化避免写坏 gameinfo.json
+		lock (_saveCacheLock)
 		{
-			var json = JsonSerializer.Serialize(_nameCache, new JsonSerializerOptions { WriteIndented = true });
-			File.WriteAllText(_cacheFilePath, json);
+			try
+			{
+				var json = JsonSerializer.Serialize(_nameCache, new JsonSerializerOptions { WriteIndented = true });
+				File.WriteAllText(_cacheFilePath, json);
+			}
+			catch (Exception ex) { LogService.Warn("名称缓存", $"保存缓存失败: {ex.Message}"); }
 		}
-		catch (Exception ex) { LogService.Warn("名称缓存", $"保存缓存失败: {ex.Message}"); }
 	}
 
 	public void PopulateFromCache(List<GameInfo> games)
@@ -172,11 +180,13 @@ public class SteamApiService : ISteamApiService
 		Directory.CreateDirectory(_coversDir);
 		_selectedCdnFailCount = 0;
 
-		var needInfo = games.Where(g =>
+		// 过滤含同步文件 IO（Exists + 读头 12 字节），N 个游戏时扔后台线程，不占 UI；
+		// ConfigureAwait(false) 让后续扇出与回调用都留在池线程，整文件序列化落盘也不回 UI
+		var needInfo = await Task.Run(() => games.Where(g =>
 			string.IsNullOrEmpty(g.GameName) ||
 			g.GameName == $"AppID: {g.AppId}" ||
 			(fetchCover && !IsValidCoverFile(Path.Combine(_coversDir, $"{g.AppId}.jpg"))))
-			.ToList();
+			.ToList(), cancellationToken).ConfigureAwait(false);
 
 		if (needInfo.Count == 0) return;
 
@@ -217,16 +227,6 @@ public class SteamApiService : ISteamApiService
 	{
 		try
 		{
-			await _apiGate.WaitAsync(cancellationToken);
-		}
-		catch
-		{
-			game.IsLoading = false;
-			return;
-		}
-
-		try
-		{
 			game.IsLoading = true;
 
 			var needName = string.IsNullOrEmpty(game.GameName) || game.GameName == $"AppID: {game.AppId}";
@@ -239,6 +239,44 @@ public class SteamApiService : ISteamApiService
 			// 1. 优先通过 Store API 获取 header_image URL（同时获取名称）
 			if (needCover || needName)
 			{
+				headerUrl = await FetchMetaSectionAsync(game, needName, needCover, headerUrl, cancellationToken);
+			}
+
+			// 2. 封面下载：选中 CDN → Store API header_image → 其余 CDN（独立闸门）
+			if (needCover)
+			{
+				var cover = await DownloadCoverChainAsync(game.AppId, headerUrl, cancellationToken);
+				if (string.IsNullOrEmpty(cover))
+				{
+					// 第一轮扫空：闸门外等 2 秒再扫一轮，等待期间不占并发槽
+					try { await Task.Delay(2000, cancellationToken); } catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+					if (!cancellationToken.IsCancellationRequested)
+						cover = await DownloadCoverChainAsync(game.AppId, headerUrl, cancellationToken);
+				}
+				if (!string.IsNullOrEmpty(cover))
+					game.CoverImagePath = cover;
+			}
+		}
+		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+		catch (Exception ex)
+		{
+			LogService.Warn("封面", $"刷新游戏信息失败 (AppID {game.AppId}): {ex.Message}");
+		}
+		finally
+		{
+			game.IsLoading = false;
+			// 增量落盘：崩溃/取消也不丢已拿到的名字，下次接着补
+			if (Interlocked.Increment(ref _completedSinceSave) % 50 == 0)
+				SaveCache();
+		}
+	}
+
+	// 元数据段（Store API + 后备名字源）：独立闸门，进出配对释放
+	private async Task<string?> FetchMetaSectionAsync(GameInfo game, bool needName, bool needCover, string? headerUrl, CancellationToken cancellationToken)
+	{
+		await _metaGate.WaitAsync(cancellationToken);
+		try
+		{
 				var storeResult = await TryStoreApi(game.AppId, "schinese", cancellationToken);
 				if (needName && storeResult.Name != null)
 				{
@@ -287,56 +325,65 @@ public class SteamApiService : ISteamApiService
 						}
 					}
 				}
-			}
-
-			// 2. 封面下载：选中 CDN → Store API header_image → 其余 CDN
-			if (needCover)
-			{
-				string? cover = null;
-
-				// 用户选中了某个图片 CDN（非 Store API）→ 优先尝试
-				var cdnChain = BuildCdnUrlChain(game.AppId);
-				if (cdnChain.Count > 0)
-				{
-					cover = await DownloadCoverFromUrl(cdnChain[0], game.AppId, cancellationToken);
-					if (string.IsNullOrEmpty(cover))
-					{
-						_selectedCdnFailCount++;
-						if (_selectedCdnFailCount >= 3)
-							AutoSwitchCdn();
-					}
-					else
-					{
-						_selectedCdnFailCount = 0;
-					}
-				}
-
-				// Store API header_image 第二顺位
-				if (string.IsNullOrEmpty(cover) && headerUrl != null)
-					cover = await DownloadCoverFromUrl(headerUrl, game.AppId, cancellationToken);
-
-				// 其余 CDN 轮询（含选中 CDN 的重试）
-				if (string.IsNullOrEmpty(cover))
-				{
-					cover = await FetchCoverAsync(game.AppId, cancellationToken);
-					if (!string.IsNullOrEmpty(cover))
-						game.CoverImagePath = cover;
-				}
-				else
-				{
-					game.CoverImagePath = cover;
-				}
-			}
-		}
-		catch (Exception ex)
-		{
-			LogService.Warn("封面", $"刷新游戏信息失败 (AppID {game.AppId}): {ex.Message}");
 		}
 		finally
 		{
-			game.IsLoading = false;
-			_apiGate.Release();
+			_metaGate.Release();
 		}
+		return headerUrl;
+	}
+
+	// 封面链下载：闸门只罩住真实请求，两轮之间的 2 秒等待不占槽
+
+	private async Task<string?> DownloadCoverChainAsync(int appId, string? headerUrl, CancellationToken cancellationToken)
+	{
+		await _coverGate.WaitAsync(cancellationToken);
+		try
+		{
+			string? cover = null;
+
+			// 用户选中了某个图片 CDN（非 Store API）→ 优先尝试
+			var cdnChain = BuildCdnUrlChain(appId);
+			if (cdnChain.Count > 0)
+			{
+				cover = await DownloadCoverFromUrl(cdnChain[0], appId, cancellationToken);
+				if (string.IsNullOrEmpty(cover))
+				{
+					if (Interlocked.Increment(ref _selectedCdnFailCount) >= 3)
+						AutoSwitchCdn();
+				}
+				else
+				{
+					_selectedCdnFailCount = 0;
+				}
+			}
+
+			// Store API header_image 第二顺位
+			if (string.IsNullOrEmpty(cover) && headerUrl != null)
+				cover = await DownloadCoverFromUrl(headerUrl, appId, cancellationToken);
+
+			// 其余 CDN 轮询（含选中 CDN 的重试）
+			if (string.IsNullOrEmpty(cover))
+				cover = await SweepCoverAsync(appId, cdnChain, cancellationToken);
+			return cover;
+		}
+		finally
+		{
+			_coverGate.Release();
+		}
+	}
+
+	// 其余 CDN 单轮扫一遍；扫空且调用方还想重试时，由调用方在闸门外等待后再次调用
+	private async Task<string?> SweepCoverAsync(int appId, List<string> ordered, CancellationToken cancellationToken)
+	{
+		foreach (var url in ordered)
+		{
+			cancellationToken.ThrowIfCancellationRequested();
+			var local = await DownloadCoverFromUrl(url, appId, cancellationToken);
+			if (!string.IsNullOrEmpty(local))
+				return local;
+		}
+		return null;
 	}
 
 	private void AutoSwitchCdn()
@@ -554,46 +601,9 @@ public class SteamApiService : ISteamApiService
 			await File.WriteAllBytesAsync(localPath, bytes, cancellationToken);
 			return localPath;
 		}
+		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
 		catch (Exception ex) { LogService.Warn("封面", $"下载封面失败 (AppID {appId}): {ex.Message}"); }
 		return null;
 	}
 
-	private async Task<string?> FetchCoverAsync(int appId, CancellationToken cancellationToken)
-	{
-		Directory.CreateDirectory(_coversDir);
-		var localPath = Path.Combine(_coversDir, $"{appId}.jpg");
-		if (IsValidCoverFile(localPath))
-			return localPath;
-		if (File.Exists(localPath))
-			DeleteInvalidCover(localPath);
-
-		var ordered = BuildCdnUrlChain(appId);
-
-		for (int attempt = 0; attempt < 2; attempt++)
-		{
-			foreach (var url in ordered)
-			{
-				try
-				{
-					using var response = await _httpClientProvider.SendWithProxyRetryAsync(
-						"steam-api-cover",
-						TimeSpan.FromSeconds(15),
-						client => client.GetAsync(url, cancellationToken),
-						HttpHeaderHelper.ConfigureBrowserJson);
-					if (!response.IsSuccessStatusCode) continue;
-
-					var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
-					if (!IsValidImageBytes(bytes)) continue;
-
-					await File.WriteAllBytesAsync(localPath, bytes, cancellationToken);
-					return localPath;
-				}
-				catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
-				catch (Exception ex) { LogService.Warn("封面", $"CDN 封面获取失败 (AppID {appId}, {url}): {ex.Message}"); }
-			}
-			if (attempt == 0)
-				await Task.Delay(2000, cancellationToken);
-		}
-		return null;
-	}
 }
