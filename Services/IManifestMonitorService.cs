@@ -23,6 +23,11 @@ public class ManifestMonitorService : IManifestMonitorService
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(500);
     private const int MaxConcurrency = 3;
     private const int MaxSeen = 10000;
+    // 请求间隔：Steam 一次触发一批 depot，无间隔 3 并发全打出去必吃 429；
+    // 强制错开请求起始时间，并发槽照拿，只是起跑错峰
+    private static readonly TimeSpan RequestPacing = TimeSpan.FromMilliseconds(800);
+    private readonly object _paceLock = new();
+    private DateTime _lastRequestStartUtc = DateTime.MinValue;
 
     private readonly IManifestHubService _hubService;
     private readonly ISteamPathService _steamPathService;
@@ -72,6 +77,7 @@ public class ManifestMonitorService : IManifestMonitorService
         _noConnHinted = false;
         lock (_seenLock) { _seen.Clear(); }
         lock (_batchLock) { _batches.Clear(); }
+        _lastRequestStartUtc = DateTime.MinValue;
         _cts = new CancellationTokenSource();
         var ct = _cts.Token;
         _ = Task.Run(() => WatchLoop(logPath, ct), ct);
@@ -180,7 +186,8 @@ public class ManifestMonitorService : IManifestMonitorService
         {
             await _gate.WaitAsync(ct);
             gated = true;
-            var r = await _hubService.DownloadAsync(req.DepotId, req.ManifestId, _apiKey, ct);
+            await PaceAsync(ct);
+            var r = await _hubService.DownloadAsync(req.DepotId, req.ManifestId, _apiKey, ct, Emit);
             if (r.KeyInvalid)
             {
                 lock (_seenLock)
@@ -209,6 +216,29 @@ public class ManifestMonitorService : IManifestMonitorService
             if (gated) { try { _gate.Release(); } catch { } }
             BatchProgress(req, ok);
         }
+    }
+
+    // 起跑错峰：上一个请求未满间隔就等一等；预占下一起点，后到的顺延排队
+    private async Task PaceAsync(CancellationToken ct)
+    {
+        TimeSpan wait;
+        var now = DateTime.UtcNow;
+        lock (_paceLock)
+        {
+            var elapsed = now - _lastRequestStartUtc;
+            if (elapsed >= RequestPacing)
+            {
+                wait = TimeSpan.Zero;
+                _lastRequestStartUtc = now;
+            }
+            else
+            {
+                wait = RequestPacing - elapsed;
+                _lastRequestStartUtc = now + wait;
+            }
+        }
+        if (wait > TimeSpan.Zero)
+            await Task.Delay(wait, ct);
     }
 
     // 新请求记入所属 App 批次；返回 true 表示该 App 新开一波（提示用户等待）
