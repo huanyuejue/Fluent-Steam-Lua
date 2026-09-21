@@ -132,10 +132,22 @@ public sealed class AuthorizationService : IAuthorizationService
         if (eticketBytes.Length != eticket.Value.DeclaredBytes)
             return Fail($"eticket 声明 {eticket.Value.DeclaredBytes} 字节，实际解码 {eticketBytes.Length} 字节，长度不一致");
 
-        // AppTicket 内嵌校验：偏移 16 处小端 uint32 应等于 appid
-        var embeddedAppId = BitConverter.ToUInt32(appTicketBytes, 16);
-        if (embeddedAppId != appId)
-            return Fail($"appticket 内嵌 AppID {embeddedAppId} 与文件声明 {appId} 不一致，请确认 tickets.txt 与游戏对应");
+        // 内嵌 AppID 定位：Steam 只保证经 GetAppOwnershipTicketData 返回的偏移，
+        // 票据布局随类型变化（常规票据 AppID 在偏移 16；部分 D 加密标题不在 16，
+        // 实测 3489700 的票据 16 处为 7）。先走常规偏移，找不到再在票据内 4 字节
+        // 对齐扫描声明 appid——32 位随机命中的概率可忽略，首个命中即采纳并记录偏移。
+        var appIdOffset = LocateEmbeddedAppId(appTicketBytes, appId);
+        if (appIdOffset < 0)
+        {
+            LogMismatchForensics(appId, appTicketBytes);
+            return Fail($"appticket 内未找到声明 AppID {appId}（常规偏移 16 处为 " +
+                $"{BitConverter.ToUInt32(appTicketBytes, 16)}），该票据与当前游戏不对应，已停止导入。" +
+                "请用内置提取重新提取该游戏的票据；第三方加壳工具的票据布局不同，不支持导入。" +
+                "详情见 app.log（授权分类）。");
+        }
+        if (appIdOffset != 16)
+            Log("授权", $"appticket 内嵌 AppID 在非常规偏移 {appIdOffset} 处命中 " +
+                $"(偏移 16 处为 {BitConverter.ToUInt32(appTicketBytes, 16)})，已接受导入");
 
         // AppTicket 内嵌 SteamID：偏移 8 处小端 uint64，必须非零
         var steamId = BitConverter.ToUInt64(appTicketBytes, 8);
@@ -171,6 +183,36 @@ public sealed class AuthorizationService : IAuthorizationService
             : c is >= 'A' and <= 'F' ? c - 'A' + 10
             : throw new FormatException();
         return value;
+    }
+
+    // 在票据内定位声明 appid：常规偏移 16 优先，其余 4 字节对齐位置依次扫描
+    private static int LocateEmbeddedAppId(byte[] appTicketBytes, uint appId)
+    {
+        if (appTicketBytes.Length >= 20 && BitConverter.ToUInt32(appTicketBytes, 16) == appId)
+            return 16;
+        for (var off = 0; off + 4 <= appTicketBytes.Length; off += 4)
+        {
+            if (off == 16) continue;
+            if (BitConverter.ToUInt32(appTicketBytes, off) == appId)
+                return off;
+        }
+        return -1;
+    }
+
+    // 内嵌校验失败时记录取证信息：只记票据头部与各偏移 u32，不记完整票据，避免日志膨胀
+    private static void LogMismatchForensics(uint appId, byte[] appTicketBytes)
+    {
+        try
+        {
+            var headLen = Math.Min(appTicketBytes.Length, 48);
+            var headHex = Convert.ToHexString(appTicketBytes, 0, headLen);
+            var words = new List<string>();
+            for (var off = 0; off + 4 <= appTicketBytes.Length && off <= 24; off += 4)
+                words.Add($"[{off}]={BitConverter.ToUInt32(appTicketBytes, off)}");
+            Log("授权", $"内嵌校验失败：声明 {appId}，票据 {appTicketBytes.Length}B，" +
+                $"头 {headLen}B={headHex}，u32 偏移值：{string.Join(" ", words)}");
+        }
+        catch { }
     }
 
     private static TicketParseResult Fail(string error) => new(false, error);

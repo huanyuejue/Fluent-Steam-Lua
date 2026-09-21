@@ -235,7 +235,7 @@ internal static class TicketWorkerNative
         {
             var written = getAppOwnershipTicketData(
                 appTicketInterface, appId, buffer, 2048,
-                out _, out var steamIdOffset, out _, out _);
+                out var appIdOffset, out var steamIdOffset, out _, out _);
             if (written == 0 || written > 2048)
                 return Error($"未获取到所有权票据（AppID {appId}）。请确认当前账号拥有该游戏并已在本机缓存授权信息，且 Steam 处于运行状态");
 
@@ -249,6 +249,11 @@ internal static class TicketWorkerNative
                 ? (ulong)Marshal.ReadInt64(buffer, (int)steamIdOffset)
                 : 0UL;
             Log("提取", $"当前账号 SteamID: {accountSteamId}");
+            // Steam 返回的才是真偏移（布局随票据类型变化，不一定是 appid@16/steamid@8），记下来备查
+            var embeddedAppId = appIdOffset + 4 <= written
+                ? (uint)Marshal.ReadInt32(buffer, (int)appIdOffset)
+                : 0;
+            Log("提取", $"Steam 报告偏移 appid@{appIdOffset} steamid@{steamIdOffset}，内嵌 AppID: {embeddedAppId}（请求 {appId}）");
 
             // ===== ETicket（请求 + 轮询 + 读取）=====
             var getUtils = GetSlot<NativeGetISteamUtils>(_clientPtr, 9);
