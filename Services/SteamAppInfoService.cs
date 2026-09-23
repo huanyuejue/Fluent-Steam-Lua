@@ -4,7 +4,8 @@ namespace SteamLuaManager.Services;
 
 /// <summary>
 /// 通过 SteamKit2 匿名登录 + AppAccessToken 向 Steam 服务器查询完整 appinfo 的兜底实现。
-/// 连接与登录为惰性单例，程序生命周期内复用同一条连接，多次查询走同一回调循环。
+/// 连接与登录为惰性单例，程序生命周期内复用同一条连接，多次查询走同一回调循环；
+/// 服务器踢线/网络抖动导致断开后下次查询自动重连，不锁死。
 /// </summary>
 public sealed class SteamAppInfoService : ISteamAppInfoService, IDisposable
 {
@@ -14,11 +15,12 @@ public sealed class SteamAppInfoService : ISteamAppInfoService, IDisposable
     private readonly Lazy<SteamApps> _apps;
 
     private volatile bool _loggedOn;
-    private volatile bool _disconnected;
+    private volatile bool _disposed;
     private Task? _callbackLoop;
     private CancellationTokenSource? _loopCts;
     private readonly SemaphoreSlim _logonLock = new(1, 1);
-    private readonly TaskCompletionSource _firstLogonTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private bool _handlersAttached;
+    private TaskCompletionSource? _logonTcs;
     private const double CallbackTimeoutSeconds = 20;
 
     public SteamAppInfoService()
@@ -32,7 +34,7 @@ public sealed class SteamAppInfoService : ISteamAppInfoService, IDisposable
 
     public void Dispose()
     {
-        _disconnected = true;
+        _disposed = true;
         try { _loopCts?.Cancel(); } catch { }
         try { _loopCts?.Dispose(); } catch { }
         _loopCts = null;
@@ -45,38 +47,53 @@ public sealed class SteamAppInfoService : ISteamAppInfoService, IDisposable
         _logonLock.Dispose();
     }
 
-    /// <summary>确保已连接并匿名登录。连接建立后可复用多次查询。</summary>
+    /// <summary>确保已连接并匿名登录。已登录直接复用；断开后自动重连，不锁死。</summary>
     private async Task<bool> EnsureLoggedOnAsync(CancellationToken ct = default)
     {
         if (_loggedOn) return true;
 
-        await _logonLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            if (_loggedOn) return true;
-            if (_disconnected) throw new InvalidOperationException("Steam 连接已断开，无法重连");
-
-            if (_callbackLoop == null || _callbackLoop.IsCompleted)
-            {
-                AttachLogonHandlers();
-                _loopCts?.Dispose();
-                _loopCts = new CancellationTokenSource();
-                var token = _loopCts.Token;
-                _callbackLoop = Task.Run(() => RunCallbackLoop(token), token);
-                _client.Value.Connect();
-            }
-
-            if (_firstLogonTcs.Task.IsCompleted) return _loggedOn;
-
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(CallbackTimeoutSeconds));
-            using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, timeout.Token);
-            await _firstLogonTcs.Task.WaitAsync(linked.Token).ConfigureAwait(false);
-            return _loggedOn;
+            await _logonLock.WaitAsync(ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
-            LogService.Warn("AppInfo", "等待 Steam 登录超时或已取消");
             return false;
+        }
+        try
+        {
+            if (_loggedOn) return true;
+            if (_disposed) throw new ObjectDisposedException(nameof(SteamAppInfoService));
+
+            EnsureLoopStarted();
+
+            // 每次连接尝试用新的 TCS 等待本次登录结果：旧 TCS 可能已被上一次会话消费，
+            // 复用会导致不断开连接就直接返回旧结果。旧会话的滞后回调若误触新 TCS，
+            // 最多浪费一轮，下次查询会自动再试，自愈收敛。
+            var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            _logonTcs = tcs;
+            try
+            {
+                _client.Value.Connect();
+            }
+            catch (Exception ex)
+            {
+                LogService.Warn("AppInfo", $"发起 Steam 连接失败: {ex.Message}");
+                return false;
+            }
+
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(CallbackTimeoutSeconds));
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, timeout.Token);
+            try
+            {
+                await tcs.Task.WaitAsync(linked.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                LogService.Warn("AppInfo", "等待 Steam 登录超时或已取消");
+                return false;
+            }
+            return _loggedOn;
         }
         finally
         {
@@ -84,9 +101,25 @@ public sealed class SteamAppInfoService : ISteamAppInfoService, IDisposable
         }
     }
 
+    private void EnsureLoopStarted()
+    {
+        if (!_handlersAttached)
+        {
+            AttachLogonHandlers();
+            _handlersAttached = true;
+        }
+        if (_callbackLoop == null || _callbackLoop.IsCompleted)
+        {
+            _loopCts?.Dispose();
+            _loopCts = new CancellationTokenSource();
+            var token = _loopCts.Token;
+            _callbackLoop = Task.Run(() => RunCallbackLoop(token), token);
+        }
+    }
+
     private void RunCallbackLoop(CancellationToken ct)
     {
-        while (!ct.IsCancellationRequested && !_disconnected)
+        while (!ct.IsCancellationRequested && !_disposed)
         {
             try
             {
@@ -107,15 +140,15 @@ public sealed class SteamAppInfoService : ISteamAppInfoService, IDisposable
         _manager.Value.Subscribe<SteamUser.LoggedOnCallback>(cb =>
         {
             _loggedOn = cb.Result == EResult.OK;
-            if (!_firstLogonTcs.Task.IsCompleted)
-                _firstLogonTcs.TrySetResult();
+            if (!_loggedOn)
+                LogService.Warn("AppInfo", $"Steam 匿名登录失败：{cb.Result}");
+            _logonTcs?.TrySetResult();
         });
         _manager.Value.Subscribe<SteamClient.DisconnectedCallback>(cb =>
         {
-            _disconnected = true;
             _loggedOn = false;
-            if (!_firstLogonTcs.Task.IsCompleted)
-                _firstLogonTcs.TrySetResult();
+            // 只唤醒当前等待者按失败处理，不再锁死：下次查询会自动重连
+            _logonTcs?.TrySetResult();
         });
     }
 
