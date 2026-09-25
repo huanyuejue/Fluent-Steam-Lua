@@ -438,12 +438,23 @@ public partial class MainWindow : Window
         _kernelCts?.Cancel();
     }
 
-    private void UpdateBackdrop(string backdropTypeName)
+    // 背景材质只影响美观，任何异常都回退纯色不断运行；
+    // 材质在部分机器（远程桌面/基础显示驱动/异 DPI）首帧布局阶段翻车，
+    // 之前是 XAML 硬编码导致崩在 Show 之前，连兜底都来不及
+    public void UpdateBackdrop(string backdropTypeName)
     {
         if (!Enum.TryParse<BackdropType>(backdropTypeName, true, out var backdropType))
-            return;
+            backdropType = BackdropType.None;
 
-        WindowHelper.SetSystemBackdropType(this, backdropType);
+        try
+        {
+            WindowHelper.SetSystemBackdropType(this, backdropType);
+        }
+        catch (Exception ex)
+        {
+            LogService.Warn("界面", $"应用背景材质 {backdropType} 失败，已回退纯色：{ex.Message}");
+            backdropType = BackdropType.None;
+        }
 
         if (backdropType == BackdropType.None)
         {

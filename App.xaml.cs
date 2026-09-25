@@ -1,6 +1,8 @@
 ﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Interop;
+using System.Windows.Media;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -45,6 +47,19 @@ public partial class App : Application
         }
         catch { }
         return ApplicationTheme.Dark;
+    }
+
+    // 启动环境打点：窗口打不开 99% 是环境问题，屏幕/DPI/背景材质先记下来，
+    // 下次再有人报同类问题直接比对，不用猜
+    private static void LogStartupEnvironment()
+    {
+        try
+        {
+            LogService.Info("系统", $"屏幕: 虚拟{SystemParameters.VirtualScreenWidth}x{SystemParameters.VirtualScreenHeight} " +
+                $"主屏{SystemParameters.PrimaryScreenWidth}x{SystemParameters.PrimaryScreenHeight}，" +
+                $"软件渲染: {RenderOptions.ProcessRenderMode == RenderMode.SoftwareOnly}");
+        }
+        catch (Exception ex) { LogService.Warn("系统", $"读取屏幕信息失败: {ex.Message}"); }
     }
 
     protected override void OnStartup(StartupEventArgs e)
@@ -124,6 +139,7 @@ public partial class App : Application
         var steamPathService = ServiceProvider.GetRequiredService<ISteamPathService>();
         LogService.Info("系统", $"Steam 路径: {steamPathService.DetectSteamPath() ?? "未检测到"}");
         RegisterGlobalLogging();
+        LogStartupEnvironment();
         var mainWindow = ServiceProvider.GetRequiredService<MainWindow>();
 
         switch (settings.SelectedTheme)
@@ -139,7 +155,34 @@ public partial class App : Application
                 break;
         }
 
-        mainWindow.Show();
+        // 首帧布局崩溃兜底：个别机器（远程桌面/基础显示驱动/异 DPI）上
+        // 亚克力背景或硬件渲染会导致 Show 直接炸，降级再试一次，
+        // 还不行才弹框（带日志路径），不再静默死
+        try
+        {
+            mainWindow.Show();
+        }
+        catch (Exception ex)
+        {
+            LogService.Error("系统", $"主窗口显示失败，尝试兼容模式（软件渲染+纯色背景）: {ex}");
+            try
+            {
+                RenderOptions.ProcessRenderMode = RenderMode.SoftwareOnly;
+                mainWindow.UpdateBackdrop("None");
+                mainWindow.Show();
+            }
+            catch (Exception ex2)
+            {
+                LogService.Error("系统", $"兼容模式仍无法显示主窗口: {ex2}");
+                System.Windows.MessageBox.Show(
+                    $"程序窗口无法显示，请把软件目录的 app.log 发给作者排查。\n\n错误：{ex2.Message}",
+                    "Fluent Steam Lua 管理工具",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+                Shutdown(1);
+                return;
+            }
+        }
 
         var autoLaunch = ServiceProvider.GetRequiredService<ITrainerAutoLaunchService>();
         autoLaunch.Start();
