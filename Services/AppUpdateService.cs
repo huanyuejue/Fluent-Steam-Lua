@@ -152,6 +152,7 @@ public class AppUpdateService : IAppUpdateService
                         throw new InvalidOperationException("更新包内路径非法，已终止更新");
                     Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
                     entry.ExtractToFile(dest, overwrite: true);
+                    try { File.SetAttributes(dest, FileAttributes.Normal); } catch { }
                 }
             }
 
@@ -196,6 +197,7 @@ public class AppUpdateService : IAppUpdateService
                     continue;
                 Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
                 entry.ExtractToFile(dest, overwrite: true);
+                try { File.SetAttributes(dest, FileAttributes.Normal); } catch { }
             }
 
             var updaterExe = Path.Combine(updaterDir, "Updater.exe");

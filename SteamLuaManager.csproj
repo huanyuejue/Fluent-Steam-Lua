@@ -61,6 +61,13 @@
     <Compile Include="obj\Generated\FeedbackSecrets.g.cs" />
   </ItemGroup>
 
+  <!-- 内嵌更新器与源码同步：每次构建自动重新打包，避免改了 Updater 源码却发出去旧版 -->
+  <Target Name="BuildUpdaterForEmbed" BeforeTargets="BeforeBuild">
+    <Exec Command="dotnet publish $(ProjectDir)Updater\Updater.csproj -c $(Configuration) -o $(ProjectDir)Resources\UpdaterPublish" />
+    <ZipDirectory SourceDirectory="$(ProjectDir)Resources\UpdaterPublish" DestinationFile="$(ProjectDir)Resources\Updater.zip" Overwrite="true" />
+    <RemoveDir Directories="$(ProjectDir)Resources\UpdaterPublish" />
+  </Target>
+
   <Target Name="BuildSvcMonitorForEmbed" BeforeTargets="BeforeBuild">
     <Exec Command="dotnet publish $(ProjectDir)SvcMonitor\SvcMonitor.csproj -c $(Configuration) -o $(ProjectDir)Resources\SvcMonitorPublish" />
     <ZipDirectory SourceDirectory="$(ProjectDir)Resources\SvcMonitorPublish"
