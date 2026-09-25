@@ -909,12 +909,17 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
                 },
                 client =>
                 {
-                    if (client.DefaultRequestHeaders.UserAgent.Any()) return;
-                    // 探活请求复刻内核发包条件，有 UA 门禁的源缺失 UA 会被直接拦截
+                    // 专属 UA 优先：实例创建时已带默认浏览器 UA，不清掉就永远轮不到专属 UA
+                    // （manifestdex 只认 ManifestDeX/1.0，其他 UA 一律 403）
                     if (!string.IsNullOrEmpty(opt.UserAgent))
+                    {
+                        client.DefaultRequestHeaders.UserAgent.Clear();
                         client.DefaultRequestHeaders.UserAgent.ParseAdd(opt.UserAgent);
-                    else
+                    }
+                    else if (!client.DefaultRequestHeaders.UserAgent.Any())
+                    {
                         HttpHeaderHelper.ConfigureApp(client);
+                    }
                 });
             sw.Stop();
             // 按内核解析请求码的口径判定：拿到有效数字才算可用，502/CF 拦截/业务错误均视为不可用
