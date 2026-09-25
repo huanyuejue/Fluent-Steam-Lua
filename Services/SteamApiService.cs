@@ -14,9 +14,11 @@ public class SteamApiService : ISteamApiService
 	private readonly string _coversDir;
 	private readonly string _cacheFilePath;
 	private ConcurrentDictionary<int, string> _nameCache = new();
-	// 元数据与封面下载分开限流：名字/Store API 走 8 并发，封面下载走 6 并发
+	// 元数据与封面下载分开限流：名字/Store API 走 8 并发，封面下载走 6 并发；
+	// 社区页回退单独 2 并发——8 并发打过去必吃 429（已在现网复现）
 	private readonly SemaphoreSlim _metaGate = new(8, 8);
 	private readonly SemaphoreSlim _coverGate = new(6, 6);
+	private readonly SemaphoreSlim _communityGate = new(2, 2);
 	private readonly object _saveCacheLock = new();
 	private int _completedSinceSave;
 	private readonly ISettingsService _settingsService;
@@ -164,7 +166,8 @@ public class SteamApiService : ISteamApiService
 		Directory.CreateDirectory(_coversDir);
 		foreach (var game in games)
 		{
-			if (_nameCache.TryGetValue(game.AppId, out var name) && !name.StartsWith("AppID:"))
+			// 缓存里的毒名字（历史版本误存的 "Error" 等）不采用，留给正文重取
+			if (_nameCache.TryGetValue(game.AppId, out var name) && !name.StartsWith("AppID:") && !IsJunkGameName(name))
 				game.GameName = name;
 
 			var coverPath = Path.Combine(_coversDir, $"{game.AppId}.jpg");
@@ -185,6 +188,7 @@ public class SteamApiService : ISteamApiService
 		var needInfo = await Task.Run(() => games.Where(g =>
 			string.IsNullOrEmpty(g.GameName) ||
 			g.GameName == $"AppID: {g.AppId}" ||
+			IsJunkGameName(g.GameName) ||
 			(fetchCover && !IsValidCoverFile(Path.Combine(_coversDir, $"{g.AppId}.jpg"))))
 			.ToList(), cancellationToken).ConfigureAwait(false);
 
@@ -211,9 +215,9 @@ public class SteamApiService : ISteamApiService
 
 		await RefreshOneGameAsync(game, cancellationToken);
 
-		if (string.IsNullOrEmpty(game.GameName) || game.GameName == $"AppID: {game.AppId}")
+		if (string.IsNullOrEmpty(game.GameName) || game.GameName == $"AppID: {game.AppId}" || IsJunkGameName(game.GameName))
 		{
-			if (!string.IsNullOrEmpty(oldName) && !oldName.StartsWith("AppID:"))
+			if (!string.IsNullOrEmpty(oldName) && !oldName.StartsWith("AppID:") && !IsJunkGameName(oldName))
 			{
 				game.GameName = oldName;
 				_nameCache[game.AppId] = oldName;
@@ -229,7 +233,7 @@ public class SteamApiService : ISteamApiService
 		{
 			game.IsLoading = true;
 
-			var needName = string.IsNullOrEmpty(game.GameName) || game.GameName == $"AppID: {game.AppId}";
+			var needName = string.IsNullOrEmpty(game.GameName) || game.GameName == $"AppID: {game.AppId}" || IsJunkGameName(game.GameName);
 			var coverPath = Path.Combine(_coversDir, $"{game.AppId}.jpg");
 			var needCover = fetchCover && !IsValidCoverFile(coverPath);
 			if (needCover && File.Exists(coverPath))
@@ -346,10 +350,11 @@ public class SteamApiService : ISteamApiService
 			var cdnChain = BuildCdnUrlChain(appId);
 			if (cdnChain.Count > 0)
 			{
-				cover = await DownloadCoverFromUrl(cdnChain[0], appId, cancellationToken);
+				var (first, nodeFailed) = await DownloadCoverFromUrl(cdnChain[0], appId, cancellationToken);
+				cover = first;
 				if (string.IsNullOrEmpty(cover))
 				{
-					if (Interlocked.Increment(ref _selectedCdnFailCount) >= 3)
+					if (nodeFailed && TryCountCdnFailure())
 						AutoSwitchCdn();
 				}
 				else
@@ -358,9 +363,9 @@ public class SteamApiService : ISteamApiService
 				}
 			}
 
-			// Store API header_image 第二顺位
+			// Store API header_image 第二顺位（官方直链，失败不计入切源）
 			if (string.IsNullOrEmpty(cover) && headerUrl != null)
-				cover = await DownloadCoverFromUrl(headerUrl, appId, cancellationToken);
+				(cover, _) = await DownloadCoverFromUrl(headerUrl, appId, cancellationToken);
 
 			// 其余 CDN 轮询（含选中 CDN 的重试）
 			if (string.IsNullOrEmpty(cover))
@@ -379,11 +384,26 @@ public class SteamApiService : ISteamApiService
 		foreach (var url in ordered)
 		{
 			cancellationToken.ThrowIfCancellationRequested();
-			var local = await DownloadCoverFromUrl(url, appId, cancellationToken);
+			var (local, _) = await DownloadCoverFromUrl(url, appId, cancellationToken);
 			if (!string.IsNullOrEmpty(local))
 				return local;
 		}
 		return null;
+	}
+
+	// 转完一轮回到 Store API 后 10 分钟内不再自动切换：节点全灭时多半是网络整体问题，
+	// 无冷却会每个批次都转一圈，日志刷屏且反复写设置
+	private DateTime _autoSwitchCooldownUntil = DateTime.MinValue;
+
+	private bool TryCountCdnFailure()
+	{
+		// 冷却期内不清零计数会让攒的老数加速下次切换，直接清掉重算
+		if (DateTime.UtcNow < _autoSwitchCooldownUntil)
+		{
+			_selectedCdnFailCount = 0;
+			return false;
+		}
+		return Interlocked.Increment(ref _selectedCdnFailCount) >= 3;
 	}
 
 	private void AutoSwitchCdn()
@@ -403,14 +423,15 @@ public class SteamApiService : ISteamApiService
 				return;
 			}
 		}
-		// 没有更多可用节点，重置到 Store API
+		// 没有更多可用节点，重置到 Store API 并冷却
 		_selectedCdnIndex = 0;
 		_selectedCdnFailCount = 0;
+		_autoSwitchCooldownUntil = DateTime.UtcNow.AddMinutes(10);
 		var s = _settingsService.Load();
 		s.SelectedCdnIndex = 0;
 		_settingsService.Save(s);
 		CdnAutoSwitched?.Invoke(0);
-		LogService.Warn("封面", $"所有 CDN 节点均不可用，已重置为 Store API");
+		LogService.Warn("封面", $"所有 CDN 节点均不可用，已重置为 Store API（10 分钟内不再自动切换）");
 	}
 
 	private static bool IsValidCoverFile(string path)
@@ -456,6 +477,30 @@ public class SteamApiService : ISteamApiService
 			game.CoverImagePath = string.Empty;
 	}
 
+	// appdetails 有时会以重定向后的 AppID 做 key（如 3669870 返回的 key 是 4760190）；
+	// 精确 key 优先，缺席时取首个 success 项，但要求 data.steam_appid 对得上才认，防止串 game
+	private static bool TryGetAppNode(JsonElement root, int appId, out JsonElement node)
+	{
+		node = default;
+		if (root.ValueKind != System.Text.Json.JsonValueKind.Object) return false;
+		if (root.TryGetProperty(appId.ToString(), out var exact))
+		{
+			node = exact;
+			return true;
+		}
+		foreach (var prop in root.EnumerateObject())
+		{
+			var v = prop.Value;
+			if (v.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
+			if (!v.TryGetProperty("success", out var s) || !s.GetBoolean()) continue;
+			if (!v.TryGetProperty("data", out var data)) continue;
+			if (data.TryGetProperty("steam_appid", out var id) && id.GetInt32() != appId) continue;
+			node = v;
+			return true;
+		}
+		return false;
+	}
+
 	private async Task<(string? Name, string? HeaderUrl)> TryStoreApi(int appId, string lang, CancellationToken cancellationToken)
 	{
 		using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -471,7 +516,7 @@ public class SteamApiService : ISteamApiService
 			using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cts.Token);
 			var root = doc.RootElement;
 
-			if (root.TryGetProperty(appId.ToString(), out var app) &&
+			if (TryGetAppNode(root, appId, out var app) &&
 				app.TryGetProperty("success", out var ok) && ok.GetBoolean() &&
 				app.TryGetProperty("data", out var data))
 			{
@@ -507,7 +552,7 @@ public class SteamApiService : ISteamApiService
 			using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cts.Token);
 			var root = doc.RootElement;
 
-			if (root.TryGetProperty(appId.ToString(), out var app) &&
+			if (TryGetAppNode(root, appId, out var app) &&
 				app.TryGetProperty("success", out var ok) && ok.GetBoolean() &&
 				app.TryGetProperty("data", out var data) &&
 				data.TryGetProperty("release_date", out var releaseDate) &&
@@ -525,6 +570,12 @@ public class SteamApiService : ISteamApiService
 			LogService.Warn("Steam API", $"coming_soon 查询失败 (AppID {appId}): {ex.Message}");
 		}
 		return null;
+	}
+
+	public async Task<string?> GetFallbackGameNameAsync(int appId, CancellationToken cancellationToken = default)
+	{
+		return await TrySteamSpy(appId, cancellationToken)
+			?? await TrySteamCommunity(appId, cancellationToken);
 	}
 
 	private async Task<string?> TrySteamSpy(int appId, CancellationToken cancellationToken)
@@ -545,8 +596,18 @@ public class SteamApiService : ISteamApiService
 		return null;
 	}
 
+	// 错误页/挑战页标题不是游戏名，直接拒掉，免得 "Error" 之类写入缓存 anden 出现在卡片上
+	private static bool IsJunkGameName(string? name) =>
+		string.IsNullOrWhiteSpace(name) ||
+		name.Equals("Error", StringComparison.OrdinalIgnoreCase) ||
+		name.Equals("Steam Community", StringComparison.OrdinalIgnoreCase) ||
+		name.Contains("Just a moment", StringComparison.OrdinalIgnoreCase) ||
+		name.Contains("Access Denied", StringComparison.OrdinalIgnoreCase) ||
+		name.Contains("Attention Required", StringComparison.OrdinalIgnoreCase);
+
 	private async Task<string?> TrySteamCommunity(int appId, CancellationToken cancellationToken)
 	{
+		await _communityGate.WaitAsync(cancellationToken);
 		try
 		{
 			var url = $"https://steamcommunity.com/app/{appId}?l=english";
@@ -565,24 +626,40 @@ public class SteamApiService : ISteamApiService
 			if (end < 0) return null;
 
 			var title = html[start..end];
+			// 社区游戏页标题固定为 "Steam Community :: 游戏名"，取 :: 之后才是真名；
+			// 之前取之前会把所有游戏都解析成 "Steam Community"
+			string? name = null;
 			var sep = title.IndexOf(" :: ", StringComparison.OrdinalIgnoreCase);
-			if (sep > 0) return title[..sep].Trim();
+			if (sep >= 0)
+				name = title[(sep + 4)..].Trim();
 
-			sep = title.LastIndexOf(" - ", StringComparison.OrdinalIgnoreCase);
-			if (sep > 0) return title[..sep].Trim();
-
-			return title.Trim();
+			if (string.IsNullOrEmpty(name))
+			{
+				sep = title.LastIndexOf(" - ", StringComparison.OrdinalIgnoreCase);
+				name = sep > 0 ? title[..sep].Trim() : title.Trim();
+			}
+			return IsJunkGameName(name) ? null : name;
 		}
-		catch (Exception ex) { LogService.Warn("Steam API", $"steamcommunity 请求失败 (AppID {appId}): {ex.Message}"); }
-		return null;
+		catch (Exception ex)
+		{
+			LogService.Warn("Steam API", $"steamcommunity 请求失败 (AppID {appId}): {ex.Message}");
+			return null;
+		}
+		finally
+		{
+			_communityGate.Release();
+		}
 	}
 
-	private async Task<string?> DownloadCoverFromUrl(string url, int appId, CancellationToken cancellationToken)
+	// 返回（落盘路径，是否节点级失败）：超时/连接异常/5xx/429/403 算节点问题，计入自动切源；
+	// 404/400/内容非法算该游戏缺图，不怪节点——老模板 URL 对新老游戏普遍 404，
+	// 不区分的话几个游戏就能把计数器顶满，无限切源
+	private async Task<(string? Path, bool NodeFailed)> DownloadCoverFromUrl(string url, int appId, CancellationToken cancellationToken)
 	{
 		Directory.CreateDirectory(_coversDir);
 		var localPath = Path.Combine(_coversDir, $"{appId}.jpg");
 		if (IsValidCoverFile(localPath))
-			return localPath;
+			return (localPath, false);
 		if (File.Exists(localPath))
 			DeleteInvalidCover(localPath);
 
@@ -593,17 +670,24 @@ public class SteamApiService : ISteamApiService
 				TimeSpan.FromSeconds(15),
 				client => client.GetAsync(url, cancellationToken),
 				HttpHeaderHelper.ConfigureBrowserJson);
-			if (!response.IsSuccessStatusCode) return null;
+			if (response.StatusCode == System.Net.HttpStatusCode.NotFound ||
+				response.StatusCode == System.Net.HttpStatusCode.BadRequest)
+				return (null, false);
+			if (!response.IsSuccessStatusCode)
+				return (null, true);
 
 			var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
-			if (!IsValidImageBytes(bytes)) return null;
+			if (!IsValidImageBytes(bytes)) return (null, false);
 
 			await File.WriteAllBytesAsync(localPath, bytes, cancellationToken);
-			return localPath;
+			return (localPath, false);
 		}
 		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
-		catch (Exception ex) { LogService.Warn("封面", $"下载封面失败 (AppID {appId}): {ex.Message}"); }
-		return null;
+		catch (Exception ex)
+		{
+			LogService.Warn("封面", $"下载封面失败 (AppID {appId}): {ex.Message}");
+			return (null, true);
+		}
 	}
 
 }

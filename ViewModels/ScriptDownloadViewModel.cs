@@ -131,13 +131,21 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
         LogLines.Clear();
         AddLog($"搜索：{query}");
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(7));
+        // 回退链（中→英→Spy→社区）走完要几秒，总限时从 7 秒放宽到 15 秒
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
 
         try
         {
             if (int.TryParse(query, out int appId))
             {
                 var (name, headerImage) = await GetAppNameAsync(appId, cts.Token);
+                // 商店下架的游戏 appdetails 无数据，用备用源再捞一次名字
+                if (name == null)
+                {
+                    name = await _steamApiService.GetFallbackGameNameAsync(appId, cts.Token);
+                    if (name != null)
+                        AddLog($"商店无数据，备用源解析到名称：{name}");
+                }
                 if (name != null)
                 {
                     // header_image 为哈希 CDN 完整 URL；缺失时回退老模板（对早期游戏仍有效）
@@ -150,8 +158,14 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
                 }
                 else
                 {
-                    AddLog($"未找到 AppId 对应的游戏：{appId}");
-                    StatusMessage = "未找到匹配的游戏";
+                    // 所有名源都查不到（如已下架且社区页也被清）：名字只是展示用，
+                    // 仓库密钥走独立接口，用 AppID 占位放行，不挡入库
+                    AddLog($"未查到 AppID {appId} 的名称（可能已下架），以 AppID 占位继续，入库不受影响");
+                    SearchResults.Add(new FoundGame(
+                        appId,
+                        $"AppID: {appId}",
+                        $"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/header.jpg"));
+                    StatusMessage = "未查到名称，已用 AppID 占位";
                 }
             }
             else
@@ -161,7 +175,7 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
         }
         catch (OperationCanceledException)
         {
-            AddLog("搜索超时（7秒），请检查网络连接");
+            AddLog("搜索超时（15秒），请检查网络连接");
             AddLog("建议：尝试开启VPN或代理后重试");
             StatusMessage = "搜索超时，请检查网络";
         }
@@ -178,32 +192,59 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
 
     private async Task<(string? Name, string? HeaderImage)> GetAppNameAsync(int appId, CancellationToken ct = default)
     {
-        try
+        // 中文优先、查不到转英文；Steam 会对合服/改 ID 的游戏返回重定向后的 AppID 做 key，
+        // 精确 key 命中失败时取首个 success 项（如 3669870 返回的 key 是 4760190）
+        foreach (var lang in new[] { "schinese", "english" })
         {
-            var url = $"https://store.steampowered.com/api/appdetails?appids={appId}&l=schinese";
-            var json = await _httpClientProvider.SendWithProxyRetryAsync(
-                "script-steam-store",
-                TimeSpan.FromSeconds(10),
-                client => client.GetStringAsync(url, ct),
-                ConfigureSteamStoreHeaders);
-
-            using var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement.GetProperty(appId.ToString());
-            if (root.TryGetProperty("data", out var data) && data.TryGetProperty("name", out var name))
+            try
             {
-                var headerImage = data.TryGetProperty("header_image", out var img)
-                    ? img.GetString()
-                    : null;
-                return (name.GetString(), headerImage);
+                var url = $"https://store.steampowered.com/api/appdetails?appids={appId}&l={lang}";
+                var json = await _httpClientProvider.SendWithProxyRetryAsync(
+                    "script-steam-store",
+                    TimeSpan.FromSeconds(10),
+                    client => client.GetStringAsync(url, ct),
+                    ConfigureSteamStoreHeaders);
+
+                using var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.ValueKind == JsonValueKind.Object)
+                {
+                    // 精确 key 优先；精确 key 缺席时才采纳其他 success 项（纯重定向场景），
+                    // 避免精确 key 存在但无数据时串到别的游戏
+                    var candidates = new List<JsonElement>();
+                    if (doc.RootElement.TryGetProperty(appId.ToString(), out var exact))
+                    {
+                        candidates.Add(exact);
+                    }
+                    else
+                    {
+                        foreach (var prop in doc.RootElement.EnumerateObject())
+                        {
+                            if (prop.Value.ValueKind == JsonValueKind.Object &&
+                                prop.Value.TryGetProperty("success", out var s) && s.GetBoolean())
+                                candidates.Add(prop.Value);
+                        }
+                    }
+                    foreach (var root in candidates)
+                    {
+                        if (!root.TryGetProperty("data", out var data) || !data.TryGetProperty("name", out var name))
+                            continue;
+                        var headerImage = data.TryGetProperty("header_image", out var img)
+                            ? img.GetString()
+                            : null;
+                        var gameName = name.GetString();
+                        if (!string.IsNullOrWhiteSpace(gameName))
+                            return (gameName, headerImage);
+                    }
+                }
             }
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            LogService.Warn("入库", $"GetAppNameAsync 失败 AppID {appId}: {ex.Message}");
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                LogService.Warn("入库", $"GetAppNameAsync 失败 AppID {appId} ({lang}): {ex.Message}");
+            }
         }
         return (null, null);
     }
