@@ -10,16 +10,17 @@ namespace SteamLuaManager.Services;
 // 再从官方 Steam CDN 下载 manifest 文件。失败/超时才试下一个源，挂掉的源冷却 60s。
 public sealed class CodeCdnManifestFetcher : IManifestFetcher
 {
-    private sealed record CodeSource(string Name, string UrlTemplate, bool NeedsDepot, bool UseManifestDexUa, bool IsSteamRunJson);
+    private sealed record CodeSource(string Name, string UrlTemplate, bool UseManifestDexUa, bool IsSteamRunJson);
 
     // 顺序即顺位：20770407 → SDM → manifestdex → wudrm → steamrun（opensteamtool 不用）
+    // 模板统一用 {0}=depot、{1}=gid，多余参数会被 Format 忽略
     private static readonly CodeSource[] Sources =
     [
-        new("20770407", "https://20770407.xyz/manifest/{0}/{1}", true, false, false),
-        new("SDM", "https://steamapi.993499094.xyz/manifest/{0}/{1}", true, false, false),
-        new("manifestdex", "https://manifest.manifestdex.com/{0}", false, true, false),
-        new("wudrm", "http://gmrc.wudrm.com/manifest/{0}", false, false, false),
-        new("steamrun", "https://manifest.steam.run/api/manifest/{0}", false, false, true),
+        new("20770407", "https://20770407.xyz/manifest/{0}/{1}", false, false),
+        new("SDM", "https://steamapi.993499094.xyz/manifest/{0}/{1}", false, false),
+        new("manifestdex", "https://manifest.manifestdex.com/{0}", true, false),
+        new("wudrm", "http://gmrc.wudrm.com/manifest/{0}", false, false),
+        new("steamrun", "https://manifest.steam.run/api/manifest/{0}", false, true),
     ];
 
     private static readonly TimeSpan CodeTimeout = TimeSpan.FromSeconds(10);
@@ -60,14 +61,28 @@ public sealed class CodeCdnManifestFetcher : IManifestFetcher
                 continue;
             }
             var (ok, code, desc) = await TryFetchCodeAsync(source, depotId, manifestId, ct);
-            if (ok)
+            if (!ok)
             {
-                RecordSuccess(source.Name);
-                progress?.Invoke($"Depot {depotId} 取码成功（源：{source.Name}），开始从 CDN 下载…");
-                return await DownloadFromCdnAsync(depotId, manifestId, code, source.Name, ct, progress);
+                MarkFailed(source.Name);
+                failures.Add($"{source.Name}={desc}");
+                progress?.Invoke($"Depot {depotId} 取码：{source.Name}失败（{desc}），换下一个源…");
+                continue;
             }
-            MarkFailed(source.Name);
-            failures.Add($"{source.Name}={desc}");
+            RecordSuccess(source.Name);
+            progress?.Invoke($"Depot {depotId} 取码成功（源：{source.Name}），开始从 CDN 下载…");
+            var (dlResult, codeRejected) = await DownloadFromCdnAsync(depotId, manifestId, code, source.Name, ct, progress);
+            if (dlResult.Success)
+                return dlResult;
+            if (codeRejected)
+            {
+                // 所有 CDN 都 401/403：码是死的，换下一个源重取（源记失败进冷却）
+                MarkFailed(source.Name);
+                failures.Add($"{source.Name}=code被CDN拒绝");
+                progress?.Invoke($"Depot {depotId} 取码：{source.Name} 的码被CDN拒绝，换下一个源重取…");
+                continue;
+            }
+            // CDN/网络类失败：换码也救不了，直接返回详情
+            return dlResult;
         }
         return new ManifestFetchResult(false, false, $"取码失败：{string.Join("，", failures)}");
     }
@@ -163,15 +178,19 @@ public sealed class CodeCdnManifestFetcher : IManifestFetcher
         return ulong.TryParse(text.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out code);
     }
 
-    private async Task<ManifestFetchResult> DownloadFromCdnAsync(
+    // 返回下载结果 + 码是否被拒：所有 host 一致 401/403 说明码是死的，调用方换源重取
+    private async Task<(ManifestFetchResult Result, bool CodeRejected)> DownloadFromCdnAsync(
         int depotId, string manifestId, ulong code, string codeSource, CancellationToken ct, Action<string>? progress)
     {
         var steamPath = _steamPathService.DetectSteamPath();
         if (string.IsNullOrEmpty(steamPath))
-            return new ManifestFetchResult(false, false, "未检测到 Steam 路径");
+            return (new ManifestFetchResult(false, false, "未检测到 Steam 路径"), false);
 
         var hosts = new List<string> { FixedCdnHost };
-        foreach (var h in await _cdnServerList.GetHostsAsync(ct))
+        var dynamicHosts = await _cdnServerList.GetHostsAsync(ct);
+        if (dynamicHosts.Count == 0)
+            progress?.Invoke($"Depot {depotId} 动态CDN列表暂不可用，仅使用固定CDN下载");
+        foreach (var h in dynamicHosts)
         {
             if (hosts.Count >= 1 + MaxDynamicHosts) break;
             if (!hosts.Contains(h, StringComparer.OrdinalIgnoreCase))
@@ -179,6 +198,7 @@ public sealed class CodeCdnManifestFetcher : IManifestFetcher
         }
 
         var failures = new List<string>();
+        var authFailures = 0;
         foreach (var host in hosts)
         {
             var url = $"https://{host}/depot/{depotId}/manifest/{manifestId}/5/{code}";
@@ -193,6 +213,8 @@ public sealed class CodeCdnManifestFetcher : IManifestFetcher
                 if (!response.IsSuccessStatusCode)
                 {
                     failures.Add($"{host}=HTTP {(int)response.StatusCode}");
+                    if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+                        authFailures++;
                     continue;
                 }
                 bytes = await response.Content.ReadAsByteArrayAsync(ct);
@@ -206,6 +228,8 @@ public sealed class CodeCdnManifestFetcher : IManifestFetcher
             catch (HttpRequestException ex)
             {
                 failures.Add($"{host}={(ex.StatusCode.HasValue ? $"HTTP {(int)ex.StatusCode.Value}" : "网络异常")}");
+                if (ex.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+                    authFailures++;
                 continue;
             }
             catch (Exception ex)
@@ -222,12 +246,13 @@ public sealed class CodeCdnManifestFetcher : IManifestFetcher
 
             var error = PlaceManifest(steamPath, depotId, manifestId, manifestBytes);
             if (error != null)
-                return new ManifestFetchResult(false, false, error);
+                return (new ManifestFetchResult(false, false, error), false);
             var via = host.Equals(FixedCdnHost, StringComparison.OrdinalIgnoreCase) ? "固定CDN" : host;
             progress?.Invoke($"Depot {depotId} 下载成功（{via}，{wrapDesc}）");
-            return new ManifestFetchResult(true, false, null, false, $"{codeSource}+{via}");
+            return (new ManifestFetchResult(true, false, null, false, $"{codeSource}+{via}"), false);
         }
-        return new ManifestFetchResult(false, false, $"CDN 下载失败：{string.Join("，", failures)}");
+        var allRejected = failures.Count > 0 && authFailures == failures.Count;
+        return (new ManifestFetchResult(false, false, $"CDN 下载失败：{string.Join("，", failures)}"), allRejected);
     }
 
     // 内容校验 + 脱壳：CDN 回来的可能是 ZIP 套壳（单 entry，一般叫 z），里面才是
