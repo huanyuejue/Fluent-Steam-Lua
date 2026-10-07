@@ -8,114 +8,252 @@
         UseLayoutRounding="True"
         SnapsToDevicePixels="True">
 
+    <UserControl.Resources>
+        <Style x:Key="PillButtonStyle" TargetType="RadioButton">
+            <Setter Property="Padding" Value="16,6"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border Background="{TemplateBinding Background}"
+                                Padding="{TemplateBinding Padding}"
+                                CornerRadius="6" BorderThickness="0">
+                            <ContentPresenter ContentSource="Content"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="{DynamicResource ControlAltFillColorSecondaryBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter Property="Background">
+                                    <Setter.Value>
+                                        <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
     <controls:SmoothScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <StackPanel Margin="36,24,36,24">
 
             <TextBlock Text="清单监听" FontSize="28" FontWeight="SemiBold" Margin="0,0,0,4"
                        Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
             <StackPanel Margin="0,0,0,24">
-                <TextBlock Text="实时监控 Steam 请求的 manifest 清单，经 ManifestHub 自动下载放入 depotcache，Steam 随即正常下载"
-                           FontSize="12"
-                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                <TextBlock Text="先在 manifesthub2.filegear-sg.me 获取免费 API Key（24 小时有效），填入保存后再启动监听"
+                <TextBlock Text="实时监控 Steam 请求的 manifest 清单，自动下载放入 depotcache，Steam 随即正常下载"
                            FontSize="12"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                 <TextBlock Text="该功能仅作为内核上游 manifest 获取失效后的备用方案使用，可手动解决 Steam 下载游戏提示无互联网链接的问题，Steam 可正常下载时无需使用该功能"
                            FontSize="12"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                <TextBlock FontSize="12"
-                           Foreground="{DynamicResource TextFillColorSecondaryBrush}">
-                    <Run Text="使用说明：" FontWeight="SemiBold"/><Run Text="先获取 Key 填写并保存，然后启动监听，前往 Steam 触发下载，等待日志区获取完成清单，回到 Steam 再次下载即可"/>
-                </TextBlock>
             </StackPanel>
 
-            <!-- API Key -->
-            <Border CornerRadius="10" Padding="16" Margin="0,0,0,8"
+            <!-- 页签：Code直下 / ManifestHub -->
+            <Border CornerRadius="10" Padding="12" Margin="0,0,0,8"
                     BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1">
                 <Border.Background>
                     <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
                 </Border.Background>
-                <StackPanel>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <PasswordBox x:Name="ApiKeyBox" Grid.Column="0"
-                                     Padding="8,6" Height="36" FontSize="14"
-                                     VerticalContentAlignment="Center" Margin="0,0,8,0"
-                                     PasswordChanged="ApiKeyBox_PasswordChanged"/>
-                        <Button Grid.Column="1" Content="获取 Key" Padding="20,6" Margin="0,0,8,0"
-                                Click="GetKeyButton_Click"/>
-                        <Button Grid.Column="2" Content="保存 Key" Padding="20,6"
-                                Click="SaveKeyButton_Click"/>
-                    </Grid>
-                    <TextBlock Text="{Binding KeyStatusText}" Margin="0,8,0,0" FontSize="12"
-                               Foreground="{Binding KeyStatusForeground}"/>
-                </StackPanel>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <RadioButton Grid.Column="0" Content="Code 直下（推荐）"
+                                 IsChecked="{Binding IsShowingCode, Mode=OneWay}"
+                                 Style="{StaticResource PillButtonStyle}"
+                                 Command="{Binding ShowCodeViewCommand}"/>
+                    <RadioButton Grid.Column="1" Content="ManifestHub"
+                                 IsChecked="{Binding IsShowingHub, Mode=OneWay}"
+                                 Style="{StaticResource PillButtonStyle}"
+                                 Command="{Binding ShowHubViewCommand}"/>
+                </Grid>
             </Border>
 
-            <!-- 启停 -->
-            <Border CornerRadius="10" Padding="16" Margin="0,0,0,8"
-                    BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1">
-                <Border.Background>
-                    <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
-                </Border.Background>
-                <StackPanel Orientation="Horizontal">
-                    <Button Content="启动监听" Padding="20,6" Margin="0,0,8,0"
-                            Command="{Binding StartMonitorCommand}"
-                            IsEnabled="{Binding IsMonitoring, Converter={StaticResource BoolInvertConverter}}"/>
-                    <Button Content="停止监听" Padding="20,6" Margin="0,0,16,0"
-                            Command="{Binding StopMonitorCommand}"
-                            IsEnabled="{Binding IsMonitoring}"/>
-                    <TextBlock VerticalAlignment="Center" FontSize="12"
+            <!-- ===== Code 直下 ===== -->
+            <StackPanel x:Name="CodeContentPanel" Visibility="{Binding IsShowingCode, Converter={StaticResource BoolToVisibilityConverter}}">
+                <StackPanel Margin="0,0,0,12">
+                    <TextBlock Text="使用上游源获取code请求码，再从Steam官方CDN下载Manifest文件放入depotcache供Steam识别"
+                               FontSize="12"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                    <TextBlock FontSize="12"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}">
-                        <Run Text="发现 "/><Run Text="{Binding FoundCount}"/><Run Text=" 个，成功 "/><Run Text="{Binding SuccessCount}"/><Run Text=" 个"/>
+                        <Run Text="使用说明：" FontWeight="SemiBold"/><Run Text="直接启动监听，前往 Steam 触发下载，等待日志区获取完成清单，回到 Steam 再次下载即可"/>
                     </TextBlock>
                 </StackPanel>
-            </Border>
 
-            <!-- 日志 -->
-            <Border CornerRadius="10" Padding="16" Margin="0,0,0,8"
-                    BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1">
-                <Border.Background>
-                    <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
-                </Border.Background>
-                <StackPanel>
-                    <Grid Margin="0,0,0,8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="{Binding StatusMessage}" FontSize="12"
-                                   VerticalAlignment="Center"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                        <StackPanel Grid.Column="1" Orientation="Horizontal">
-                            <Button x:Name="CopyLogButton" Content="复制日志" Padding="12,4" Margin="0,0,8,0"
-                                    Click="CopyLogButton_Click" Visibility="Collapsed"/>
-                            <Button Content="清空日志" Padding="12,4"
-                                    Command="{Binding ClearLogCommand}"
-                                    Visibility="{Binding LogLines.Count, Converter={StaticResource NonZeroToVisibilityConverter}}"/>
-                        </StackPanel>
-                    </Grid>
-                    <Grid>
-                        <TextBlock Text="暂无日志" Style="{StaticResource LogEmptyStyle}"
-                                   Visibility="{Binding LogLines.Count, Converter={StaticResource ZeroToVisibilityConverter}}"/>
-                        <ScrollViewer MaxHeight="320" VerticalScrollBarVisibility="Auto">
-                            <ItemsControl ItemsSource="{Binding LogLines}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <TextBlock Text="{Binding}" FontFamily="Consolas,微软雅黑" FontSize="12"
-                                                   TextWrapping="Wrap" Margin="0,1"
-                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </ScrollViewer>
-                    </Grid>
+                <!-- 启停 -->
+                <Border CornerRadius="10" Padding="16" Margin="0,0,0,8"
+                        BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1">
+                    <Border.Background>
+                        <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
+                    </Border.Background>
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="启动监听" Padding="20,6" Margin="0,0,8,0"
+                                Command="{Binding StartCodeMonitorCommand}"
+                                IsEnabled="{Binding IsCodeMonitoring, Converter={StaticResource BoolInvertConverter}}"/>
+                        <Button Content="停止监听" Padding="20,6" Margin="0,0,16,0"
+                                Command="{Binding StopCodeMonitorCommand}"
+                                IsEnabled="{Binding IsCodeMonitoring}"/>
+                        <TextBlock VerticalAlignment="Center" FontSize="12"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                            <Run Text="发现 "/><Run Text="{Binding CodeFoundCount}"/><Run Text=" 个，成功 "/><Run Text="{Binding CodeSuccessCount}"/><Run Text=" 个"/>
+                        </TextBlock>
+                    </StackPanel>
+                </Border>
+
+                <!-- 日志 -->
+                <Border CornerRadius="10" Padding="16" Margin="0,0,0,8"
+                        BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1">
+                    <Border.Background>
+                        <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
+                    </Border.Background>
+                    <StackPanel>
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="{Binding CodeStatusMessage}" FontSize="12"
+                                       VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                <Button x:Name="CopyCodeLogButton" Content="复制日志" Padding="12,4" Margin="0,0,8,0"
+                                        Click="CopyCodeLogButton_Click" Visibility="Collapsed"/>
+                                <Button Content="清空日志" Padding="12,4"
+                                        Command="{Binding ClearCodeLogCommand}"
+                                        Visibility="{Binding CodeLogLines.Count, Converter={StaticResource NonZeroToVisibilityConverter}}"/>
+                            </StackPanel>
+                        </Grid>
+                        <Grid>
+                            <TextBlock Text="暂无日志" Style="{StaticResource LogEmptyStyle}"
+                                       Visibility="{Binding CodeLogLines.Count, Converter={StaticResource ZeroToVisibilityConverter}}"/>
+                            <ScrollViewer MaxHeight="320" VerticalScrollBarVisibility="Auto">
+                                <ItemsControl ItemsSource="{Binding CodeLogLines}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding}" FontFamily="Consolas,微软雅黑" FontSize="12"
+                                                       TextWrapping="Wrap" Margin="0,1"
+                                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <!-- ===== ManifestHub ===== -->
+            <StackPanel x:Name="HubContentPanel" Visibility="{Binding IsShowingHub, Converter={StaticResource BoolToVisibilityConverter}}">
+                <StackPanel Margin="0,0,0,12">
+                    <TextBlock Text="先在 manifesthub2.filegear-sg.me 获取免费 API Key（24 小时有效），填入保存后再启动监听"
+                               FontSize="12"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                    <TextBlock FontSize="12"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                        <Run Text="使用说明：" FontWeight="SemiBold"/><Run Text="先获取 Key 填写并保存，然后启动监听，前往 Steam 触发下载，等待日志区获取完成清单，回到 Steam 再次下载即可"/>
+                    </TextBlock>
                 </StackPanel>
-            </Border>
+
+                <!-- API Key -->
+                <Border CornerRadius="10" Padding="16" Margin="0,0,0,8"
+                        BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1">
+                    <Border.Background>
+                        <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
+                    </Border.Background>
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <PasswordBox x:Name="ApiKeyBox" Grid.Column="0"
+                                         Padding="8,6" Height="36" FontSize="14"
+                                         VerticalContentAlignment="Center" Margin="0,0,8,0"
+                                         PasswordChanged="ApiKeyBox_PasswordChanged"/>
+                            <Button Grid.Column="1" Content="获取 Key" Padding="20,6" Margin="0,0,8,0"
+                                    Click="GetKeyButton_Click"/>
+                            <Button Grid.Column="2" Content="保存 Key" Padding="20,6"
+                                    Click="SaveKeyButton_Click"/>
+                        </Grid>
+                        <TextBlock Text="{Binding KeyStatusText}" Margin="0,8,0,0" FontSize="12"
+                                   Foreground="{Binding KeyStatusForeground}"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- 启停 -->
+                <Border CornerRadius="10" Padding="16" Margin="0,0,0,8"
+                        BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1">
+                    <Border.Background>
+                        <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
+                    </Border.Background>
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="启动监听" Padding="20,6" Margin="0,0,8,0"
+                                Command="{Binding StartHubMonitorCommand}"
+                                IsEnabled="{Binding IsHubMonitoring, Converter={StaticResource BoolInvertConverter}}"/>
+                        <Button Content="停止监听" Padding="20,6" Margin="0,0,16,0"
+                                Command="{Binding StopHubMonitorCommand}"
+                                IsEnabled="{Binding IsHubMonitoring}"/>
+                        <TextBlock VerticalAlignment="Center" FontSize="12"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                            <Run Text="发现 "/><Run Text="{Binding HubFoundCount}"/><Run Text=" 个，成功 "/><Run Text="{Binding HubSuccessCount}"/><Run Text=" 个"/>
+                        </TextBlock>
+                    </StackPanel>
+                </Border>
+
+                <!-- 日志 -->
+                <Border CornerRadius="10" Padding="16" Margin="0,0,0,8"
+                        BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1">
+                    <Border.Background>
+                        <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
+                    </Border.Background>
+                    <StackPanel>
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="{Binding HubStatusMessage}" FontSize="12"
+                                       VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                <Button x:Name="CopyHubLogButton" Content="复制日志" Padding="12,4" Margin="0,0,8,0"
+                                        Click="CopyHubLogButton_Click" Visibility="Collapsed"/>
+                                <Button Content="清空日志" Padding="12,4"
+                                        Command="{Binding ClearHubLogCommand}"
+                                        Visibility="{Binding HubLogLines.Count, Converter={StaticResource NonZeroToVisibilityConverter}}"/>
+                            </StackPanel>
+                        </Grid>
+                        <Grid>
+                            <TextBlock Text="暂无日志" Style="{StaticResource LogEmptyStyle}"
+                                       Visibility="{Binding HubLogLines.Count, Converter={StaticResource ZeroToVisibilityConverter}}"/>
+                            <ScrollViewer MaxHeight="320" VerticalScrollBarVisibility="Auto">
+                                <ItemsControl ItemsSource="{Binding HubLogLines}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding}" FontFamily="Consolas,微软雅黑" FontSize="12"
+                                                       TextWrapping="Wrap" Margin="0,1"
+                                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
 
         </StackPanel>
     </controls:SmoothScrollViewer>

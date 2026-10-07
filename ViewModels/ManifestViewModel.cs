@@ -7,12 +7,20 @@ namespace SteamLuaManager.ViewModels;
 
 public partial class ManifestViewModel : ObservableObject
 {
-    private readonly IManifestMonitorService _monitorService;
+    private readonly HubManifestMonitorService _hubMonitor;
+    private readonly CodeManifestMonitorService _codeMonitor;
     private readonly IManifestHubKeyService _keyService;
     private const int MaxLogLines = 500;
 
+    // 页签：默认 Code 直下
     [ObservableProperty]
-    private bool _isMonitoring;
+    [NotifyPropertyChangedFor(nameof(IsShowingHub))]
+    private bool _isShowingCode = true;
+    public bool IsShowingHub => !IsShowingCode;
+
+    // Hub 页签状态
+    [ObservableProperty]
+    private bool _isHubMonitoring;
 
     [ObservableProperty]
     private string _keyStatusText = "未填写 API Key";
@@ -21,53 +29,83 @@ public partial class ManifestViewModel : ObservableObject
     private string _keyStatusForeground = "#888888";
 
     [ObservableProperty]
-    private int _foundCount;
+    private int _hubFoundCount;
 
     [ObservableProperty]
-    private int _successCount;
+    private int _hubSuccessCount;
 
     [ObservableProperty]
-    private string _statusMessage = string.Empty;
+    private string _hubStatusMessage = string.Empty;
+
+    // Code 页签状态
+    [ObservableProperty]
+    private bool _isCodeMonitoring;
+
+    [ObservableProperty]
+    private int _codeFoundCount;
+
+    [ObservableProperty]
+    private int _codeSuccessCount;
+
+    [ObservableProperty]
+    private string _codeStatusMessage = string.Empty;
 
     public bool HasSavedKey => _keyService.HasSavedKey;
 
-    public System.Collections.ObjectModel.ObservableCollection<string> LogLines { get; } = new();
+    public System.Collections.ObjectModel.ObservableCollection<string> HubLogLines { get; } = new();
+    public System.Collections.ObjectModel.ObservableCollection<string> CodeLogLines { get; } = new();
 
-    public ManifestViewModel(IManifestMonitorService monitorService, IManifestHubKeyService keyService)
+    public ManifestViewModel(
+        HubManifestMonitorService hubMonitor,
+        CodeManifestMonitorService codeMonitor,
+        IManifestHubKeyService keyService)
     {
-        _monitorService = monitorService;
+        _hubMonitor = hubMonitor;
+        _codeMonitor = codeMonitor;
         _keyService = keyService;
-        _monitorService.Log += OnMonitorLog;
-        _monitorService.RequestCompleted += OnRequestCompleted;
+        _hubMonitor.Log += m => Application.Current.Dispatcher.InvokeAsync(() => AppendLog(HubLogLines, m));
+        _hubMonitor.RequestCompleted += (_, ok) => Application.Current.Dispatcher.InvokeAsync(() =>
+        {
+            HubFoundCount++;
+            if (ok) HubSuccessCount++;
+        });
+        _codeMonitor.Log += m => Application.Current.Dispatcher.InvokeAsync(() => AppendLog(CodeLogLines, m));
+        _codeMonitor.RequestCompleted += (_, ok) => Application.Current.Dispatcher.InvokeAsync(() =>
+        {
+            CodeFoundCount++;
+            if (ok) CodeSuccessCount++;
+        });
         RefreshKeyStatus();
     }
 
-    private void OnMonitorLog(string message)
+    private static void AppendLog(System.Collections.ObjectModel.ObservableCollection<string> lines, string message)
     {
-        Application.Current.Dispatcher.InvokeAsync(() => AppendLog(message));
+        lines.Add($"[{DateTime.Now:HH:mm:ss}] {message}");
+        while (lines.Count > MaxLogLines)
+            lines.RemoveAt(0);
     }
 
-    private void OnRequestCompleted(ManifestRequest req, bool ok)
-    {
-        Application.Current.Dispatcher.InvokeAsync(() =>
-        {
-            FoundCount++;
-            if (ok) SuccessCount++;
-        });
-    }
+    private void AppendHubLog(string message) => AppendLog(HubLogLines, message);
+    private void AppendCodeLog(string message) => AppendLog(CodeLogLines, message);
 
-    private void AppendLog(string message)
-    {
-        LogLines.Add($"[{DateTime.Now:HH:mm:ss}] {message}");
-        while (LogLines.Count > MaxLogLines)
-            LogLines.RemoveAt(0);
-    }
-
-    /// <summary>切到本页时刷新：Key 状态与监听开关回显。</summary>
+    /// <summary>切到本页时刷新：默认 Code 页签，Key 状态与监听开关回显。</summary>
     public void OnNavigatedTo()
     {
+        IsShowingCode = true;
         RefreshKeyStatus();
-        IsMonitoring = _monitorService.IsRunning;
+        IsHubMonitoring = _hubMonitor.IsRunning;
+        IsCodeMonitoring = _codeMonitor.IsRunning;
+    }
+
+    [RelayCommand]
+    private void ShowCodeView() => SwitchTab(true);
+
+    [RelayCommand]
+    private void ShowHubView() => SwitchTab(false);
+
+    private void SwitchTab(bool showCode)
+    {
+        IsShowingCode = showCode;
     }
 
     [RelayCommand]
@@ -75,45 +113,88 @@ public partial class ManifestViewModel : ObservableObject
     {
         // 界面用假内容占位时传 null：有存量 Key 就是"未改动"，没有才是"没填"
         var (ok, message) = _keyService.SaveKey(password);
-        StatusMessage = message;
+        HubStatusMessage = message;
         if (!ok) return;
         RefreshKeyStatus();
-        AppendLog("API Key 已保存");
+        AppendHubLog("API Key 已保存");
     }
 
+    // 双监听互斥：启动一个先停另一个
     [RelayCommand]
-    private async Task StartMonitorAsync()
+    private async Task StartHubMonitorAsync()
     {
         var key = _keyService.LoadKey();
         if (string.IsNullOrEmpty(key))
         {
-            StatusMessage = "请先填写并保存 API Key";
+            HubStatusMessage = "请先填写并保存 API Key";
             return;
         }
         if (_keyService.IsKeyExpired())
         {
-            StatusMessage = "API Key 已过期，请重新获取填入后使用";
+            HubStatusMessage = "API Key 已过期，请重新获取填入后使用";
             return;
         }
-        var (ok, error) = await _monitorService.StartAsync(key);
-        IsMonitoring = ok;
-        StatusMessage = ok ? "清单监听已启动" : error ?? "启动失败";
-        AppendLog(StatusMessage);
+        StopCodeSilently();
+        var (ok, error) = await _hubMonitor.StartAsync();
+        IsHubMonitoring = ok;
+        HubStatusMessage = ok ? "清单监听已启动（ManifestHub）" : error ?? "启动失败";
+        AppendHubLog(HubStatusMessage);
     }
 
     [RelayCommand]
-    private void StopMonitor()
+    private async Task StartCodeMonitorAsync()
     {
-        _monitorService.Stop();
-        IsMonitoring = false;
-        StatusMessage = "清单监听已停止";
-        AppendLog(StatusMessage);
+        StopHubSilently();
+        var (ok, error) = await _codeMonitor.StartAsync();
+        IsCodeMonitoring = ok;
+        CodeStatusMessage = ok ? "清单监听已启动（Code直下）" : error ?? "启动失败";
+        AppendCodeLog(CodeStatusMessage);
     }
 
     [RelayCommand]
-    private void ClearLog()
+    private void StopHubMonitor()
     {
-        LogLines.Clear();
+        _hubMonitor.Stop();
+        IsHubMonitoring = false;
+        HubStatusMessage = "清单监听已停止";
+        AppendHubLog(HubStatusMessage);
+    }
+
+    [RelayCommand]
+    private void StopCodeMonitor()
+    {
+        _codeMonitor.Stop();
+        IsCodeMonitoring = false;
+        CodeStatusMessage = "清单监听已停止";
+        AppendCodeLog(CodeStatusMessage);
+    }
+
+    private void StopHubSilently()
+    {
+        if (!_hubMonitor.IsRunning) return;
+        _hubMonitor.Stop();
+        IsHubMonitoring = false;
+        AppendHubLog("已自动停止 ManifestHub 监听（双监听互斥）");
+    }
+
+    private void StopCodeSilently()
+    {
+        if (!_codeMonitor.IsRunning) return;
+        _codeMonitor.Stop();
+        IsCodeMonitoring = false;
+        AppendCodeLog("已自动停止 Code 监听（双监听互斥）");
+    }
+
+    [RelayCommand]
+    private void ClearHubLog()
+    {
+        HubLogLines.Clear();
+    }
+
+    [RelayCommand]
+    private void ClearCodeLog()
+    {
+        CodeLogLines.Clear();
     }
 
     private void RefreshKeyStatus()

@@ -6,16 +6,7 @@ namespace SteamLuaManager.Services;
 
 public record ManifestRequest(int AppId, int DepotId, string ManifestId);
 
-public interface IManifestMonitorService
-{
-    bool IsRunning { get; }
-    event Action<string>? Log;
-    event Action<ManifestRequest, bool>? RequestCompleted;
-    Task<(bool Ok, string? Error)> StartAsync(string apiKey);
-    void Stop();
-}
-
-public class ManifestMonitorService : IManifestMonitorService
+public class ManifestMonitorService
 {
     // content_log 里 Steam 请求 manifest 的行，App/Depot/Manifest 一次齐全
     private static readonly Regex RequestRegex = new(
@@ -30,7 +21,7 @@ public class ManifestMonitorService : IManifestMonitorService
     private readonly object _paceLock = new();
     private DateTime _lastRequestStartUtc = DateTime.MinValue;
 
-    private readonly IManifestHubService _hubService;
+    private readonly IManifestFetcher _fetcher;
     private readonly ISteamPathService _steamPathService;
     private readonly SemaphoreSlim _gate = new(MaxConcurrency, MaxConcurrency);
     private readonly HashSet<(int Depot, string Manifest)> _seen = new();
@@ -38,6 +29,17 @@ public class ManifestMonitorService : IManifestMonitorService
     // 同一 App 的在途批次：在途归零即落定（Steam 更新开始时一次性要全，不存在细水长流）
     private readonly Dictionary<int, AppBatch> _batches = new();
     private readonly object _batchLock = new();
+    // 完成提示去抖（全局）：任意 App 落定一波后都只预约提示，5s 内 Steam
+    // 又要新清单（任意 App）就续波不提示；彻底安静满 5s 才汇总输出一条
+    // "已齐请重试"，避免多波/多 App 下载时反复打扰用户
+    private static readonly TimeSpan CompletionQuietWindow = TimeSpan.FromSeconds(5);
+    private GlobalCompletion? _pendingCompletion;
+
+    private sealed class GlobalCompletion
+    {
+        public CancellationTokenSource? Cts;
+        public readonly Dictionary<int, (int Done, int Failed)> PerApp = new();
+    }
 
     private sealed class AppBatch
     {
@@ -46,7 +48,6 @@ public class ManifestMonitorService : IManifestMonitorService
         public int Failed;
     }
     private CancellationTokenSource? _cts;
-    private string _apiKey = string.Empty;
     private bool _keyInvalidLatched;
     private bool _noConnHinted;
 
@@ -55,17 +56,15 @@ public class ManifestMonitorService : IManifestMonitorService
     public event Action<string>? Log;
     public event Action<ManifestRequest, bool>? RequestCompleted;
 
-    public ManifestMonitorService(IManifestHubService hubService, ISteamPathService steamPathService)
+    public ManifestMonitorService(IManifestFetcher fetcher, ISteamPathService steamPathService)
     {
-        _hubService = hubService;
+        _fetcher = fetcher;
         _steamPathService = steamPathService;
     }
 
-    public Task<(bool Ok, string? Error)> StartAsync(string apiKey)
+    public Task<(bool Ok, string? Error)> StartAsync()
     {
         if (IsRunning) return Task.FromResult((true, (string?)null));
-        if (string.IsNullOrWhiteSpace(apiKey))
-            return Task.FromResult((false, (string?)"请先填写 API Key"));
         var steamPath = _steamPathService.DetectSteamPath();
         if (string.IsNullOrEmpty(steamPath))
             return Task.FromResult((false, (string?)"未检测到 Steam 路径"));
@@ -73,7 +72,6 @@ public class ManifestMonitorService : IManifestMonitorService
         if (!File.Exists(logPath))
             return Task.FromResult((false, (string?)"找不到 content_log.txt，请先启动 Steam（若仍没有，在 Steam 快捷方式加上 -dev -console 后重启）"));
 
-        _apiKey = apiKey;
         _keyInvalidLatched = false;
         _noConnHinted = false;
         lock (_seenLock) { _seen.Clear(); }
@@ -90,7 +88,20 @@ public class ManifestMonitorService : IManifestMonitorService
         try { _cts?.Cancel(); } catch { }
         _cts?.Dispose();
         _cts = null;
-        lock (_batchLock) { _batches.Clear(); }
+        lock (_batchLock)
+        {
+            _batches.Clear();
+            // 主动停止后不再补"已齐"提示，避免关页面后又弹一条造成困惑
+            CancelPendingCompletionLocked();
+        }
+    }
+
+    private void CancelPendingCompletionLocked()
+    {
+        if (_pendingCompletion == null) return;
+        try { _pendingCompletion.Cts?.Cancel(); } catch { }
+        try { _pendingCompletion.Cts?.Dispose(); } catch { }
+        _pendingCompletion = null;
     }
 
     private void Emit(string message)
@@ -140,15 +151,14 @@ public class ManifestMonitorService : IManifestMonitorService
                     }
                     continue;
                 }
-                // 控制台行理论上全是数字，但超长数字会让 Parse 抛异常拖停整个监控；
-                // 解析失败只跳过该行并记一行日志，不断链
-                if (!int.TryParse(m.Groups[1].Value, CultureInfo.InvariantCulture, out var depotId) ||
-                    !int.TryParse(m.Groups[2].Value, CultureInfo.InvariantCulture, out var manifestId))
+                // 组1=App，组2=Depot，组3=Manifest（gid 超过 int 范围，必须保持字符串）
+                if (!int.TryParse(m.Groups[1].Value, CultureInfo.InvariantCulture, out var appId) ||
+                    !int.TryParse(m.Groups[2].Value, CultureInfo.InvariantCulture, out var depotId))
                 {
                     Emit($"忽略无法解析的清单请求行: {line.Trim()}");
                     continue;
                 }
-                var req = new ManifestRequest(depotId, manifestId, m.Groups[3].Value);
+                var req = new ManifestRequest(appId, depotId, m.Groups[3].Value);
                 bool isNew;
                 lock (_seenLock)
                 {
@@ -196,7 +206,7 @@ public class ManifestMonitorService : IManifestMonitorService
             await _gate.WaitAsync(ct);
             gated = true;
             await PaceAsync(ct);
-            var r = await _hubService.DownloadAsync(req.DepotId, req.ManifestId, _apiKey, ct, Emit);
+            var r = await _fetcher.FetchAsync(req.DepotId, req.ManifestId, ct, Emit);
             if (r.KeyInvalid)
             {
                 lock (_seenLock)
@@ -250,11 +260,18 @@ public class ManifestMonitorService : IManifestMonitorService
             await Task.Delay(wait, ct);
     }
 
-    // 新请求记入所属 App 批次；返回 true 表示该 App 新开一波（提示用户等待）
+    // 新请求记入所属 App 批次；返回 true 表示该 App 新开一波（提示用户等待）。
+    // 若有待触发的全局完成提示，取消它（续波不提示），累计计数保留。
     private bool TrackRequest(int appId)
     {
         lock (_batchLock)
         {
+            if (_pendingCompletion != null)
+            {
+                try { _pendingCompletion.Cts?.Cancel(); } catch { }
+                try { _pendingCompletion.Cts?.Dispose(); } catch { }
+                _pendingCompletion.Cts = null;
+            }
             if (!_batches.TryGetValue(appId, out var batch))
             {
                 batch = new AppBatch();
@@ -296,9 +313,80 @@ public class ManifestMonitorService : IManifestMonitorService
 
     private void FinishBatch(int appId, int done, int failed)
     {
-        if (failed == 0)
-            Emit($"App {appId} 清单已齐（共 {done} 个），请在 Steam 中重试下载游戏");
-        else
-            Emit($"App {appId} 清单获取结束（成功 {done} / 失败 {failed}），失败的可重新触发 Steam 下载后再试");
+        // 一波落定不立即提示：并入全局累计并预约 5s 后汇总输出；
+        // 期间任意 App 来新请求都会被 TrackRequest 取消续波
+        CancellationTokenSource cts;
+        lock (_batchLock)
+        {
+            _pendingCompletion ??= new GlobalCompletion();
+            var pending = _pendingCompletion;
+            if (pending.PerApp.TryGetValue(appId, out var cur))
+                pending.PerApp[appId] = (cur.Done + done, cur.Failed + failed);
+            else
+                pending.PerApp[appId] = (done, failed);
+            try { pending.Cts?.Cancel(); } catch { }
+            try { pending.Cts?.Dispose(); } catch { }
+            pending.Cts = cts = new CancellationTokenSource();
+        }
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(CompletionQuietWindow, cts.Token);
+            }
+            catch (OperationCanceledException) { return; }
+            Dictionary<int, (int Done, int Failed)> snapshot;
+            lock (_batchLock)
+            {
+                if (_pendingCompletion == null || !ReferenceEquals(_pendingCompletion.Cts, cts))
+                    return;
+                snapshot = new Dictionary<int, (int Done, int Failed)>(_pendingCompletion.PerApp);
+                _pendingCompletion = null;
+            }
+            try { cts.Dispose(); } catch { }
+            EmitCompletionSummary(snapshot);
+        });
     }
+
+    // 全局只提示一次：单个 App 沿用老文案；多个 App 先分行列各家结果，最后统一一句请重试
+    private void EmitCompletionSummary(Dictionary<int, (int Done, int Failed)> perApp)
+    {
+        if (perApp.Count == 1)
+        {
+            foreach (var (appId, (done, failed)) in perApp)
+            {
+                if (failed == 0)
+                    Emit($"App {appId} 清单已齐（共 {done} 个），请在 Steam 中重试下载游戏");
+                else
+                    Emit($"App {appId} 清单获取结束（成功 {done} / 失败 {failed}），失败的可重新触发 Steam 下载后再试");
+            }
+            return;
+        }
+        int totalDone = 0, totalFailed = 0;
+        foreach (var (appId, (done, failed)) in perApp)
+        {
+            totalDone += done;
+            totalFailed += failed;
+            Emit(failed == 0
+                ? $"App {appId} 清单已齐（共 {done} 个）"
+                : $"App {appId} 清单获取结束（成功 {done} / 失败 {failed}）");
+        }
+        Emit(totalFailed == 0
+            ? $"共 {perApp.Count} 个 App、{totalDone} 个清单已齐，请在 Steam 中重试下载游戏"
+            : $"共 {perApp.Count} 个 App（成功 {totalDone} / 失败 {totalFailed}），失败的可重新触发 Steam 下载后再试");
+    }
+}
+
+// Hub 监听：用 ManifestHub 抓取
+public sealed class HubManifestMonitorService : ManifestMonitorService
+{
+    public HubManifestMonitorService(HubManifestFetcher fetcher, ISteamPathService steamPathService)
+        : base(fetcher, steamPathService) { }
+}
+
+// Code 监听：取码 + 官方 CDN 下载
+public sealed class CodeManifestMonitorService : ManifestMonitorService
+{
+    public CodeManifestMonitorService(CodeCdnManifestFetcher fetcher, ISteamPathService steamPathService)
+        : base(fetcher, steamPathService) { }
 }

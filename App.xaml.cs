@@ -566,7 +566,11 @@ public partial class App : Application
         services.AddSingleton<IAuthorizationService, AuthorizationService>();
         services.AddSingleton<IDialogService, DialogService>();
         services.AddSingleton<IManifestHubService, ManifestHubService>();
-        services.AddSingleton<IManifestMonitorService, ManifestMonitorService>();
+        services.AddSingleton<HubManifestFetcher>();
+        services.AddSingleton<CodeCdnManifestFetcher>();
+        services.AddSingleton<CdnServerListService>();
+        services.AddSingleton<HubManifestMonitorService>();
+        services.AddSingleton<CodeManifestMonitorService>();
         services.AddSingleton<IManifestHubKeyService, ManifestHubKeyService>();
         services.AddSingleton<IOnlineFixService, OnlineFixService>();
         services.AddSingleton<ICrackToolService, CrackToolService>();
