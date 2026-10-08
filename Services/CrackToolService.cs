@@ -34,7 +34,7 @@ public sealed class CrackToolService : ICrackToolService, IDisposable
         _gate.Dispose();
     }
 
-    public async Task<bool> CrackAsync(string inputPath, string appId, string? webApiKey, IProgress<string>? log, CancellationToken ct = default)
+    public async Task<bool> CrackAsync(string inputPath, string appId, string? webApiKey, IProgress<string>? log, CancellationToken ct = default, bool unpackOnly = false)
     {
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         try
@@ -42,17 +42,31 @@ public sealed class CrackToolService : ICrackToolService, IDisposable
             EnsureInitialized(log);
             _runHadError = false;
             SacConfig.InputPath = inputPath;
-            SacConfig.EMUGameInfoConfigs.AppID = appId.Trim();
+            if (!string.IsNullOrWhiteSpace(appId))
+                SacConfig.EMUGameInfoConfigs.AppID = appId.Trim();
             SacConfig.EMUGameInfoConfigs.SteamWebAPIKey = webApiKey?.Trim() ?? "";
             // 信息源锁定 SteamKit2 Client（不走 Steam Web API，免 Key 也能跑）
             SacConfig.EMUGameInfoConfigs.GameInfoAPI = EMUGameInfoConfig.GeneratorGameInfoAPI.GeneratorSteamClient;
             var p = SacConfig.ProcessConfigs;
-            p.GenerateEMUGameInfo = true;
-            p.GenerateEMUConfig = true;
-            p.Unpack = true;
-            p.ApplyEMU = true;
-            p.GenerateCrackOnly = false;
-            p.Restore = false;
+            if (unpackOnly)
+            {
+                // 仅脱壳：Steamless 去壳，原 exe 备成 .exe.bak；steam_api* 不动，照常要开 Steam
+                p.GenerateEMUGameInfo = false;
+                p.GenerateEMUConfig = false;
+                p.Unpack = true;
+                p.ApplyEMU = false;
+                p.GenerateCrackOnly = false;
+                p.Restore = false;
+            }
+            else
+            {
+                p.GenerateEMUGameInfo = true;
+                p.GenerateEMUConfig = true;
+                p.Unpack = true;
+                p.ApplyEMU = true;
+                p.GenerateCrackOnly = false;
+                p.Restore = false;
+            }
             await new Processor().ProcessFileGUI(ct).ConfigureAwait(false);
             return !_runHadError && !ct.IsCancellationRequested;
         }

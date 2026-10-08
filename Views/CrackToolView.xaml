@@ -98,9 +98,12 @@
                                 ToolTip="去 Steam 官方申请 Key"/>
                     </Grid>
                     <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                        <CheckBox IsChecked="{Binding IsUnpackOnly}" Content="仅脱壳" FontSize="14"
+                                  VerticalAlignment="Center" Margin="0,0,8,0" MinWidth="0"
+                                  ToolTip="只去除 SteamStub 壳，保留 Steam 启动依赖；原 exe 备份为 .exe.bak，还原可恢复"/>
                         <Button Command="{Binding CrackCommand}"
                                 Padding="16,6" Height="36" FontSize="14" Margin="0,0,6,0"
-                                Content="一键破解"
+                                Content="{Binding CrackButtonText}"
                                 ToolTip="仅 SteamStub 游戏有效"
                                 IsEnabled="{Binding IsRunning, Converter={StaticResource BoolInvertConverter}}"/>
                         <Button Command="{Binding RestoreCommand}"

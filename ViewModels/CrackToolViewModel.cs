@@ -40,6 +40,13 @@ public partial class CrackToolViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _emuVersionText = string.Empty;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CrackButtonText))]
+    private bool _isUnpackOnly;
+
+    // 勾上仅脱壳，一键破解按钮变为一键脱壳
+    public string CrackButtonText => IsUnpackOnly ? "一键脱壳" : "一键破解";
+
     private Timer? _statusMessageTimer;
 
     // 通知 3 秒自动消失，跟主页逻辑一致
@@ -209,9 +216,11 @@ public partial class CrackToolViewModel : ObservableObject, IDisposable
             CancelCrack();
             return;
         }
-        if (!CheckInput(needAppId: true)) return;
-        await RunOpAsync("破解", (log, ct) =>
-            _crackService.CrackAsync(InputPath.Trim(), AppId.Trim(), WebApiKey, log, ct));
+        // 仅脱壳不需要 AppID（AppID 只给 emu 信息生成用）
+        if (!CheckInput(needAppId: !IsUnpackOnly)) return;
+        var label = IsUnpackOnly ? "脱壳" : "破解";
+        await RunOpAsync(label, (log, ct) =>
+            _crackService.CrackAsync(InputPath.Trim(), AppId?.Trim() ?? string.Empty, WebApiKey, log, ct, IsUnpackOnly));
     }
 
     [RelayCommand]
