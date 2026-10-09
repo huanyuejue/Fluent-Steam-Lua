@@ -6,7 +6,9 @@
         TextOptions.TextFormattingMode="Display"
         TextOptions.TextRenderingMode="Grayscale"
         UseLayoutRounding="True"
-        SnapsToDevicePixels="True">
+        SnapsToDevicePixels="True"
+        KeyboardNavigation.DirectionalNavigation="Cycle"
+        KeyboardNavigation.TabNavigation="Cycle">
 
     <UserControl.Resources>
         <Style x:Key="PillButtonStyle" TargetType="RadioButton">
@@ -72,11 +74,13 @@
                     <RadioButton Grid.Column="0" Content="Code 直下（推荐）"
                                  IsChecked="{Binding IsShowingCode, Mode=OneWay}"
                                  Style="{StaticResource PillButtonStyle}"
-                                 Command="{Binding ShowCodeViewCommand}"/>
+                                 Command="{Binding ShowCodeViewCommand}"
+                                 FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                     <RadioButton Grid.Column="1" Content="ManifestHub"
                                  IsChecked="{Binding IsShowingHub, Mode=OneWay}"
                                  Style="{StaticResource PillButtonStyle}"
-                                 Command="{Binding ShowHubViewCommand}"/>
+                                 Command="{Binding ShowHubViewCommand}"
+                                 FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                 </Grid>
             </Border>
 
@@ -101,10 +105,12 @@
                     <StackPanel Orientation="Horizontal">
                         <Button Content="启动监听" Padding="20,6" Margin="0,0,8,0"
                                 Command="{Binding StartCodeMonitorCommand}"
-                                IsEnabled="{Binding IsCodeMonitoring, Converter={StaticResource BoolInvertConverter}}"/>
+                                IsEnabled="{Binding IsCodeMonitoring, Converter={StaticResource BoolInvertConverter}}"
+                                FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                         <Button Content="停止监听" Padding="20,6" Margin="0,0,16,0"
                                 Command="{Binding StopCodeMonitorCommand}"
-                                IsEnabled="{Binding IsCodeMonitoring}"/>
+                                IsEnabled="{Binding IsCodeMonitoring}"
+                                FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                         <TextBlock VerticalAlignment="Center" FontSize="12"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}">
                             <Run Text="发现 "/><Run Text="{Binding CodeFoundCount}"/><Run Text=" 个，成功 "/><Run Text="{Binding CodeSuccessCount}"/><Run Text=" 个"/>
@@ -129,10 +135,12 @@
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                             <StackPanel Grid.Column="1" Orientation="Horizontal">
                                 <Button x:Name="CopyCodeLogButton" Content="复制日志" Padding="12,4" Margin="0,0,8,0"
-                                        Click="CopyCodeLogButton_Click" Visibility="Collapsed"/>
+                                        Click="CopyCodeLogButton_Click" Visibility="Collapsed"
+                                        FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                                 <Button Content="清空日志" Padding="12,4"
                                         Command="{Binding ClearCodeLogCommand}"
-                                        Visibility="{Binding CodeLogLines.Count, Converter={StaticResource NonZeroToVisibilityConverter}}"/>
+                                        Visibility="{Binding CodeLogLines.Count, Converter={StaticResource NonZeroToVisibilityConverter}}"
+                                        FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                             </StackPanel>
                         </Grid>
                         <Grid>
@@ -182,11 +190,14 @@
                             <PasswordBox x:Name="ApiKeyBox" Grid.Column="0"
                                          Padding="8,6" Height="36" FontSize="14"
                                          VerticalContentAlignment="Center" Margin="0,0,8,0"
-                                         PasswordChanged="ApiKeyBox_PasswordChanged"/>
+                                         PasswordChanged="ApiKeyBox_PasswordChanged"
+                                         FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                             <Button Grid.Column="1" Content="获取 Key" Padding="20,6" Margin="0,0,8,0"
-                                    Click="GetKeyButton_Click"/>
+                                    Click="GetKeyButton_Click"
+                                    FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                             <Button Grid.Column="2" Content="保存 Key" Padding="20,6"
-                                    Click="SaveKeyButton_Click"/>
+                                    Click="SaveKeyButton_Click"
+                                    FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                         </Grid>
                         <TextBlock Text="{Binding KeyStatusText}" Margin="0,8,0,0" FontSize="12"
                                    Foreground="{Binding KeyStatusForeground}"/>
@@ -202,10 +213,12 @@
                     <StackPanel Orientation="Horizontal">
                         <Button Content="启动监听" Padding="20,6" Margin="0,0,8,0"
                                 Command="{Binding StartHubMonitorCommand}"
-                                IsEnabled="{Binding IsHubMonitoring, Converter={StaticResource BoolInvertConverter}}"/>
+                                IsEnabled="{Binding IsHubMonitoring, Converter={StaticResource BoolInvertConverter}}"
+                                FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                         <Button Content="停止监听" Padding="20,6" Margin="0,0,16,0"
                                 Command="{Binding StopHubMonitorCommand}"
-                                IsEnabled="{Binding IsHubMonitoring}"/>
+                                IsEnabled="{Binding IsHubMonitoring}"
+                                FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                         <TextBlock VerticalAlignment="Center" FontSize="12"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}">
                             <Run Text="发现 "/><Run Text="{Binding HubFoundCount}"/><Run Text=" 个，成功 "/><Run Text="{Binding HubSuccessCount}"/><Run Text=" 个"/>
@@ -230,10 +243,12 @@
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                             <StackPanel Grid.Column="1" Orientation="Horizontal">
                                 <Button x:Name="CopyHubLogButton" Content="复制日志" Padding="12,4" Margin="0,0,8,0"
-                                        Click="CopyHubLogButton_Click" Visibility="Collapsed"/>
+                                        Click="CopyHubLogButton_Click" Visibility="Collapsed"
+                                        FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                                 <Button Content="清空日志" Padding="12,4"
                                         Command="{Binding ClearHubLogCommand}"
-                                        Visibility="{Binding HubLogLines.Count, Converter={StaticResource NonZeroToVisibilityConverter}}"/>
+                                        Visibility="{Binding HubLogLines.Count, Converter={StaticResource NonZeroToVisibilityConverter}}"
+                                        FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                             </StackPanel>
                         </Grid>
                         <Grid>

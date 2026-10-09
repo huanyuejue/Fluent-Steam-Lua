@@ -6,7 +6,9 @@
         TextOptions.TextFormattingMode="Display"
         TextOptions.TextRenderingMode="Grayscale"
         UseLayoutRounding="True"
-        SnapsToDevicePixels="True">
+        SnapsToDevicePixels="True"
+        KeyboardNavigation.DirectionalNavigation="Cycle"
+        KeyboardNavigation.TabNavigation="Cycle">
 
     <controls:SmoothScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <StackPanel Margin="36,24,36,24" HorizontalAlignment="Stretch">
@@ -38,7 +40,8 @@
                             <TextBox x:Name="PathBox" Text="{Binding InputPath, Mode=OneWay}"
                                      IsReadOnly="True" Padding="8,6"
                                      FontSize="14" VerticalContentAlignment="Center" HorizontalAlignment="Stretch"
-                                     ToolTip="通过右侧“选择目录”来指定你要脱壳破解的游戏根目录">
+                                     ToolTip="通过右侧“选择目录”来指定你要脱壳破解的游戏根目录"
+                                     FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}">
                                 <TextBox.Background>
                                     <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                                 </TextBox.Background>
@@ -61,10 +64,12 @@
                         </Grid>
                         <Button Grid.Column="1" Command="{Binding BrowseFolderCommand}"
                                 Padding="16,6" Height="36" FontSize="14" Margin="8,0,0,0"
-                                Content="选择目录"/>
+                                Content="选择目录"
+                                FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                         <Button Grid.Column="2" Command="{Binding ClearLogCommand}"
                                 Padding="16,6" Height="36" FontSize="14" Margin="8,0,0,0"
-                                Content="清除日志"/>
+                                Content="清除日志"
+                                FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                     </Grid>
                     <Grid Margin="0,12,0,0" VerticalAlignment="Center">
                         <Grid.ColumnDefinitions>
@@ -80,46 +85,55 @@
                         <TextBox Grid.Column="1" Text="{Binding AppId, UpdateSourceTrigger=PropertyChanged}"
                                  Padding="8,6" Height="32" FontSize="13" Width="140"
                                  VerticalContentAlignment="Center"
-                                 ToolTip="输入要脱壳的游戏的Appid，或右侧点击查询"/>
+                                 ToolTip="输入要脱壳的游戏的Appid，或右侧点击查询"
+                                 FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                         <Button Grid.Column="2" Command="{Binding QueryAppIdCommand}"
                                 Padding="16,6" Height="32" FontSize="13" Margin="8,0,0,0"
                                 Content="查询AppID"
-                                ToolTip="用目录名搜索候选游戏并回填"/>
+                                ToolTip="用目录名搜索候选游戏并回填"
+                                FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                         <TextBlock Grid.Column="3" Text="Steam Web API Key（选填）：" FontSize="13" VerticalAlignment="Center" Margin="16,0,0,0"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                    ToolTip="填了可补全模拟器的成就与库存信息，不填则跳过，不影响破解本身"/>
                         <TextBox Grid.Column="4" Text="{Binding WebApiKey, UpdateSourceTrigger=PropertyChanged}"
                                  Padding="8,6" Height="32" FontSize="13" Margin="8,0,0,0"
                                  VerticalContentAlignment="Center" HorizontalAlignment="Stretch"
-                                 ToolTip="填了可补全模拟器的成就与库存信息，不填则跳过，不影响破解本身"/>
+                                 ToolTip="填了可补全模拟器的成就与库存信息，不填则跳过，不影响破解本身"
+                                 FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                         <Button Grid.Column="5" Command="{Binding OpenApiKeyPageCommand}"
                                 Padding="16,6" Height="32" FontSize="13" Margin="8,0,0,0"
                                 Content="获取"
-                                ToolTip="去 Steam 官方申请 Key"/>
+                                ToolTip="去 Steam 官方申请 Key"
+                                FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                     </Grid>
                     <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
                         <CheckBox IsChecked="{Binding IsUnpackOnly}" Content="仅脱壳" FontSize="14"
                                   VerticalAlignment="Center" Margin="0,0,8,0" MinWidth="0"
+                                  FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"
                                   ToolTip="只去除 SteamStub 壳，保留 Steam 启动依赖；原 exe 备份为 .exe.bak，还原可恢复"/>
                         <Button Command="{Binding CrackCommand}"
                                 Padding="16,6" Height="36" FontSize="14" Margin="0,0,6,0"
                                 Content="{Binding CrackButtonText}"
                                 ToolTip="仅 SteamStub 游戏有效"
-                                IsEnabled="{Binding IsRunning, Converter={StaticResource BoolInvertConverter}}"/>
+                                IsEnabled="{Binding IsRunning, Converter={StaticResource BoolInvertConverter}}"
+                                FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                         <Button Command="{Binding RestoreCommand}"
                                 Padding="16,6" Height="36" FontSize="14" Margin="6,0,6,0"
                                 Content="还原破解"
-                                IsEnabled="{Binding IsRunning, Converter={StaticResource BoolInvertConverter}}"/>
+                                IsEnabled="{Binding IsRunning, Converter={StaticResource BoolInvertConverter}}"
+                                FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                         <Button Command="{Binding UpdateEmuCommand}"
                                 Padding="16,6" Height="36" FontSize="14" Margin="6,0,0,0"
                                 Content="{Binding EmuButtonText}"
-                                IsEnabled="{Binding IsRunning, Converter={StaticResource BoolInvertConverter}}"/>
+                                IsEnabled="{Binding IsRunning, Converter={StaticResource BoolInvertConverter}}"
+                                FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                         <TextBlock Text="{Binding EmuVersionText}" FontSize="12" VerticalAlignment="Center" Margin="12,0,0,0"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                         <Button Command="{Binding CancelCommand}"
                                 Padding="16,6" Height="36" FontSize="14" Margin="6,0,0,0"
                                 Content="取消"
-                                Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibilityConverter}}"
+                                FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                     </StackPanel>
                     <ui:ProgressRing IsActive="{Binding IsRunning}" Width="20" Height="20"
                                      HorizontalAlignment="Left" Margin="0,8,0,0"

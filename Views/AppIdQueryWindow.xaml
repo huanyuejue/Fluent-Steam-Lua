@@ -8,7 +8,9 @@
         TextOptions.TextFormattingMode="Display"
         TextOptions.TextRenderingMode="Grayscale"
         UseLayoutRounding="True"
-        SnapsToDevicePixels="True">
+        SnapsToDevicePixels="True"
+        KeyboardNavigation.DirectionalNavigation="Cycle"
+        KeyboardNavigation.TabNavigation="Cycle">
     <Grid Margin="24,16,24,16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -28,7 +30,8 @@
                                Text="{Binding SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                PlaceholderText="输入游戏英文名" Padding="8,6" Height="36" FontSize="14" Margin="0,0,8,0"
                                 VerticalContentAlignment="Center"
-                                QuerySubmitted="SearchBox_QuerySubmitted">
+                                QuerySubmitted="SearchBox_QuerySubmitted"
+                                FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}">
                 <ui:AutoSuggestBox.Background>
                     <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                 </ui:AutoSuggestBox.Background>
@@ -36,7 +39,8 @@
             <Button Grid.Column="1" Command="{Binding SearchCommand}"
                     Padding="16,6" Height="36" FontSize="14"
                     IsEnabled="{Binding IsSearching, Converter={StaticResource BoolInvertConverter}}"
-                    Content="搜索"/>
+                    Content="搜索"
+                    FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
         </Grid>
 
         <controls:SmoothScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
@@ -70,7 +74,8 @@
                                             Command="{Binding DataContext.SelectCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                             CommandParameter="{Binding}"
                                             Padding="16,6" Height="34" FontSize="13"
-                                            Content="选择"/>
+                                            Content="选择"
+                                            FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                                 </Grid>
                             </Border>
                         </DataTemplate>

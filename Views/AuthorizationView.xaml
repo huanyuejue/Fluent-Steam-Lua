@@ -10,7 +10,9 @@
         TextOptions.TextFormattingMode="Display"
         TextOptions.TextRenderingMode="Grayscale"
         UseLayoutRounding="True"
-        SnapsToDevicePixels="True">
+        SnapsToDevicePixels="True"
+        KeyboardNavigation.DirectionalNavigation="Cycle"
+        KeyboardNavigation.TabNavigation="Cycle">
 
     <UserControl.Resources>
         <Style x:Key="AuthCardStyle" TargetType="Border">
@@ -97,7 +99,8 @@
                                          Height="36" VerticalContentAlignment="Center"
                                          Padding="10,0"
                                          KeyDown="ExtractAppIdBox_KeyDown"
-                                         IsEnabled="{Binding IsBusy, Converter={StaticResource BoolInvertConverter}}">
+                                         IsEnabled="{Binding IsBusy, Converter={StaticResource BoolInvertConverter}}"
+                                         FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}">
                                     <TextBox.Background>
                                         <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                                     </TextBox.Background>
@@ -122,7 +125,8 @@
                             <Button Grid.Column="1" Margin="10,0,0,0" Height="36" Padding="18,0"
                                     Content="{Binding IsExtracting, Converter={StaticResource BoolToRunStopConverter}}"
                                     Command="{Binding ExtractCommand}"
-                                    IsEnabled="{Binding IsImporting, Converter={StaticResource BoolInvertConverter}}"/>
+                                    IsEnabled="{Binding IsImporting, Converter={StaticResource BoolInvertConverter}}"
+                                    FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                         </Grid>
 
                         <Grid Margin="0,0,0,8"
@@ -166,9 +170,11 @@
                                         </Style>
                                     </StackPanel.Style>
                                     <Button Content="复制路径" Height="36" Padding="18,0"
-                                            Command="{Binding CopyExtractPathCommand}"/>
+                                            Command="{Binding CopyExtractPathCommand}"
+                                            FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                                     <Button Content="打开目录" Height="36" Padding="18,0" Margin="8,0,0,0"
-                                            Command="{Binding OpenExtractFolderCommand}"/>
+                                            Command="{Binding OpenExtractFolderCommand}"
+                                            FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                                 </StackPanel>
                                 <TextBlock Margin="0,12,0,0" FontSize="12" TextWrapping="Wrap" LineHeight="20"
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
@@ -202,7 +208,10 @@
                         <!-- 拖放区（虚线框） -->
                         <Grid Height="120" Cursor="Hand" Background="Transparent"
                               IsEnabled="{Binding IsBusy, Converter={StaticResource BoolInvertConverter}}"
-                              MouseLeftButtonDown="DropZone_MouseLeftButtonDown">
+                              MouseLeftButtonDown="DropZone_MouseLeftButtonDown"
+                              Focusable="True"
+                              FocusVisualStyle="{StaticResource GamepadFocusVisualLargeStyle}"
+                              controls:GamepadClick.Enable="True">
                             <Rectangle RadiusX="10" RadiusY="10" Fill="Transparent"
                                        StrokeDashArray="4,3">
                                 <Rectangle.Style>

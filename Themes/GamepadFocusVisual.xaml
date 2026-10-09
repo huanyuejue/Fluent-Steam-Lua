@@ -1,0 +1,33 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- 手柄/键盘焦点框：2px 强调色圆角，浅色与深色主题均可见的自发光蓝 -->
+    <Style x:Key="GamepadFocusVisualStyle" TargetType="Control">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Control">
+                    <Border BorderThickness="2"
+                            BorderBrush="{DynamicResource SystemAccentColorBrush}"
+                            CornerRadius="6"
+                            Margin="-2"
+                            IsHitTestVisible="False"/>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- 大控件焦点框：3px 强调色大圆角，用于卡片/列表项 -->
+    <Style x:Key="GamepadFocusVisualLargeStyle" TargetType="Control">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Control">
+                    <Border BorderThickness="3"
+                            BorderBrush="{DynamicResource SystemAccentColorBrush}"
+                            CornerRadius="8"
+                            Margin="-3"
+                            IsHitTestVisible="False"/>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+</ResourceDictionary>

@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
@@ -24,6 +24,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     private readonly ISteamManifestRepoService _manifestRepoService;
     private readonly IDialogService _dialogService;
     private readonly IHttpClientProvider _httpClientProvider;
+    private readonly IGamepadService _gamepadService;
     private AppSettings _settings;
 
     [ObservableProperty]
@@ -37,6 +38,12 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private bool _minimizeToTray;
+
+    [ObservableProperty]
+    private bool _enableGamepad;
+
+    [ObservableProperty]
+    private double _gamepadSensitivity = 1.0;
 
     [ObservableProperty]
     private string _statusMessage = string.Empty;
@@ -100,7 +107,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     public SettingsViewModel(ISteamPathService steamPathService, ILuaFileManager luaFileManager,
         ISettingsService settingsService, ISteamApiService steamApiService,
         ISteamManifestRepoService manifestRepoService, IDialogService dialogService,
-        IHttpClientProvider httpClientProvider)
+        IHttpClientProvider httpClientProvider, IGamepadService gamepadService)
     {
         _steamPathService = steamPathService;
         _luaFileManager = luaFileManager;
@@ -109,6 +116,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         _manifestRepoService = manifestRepoService;
         _dialogService = dialogService;
         _httpClientProvider = httpClientProvider;
+        _gamepadService = gamepadService;
         _settings = settingsService.Load();
 
         SteamPath = _settings.SteamPath;
@@ -124,6 +132,8 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         IsShowCopyLogButton = _settings.ShowCopyLogButton;
         EnableLogging = _settings.EnableLogging;
         MinimizeToTray = _settings.MinimizeToTray;
+        EnableGamepad = _settings.EnableGamepad;
+        GamepadSensitivity = _settings.GamepadSensitivity;
 
         SelectedTheme = _settings.SelectedTheme;
         SelectedCdnIndex = Math.Clamp(_settings.SelectedCdnIndex, 0, CdnEndpoints.Count - 1);
@@ -306,6 +316,22 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         _settingsService.Save(_settings);
         StatusMessage = value ? "关闭时最小化到系统托盘已开启" : "关闭时最小化到系统托盘已关闭";
         LogService.Info("设置", value ? "关闭时最小化到系统托盘已开启" : "关闭时最小化到系统托盘已关闭");
+    }
+
+    partial void OnEnableGamepadChanged(bool value)
+    {
+        _settings.EnableGamepad = value;
+        _settingsService.Save(_settings);
+        if (value) _gamepadService.Start(); else _gamepadService.Stop();
+        OnScreenKeyboardService.SetEnabled(value);
+        LogService.Info("设置", value ? "手柄操作已开启" : "手柄操作已关闭");
+    }
+
+    partial void OnGamepadSensitivityChanged(double value)
+    {
+        _settings.GamepadSensitivity = value;
+        _settingsService.Save(_settings);
+        _gamepadService.SetSensitivity(value);
     }
 
     partial void OnSelectedBackdropChanged(string value)

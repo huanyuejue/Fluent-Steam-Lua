@@ -6,7 +6,9 @@
         TextOptions.TextFormattingMode="Display"
         TextOptions.TextRenderingMode="Grayscale"
         UseLayoutRounding="True"
-        SnapsToDevicePixels="True">
+        SnapsToDevicePixels="True"
+        KeyboardNavigation.DirectionalNavigation="Cycle"
+        KeyboardNavigation.TabNavigation="Cycle">
 
     <UserControl.Resources>
         <Style x:Key="PillButtonStyle" TargetType="RadioButton">
@@ -86,11 +88,13 @@
                 <RadioButton Grid.Column="0" Content="480 联机"
                              IsChecked="{Binding IsShowing480}"
                              Style="{StaticResource PillButtonStyle}"
-                             Command="{Binding Show480ViewCommand}"/>
+                             Command="{Binding Show480ViewCommand}"
+                             FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                 <RadioButton Grid.Column="1" Content="OnlineFix 补丁"
                              IsChecked="{Binding IsShowingPatch}"
                              Style="{StaticResource PillButtonStyle}"
-                             Command="{Binding ShowPatchViewCommand}"/>
+                             Command="{Binding ShowPatchViewCommand}"
+                             FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
             </Grid>
         </Border>
 
@@ -126,7 +130,8 @@
                                        Text="3. 正常启动游戏即可联机；想恢复只需删掉该参数"/>
                             <TextBox Text="-onlinefix" IsReadOnly="True" FontSize="14" FontFamily="Consolas, Consolas, Microsoft YaHei"
                                      Padding="10,8" Margin="0,0,0,8" MaxWidth="280" HorizontalAlignment="Left"
-                                     ToolTip="鼠标拖选复制">
+                                     ToolTip="鼠标拖选复制"
+                                     FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}">
                                 <TextBox.Background>
                                     <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                                 </TextBox.Background>
@@ -159,7 +164,8 @@
                                                QuerySubmitted="SearchBox_QuerySubmitted"
                                                TextChanged="SearchBox_TextChanged"
                                                Height="36"
-                                               Margin="0,0,8,0" HorizontalAlignment="Stretch">
+                                               Margin="0,0,8,0" HorizontalAlignment="Stretch"
+                                               FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}">
                                 <ui:AutoSuggestBox.Background>
                                     <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                                 </ui:AutoSuggestBox.Background>
@@ -168,7 +174,8 @@
                                 </ui:AutoSuggestBox.QueryIcon>
                             </ui:AutoSuggestBox>
                             <Button Grid.Column="1" Command="{Binding ClearLogCommand}"
-                                    Padding="16,6" Height="36" FontSize="14">
+                                    Padding="16,6" Height="36" FontSize="14"
+                                    FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}">
                                 <Button.Background>
                                     <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                                 </Button.Background>
@@ -202,7 +209,8 @@
                             <Button x:Name="CopyLogButton" Content="复制日志"
                                     HorizontalAlignment="Right" VerticalAlignment="Top"
                                     Margin="0,8,8,0" Padding="8,4" FontSize="12"
-                                    Click="CopyLogButton_Click" Visibility="Collapsed"/>
+                                    Click="CopyLogButton_Click" Visibility="Collapsed"
+                                    FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                         </Grid>
                     </Border>
 
@@ -245,7 +253,8 @@
                                         <Button Grid.Column="1"
                                                 Command="{Binding DataContext.LoadDetailCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                 CommandParameter="{Binding}"
-                                                Padding="16,6" Height="36" FontSize="14" Focusable="False">
+                                                Padding="16,6" Height="36" FontSize="14"
+                                                FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}">
                                             <Button.Background>
                                                 <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                                             </Button.Background>
@@ -297,7 +306,8 @@
                                          FontSize="12" TextWrapping="Wrap" BorderThickness="0"
                                          VerticalScrollBarVisibility="Auto"
                                          IsInactiveSelectionHighlightEnabled="True"
-                                         Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+                                         Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                         FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}">
                                     <TextBox.Background>
                                         <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.25"/>
                                     </TextBox.Background>
@@ -330,7 +340,8 @@
                                                 <Button Grid.Column="1"
                                                         Command="{Binding DataContext.DownloadCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                         CommandParameter="{Binding}"
-                                                        Padding="20,8" Height="36" FontSize="14" Focusable="False"
+                                                        Padding="20,8" Height="36" FontSize="14"
+                                                        FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"
                                                         IsEnabled="{Binding DataContext.IsDownloading, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolInvertConverter}}">
                                                 <Button.Background>
                                                     <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
@@ -350,7 +361,8 @@
                                          Visibility="{Binding IsDownloading, Converter={StaticResource BoolToVisibilityConverter}}"/>
                             <Button Content="取消下载" Command="{Binding CancelDownloadCommand}"
                                     Padding="16,6" Height="32" FontSize="13" Margin="0,8,0,0" HorizontalAlignment="Left"
-                                    Visibility="{Binding IsDownloading, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    Visibility="{Binding IsDownloading, Converter={StaticResource BoolToVisibilityConverter}}"
+                                    FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}">
                                 <Button.Background>
                                     <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                                 </Button.Background>

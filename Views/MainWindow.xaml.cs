@@ -1,7 +1,8 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Windows;
@@ -20,6 +21,7 @@ using iNKORE.UI.WPF.Modern.Controls.Helpers;
 using iNKORE.UI.WPF.Modern.Helpers.Styles;
 using SteamLuaManager.Services;
 using SteamLuaManager.ViewModels;
+using CommunityToolkit.Mvvm.Messaging;
 
 namespace SteamLuaManager.Views;
 
@@ -126,6 +128,169 @@ public partial class MainWindow : Window
 
         settingsViewModel.PropertyChanged += SettingsViewModel_PropertyChanged;
         Closed += MainWindow_Closed;
+
+        // 手柄消息：Y 切换侧栏，Start/Back 导航到指定页，LB/RB 在主导航页间循环
+        WeakReferenceMessenger.Default.Register<MainWindow, GamepadTogglePaneMessage>(this,
+            (r, _) => r.Dispatcher.Invoke(() => r.NavView.IsPaneOpen = !r.NavView.IsPaneOpen));
+        WeakReferenceMessenger.Default.Register<MainWindow, GamepadNavigateMessage>(this,
+            (r, msg) => r.Dispatcher.Invoke(() => r.NavigateTo(msg.Target)));
+        WeakReferenceMessenger.Default.Register<MainWindow, GamepadPrevPageMessage>(this,
+            (r, _) => r.Dispatcher.Invoke(() => r.CycleMainPage(-1)));
+        WeakReferenceMessenger.Default.Register<MainWindow, GamepadNextPageMessage>(this,
+            (r, _) => r.Dispatcher.Invoke(() => r.CycleMainPage(1)));
+
+        // A 键物理点击的同时：若光标在导航项上，切页/选页完成后把焦点与光标带入页面内容区
+        GamepadService.ActivatePressed += OnGamepadActivate;
+        Closed += (_, _) => GamepadService.ActivatePressed -= OnGamepadActivate;
+    }
+
+    private void OnGamepadActivate()
+    {
+        // 仅当光标命中 NavigationViewItem（含已展开的汉堡菜单/设置项）时才接管；
+        // 延迟到 Loaded：确保物理点击引发的切页和新页面模板布局已完成
+        if (HitTestNavItemAtCursor() != null)
+            Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(EnterPageContent));
+    }
+
+    private NavigationViewItem? HitTestNavItemAtCursor()
+    {
+        try
+        {
+            if (!GetCursorPos(out var pt)) return null;
+            if (WindowState == WindowState.Minimized) return null;
+            var node = VisualTreeHelper.HitTest(this, PointFromScreen(new Point(pt.X, pt.Y)))?.VisualHit;
+            while (node is Visual)
+            {
+                if (node is NavigationViewItem nvi) return nvi;
+                if (ReferenceEquals(node, this)) return null;
+                node = VisualTreeHelper.GetParent(node);
+            }
+        }
+        catch { /* 命中失败按“未命中”处理，不干预物理点击 */ }
+        return null;
+    }
+
+    /// <summary>焦点移入当前页面第一个可交互控件并把光标带到其中心（按 A 进入页面）。</summary>
+    private void EnterPageContent()
+    {
+        if (!TryFocusFirstFocusable(ContentTransition.Content as DependencyObject))
+        {
+            // 数据驱动页面（列表异步加载）首帧可能没有可聚焦元素，下一帧再试一次
+            Dispatcher.BeginInvoke(DispatcherPriority.Background,
+                new Action(() => TryFocusFirstFocusable(ContentTransition.Content as DependencyObject)));
+        }
+    }
+
+    /// <summary>深度优先找到可视树中第一个可见、可用、可聚焦的元素，聚焦并把光标移到其中心。</summary>
+    private static bool TryFocusFirstFocusable(DependencyObject? root)
+    {
+        if (root == null) return false;
+        var count = VisualTreeHelper.GetChildrenCount(root);
+        for (var i = 0; i < count; i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is FrameworkElement { Focusable: true, IsEnabled: true, Visibility: Visibility.Visible } fe
+                && fe.Focus())
+            {
+                MoveCursorToElement(fe);
+                return true;
+            }
+            if (TryFocusFirstFocusable(child)) return true;
+        }
+        return false;
+    }
+
+    // LB/RB 循环切换主导航（不含底部的设置/关于，那两个由 Start/Back 直达）
+    private static readonly string[] _gamepadMainPages =
+        ["Home", "ScriptDownload", "Manifest", "Extraction", "Authorization",
+         "Trainer", "Achievement", "CloudSave", "OnlineFix", "CrackTool"];
+
+    private void CycleMainPage(int delta)
+    {
+        var idx = Array.IndexOf(_gamepadMainPages, CurrentPage);
+        // 当前停在设置/关于等非主页面时：RB 回第一页，LB 回最后一页
+        var target = idx < 0
+            ? (delta > 0 ? _gamepadMainPages[0] : _gamepadMainPages[^1])
+            : _gamepadMainPages[(idx + delta + _gamepadMainPages.Length) % _gamepadMainPages.Length];
+        NavigateTo(target);
+        // 切页后焦点与光标都落到对应导航项，按 A 即物理点击该项；推右摇杆可进入页面内容区
+        var item = GetNavItem(target);
+        if (item != null)
+        {
+            item.Focus();
+            MoveCursorToElement(item);
+        }
+    }
+
+    private NavigationViewItem? GetNavItem(string tag) => tag switch
+    {
+        "Home" => HomeItem,
+        "ScriptDownload" => ScriptDownloadItem,
+        "Manifest" => ManifestItem,
+        "Extraction" => ExtractionItem,
+        "Authorization" => AuthorizationItem,
+        "Trainer" => TrainerItem,
+        "Achievement" => AchievementItem,
+        "CloudSave" => CloudSaveItem,
+        "OnlineFix" => OnlineFixItem,
+        "CrackTool" => CrackToolItem,
+        "Settings" => SettingsItem,
+        "About" => AboutItem,
+        _ => null
+    };
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetCursorPos(out NativePoint lpPoint);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetCursorPos(int x, int y);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativePoint
+    {
+        public int X;
+        public int Y;
+    }
+
+    /// <summary>
+    /// 右摇杆鼠标停住后调用：对光标位置做命中测试，沿可视树上溯找到第一个可聚焦的
+    /// 可见/可用元素并给予键盘焦点，使手柄 A 键（Enter）能激活鼠标指向的任意控件。
+    /// </summary>
+    public void FocusElementAtCursor()
+    {
+        try
+        {
+            if (!GetCursorPos(out var pt)) return;
+            if (WindowState == WindowState.Minimized) return;
+            var relative = PointFromScreen(new Point(pt.X, pt.Y));
+            var hit = VisualTreeHelper.HitTest(this, relative)?.VisualHit;
+            DependencyObject? node = hit;
+            while (node is Visual)
+            {
+                if (ReferenceEquals(node, this)) break;
+                if (node is FrameworkElement { Focusable: true, IsEnabled: true, Visibility: Visibility.Visible } fe)
+                {
+                    fe.BringIntoView();
+                    fe.Focus();
+                    return;
+                }
+                node = VisualTreeHelper.GetParent(node);
+            }
+        }
+        catch { /* 命中测试失败静默 */ }
+    }
+
+    /// <summary>把鼠标光标移到指定元素中心（屏幕物理坐标）。</summary>
+    private static void MoveCursorToElement(FrameworkElement fe)
+    {
+        try
+        {
+            var center = fe.PointToScreen(new Point(fe.ActualWidth / 2, fe.ActualHeight / 2));
+            SetCursorPos((int)center.X, (int)center.Y);
+        }
+        catch { /* 元素未完成布局时忽略 */ }
     }
 
     protected override void OnClosing(CancelEventArgs e)

@@ -1,0 +1,242 @@
+<Window x:Class="SteamLuaManager.Views.GamepadKeyboardWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="屏幕键盘"
+        Width="940"
+        Height="316"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        Topmost="True"
+        AllowsTransparency="True"
+        WindowStartupLocation="Manual"
+        Background="Transparent"
+        Focusable="False">
+    <Window.Resources>
+        <!-- 虚拟键按钮：所有按键不可聚焦，点击不带走输入框焦点，手柄右摇杆+A 直接点按 -->
+        <Style x:Key="KeyStyle" TargetType="Button">
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="IsTabStop" Value="False" />
+            <Setter Property="Height" Value="50" />
+            <Setter Property="Margin" Value="3" />
+            <Setter Property="FontSize" Value="19" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd"
+                                Background="#FF333337"
+                                CornerRadius="6"
+                                BorderBrush="#FF4A4A52"
+                                BorderThickness="1">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#FF4A4A55" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#FF0067C0" />
+                            </Trigger>
+                            <Trigger Property="Tag" Value="SHIFT-ON">
+                                <Setter TargetName="Bd" Property="Background" Value="#FF0067C0" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Border Background="#E61B1B1F" CornerRadius="10" Padding="8">
+        <StackPanel x:Name="KeyboardRoot">
+            <!-- ========== 字母页 ========== -->
+            <StackPanel x:Name="LettersPanel">
+                <!-- 数字行 -->
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Button Grid.Column="0" Style="{StaticResource KeyStyle}" Content="1" Tag="1" Click="Key_Click" />
+                    <Button Grid.Column="1" Style="{StaticResource KeyStyle}" Content="2" Tag="2" Click="Key_Click" />
+                    <Button Grid.Column="2" Style="{StaticResource KeyStyle}" Content="3" Tag="3" Click="Key_Click" />
+                    <Button Grid.Column="3" Style="{StaticResource KeyStyle}" Content="4" Tag="4" Click="Key_Click" />
+                    <Button Grid.Column="4" Style="{StaticResource KeyStyle}" Content="5" Tag="5" Click="Key_Click" />
+                    <Button Grid.Column="5" Style="{StaticResource KeyStyle}" Content="6" Tag="6" Click="Key_Click" />
+                    <Button Grid.Column="6" Style="{StaticResource KeyStyle}" Content="7" Tag="7" Click="Key_Click" />
+                    <Button Grid.Column="7" Style="{StaticResource KeyStyle}" Content="8" Tag="8" Click="Key_Click" />
+                    <Button Grid.Column="8" Style="{StaticResource KeyStyle}" Content="9" Tag="9" Click="Key_Click" />
+                    <Button Grid.Column="9" Style="{StaticResource KeyStyle}" Content="0" Tag="0" Click="Key_Click" />
+                    <Button Grid.Column="10" Style="{StaticResource KeyStyle}" FontSize="16" Content="退格" Tag="BACK" Click="Key_Click" />
+                </Grid>
+                <!-- 字母三行 -->
+                <Grid Margin="0,3,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Button Grid.Column="0" Style="{StaticResource KeyStyle}" Content="q" Tag="q" Click="Key_Click" />
+                    <Button Grid.Column="1" Style="{StaticResource KeyStyle}" Content="w" Tag="w" Click="Key_Click" />
+                    <Button Grid.Column="2" Style="{StaticResource KeyStyle}" Content="e" Tag="e" Click="Key_Click" />
+                    <Button Grid.Column="3" Style="{StaticResource KeyStyle}" Content="r" Tag="r" Click="Key_Click" />
+                    <Button Grid.Column="4" Style="{StaticResource KeyStyle}" Content="t" Tag="t" Click="Key_Click" />
+                    <Button Grid.Column="5" Style="{StaticResource KeyStyle}" Content="y" Tag="y" Click="Key_Click" />
+                    <Button Grid.Column="6" Style="{StaticResource KeyStyle}" Content="u" Tag="u" Click="Key_Click" />
+                    <Button Grid.Column="7" Style="{StaticResource KeyStyle}" Content="i" Tag="i" Click="Key_Click" />
+                    <Button Grid.Column="8" Style="{StaticResource KeyStyle}" Content="o" Tag="o" Click="Key_Click" />
+                    <Button Grid.Column="9" Style="{StaticResource KeyStyle}" Content="p" Tag="p" Click="Key_Click" />
+                </Grid>
+                <Grid Margin="0,3,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Button Grid.Column="0" Style="{StaticResource KeyStyle}" Content="a" Tag="a" Click="Key_Click" />
+                    <Button Grid.Column="1" Style="{StaticResource KeyStyle}" Content="s" Tag="s" Click="Key_Click" />
+                    <Button Grid.Column="2" Style="{StaticResource KeyStyle}" Content="d" Tag="d" Click="Key_Click" />
+                    <Button Grid.Column="3" Style="{StaticResource KeyStyle}" Content="f" Tag="f" Click="Key_Click" />
+                    <Button Grid.Column="4" Style="{StaticResource KeyStyle}" Content="g" Tag="g" Click="Key_Click" />
+                    <Button Grid.Column="5" Style="{StaticResource KeyStyle}" Content="h" Tag="h" Click="Key_Click" />
+                    <Button Grid.Column="6" Style="{StaticResource KeyStyle}" Content="j" Tag="j" Click="Key_Click" />
+                    <Button Grid.Column="7" Style="{StaticResource KeyStyle}" Content="k" Tag="k" Click="Key_Click" />
+                    <Button Grid.Column="8" Style="{StaticResource KeyStyle}" Content="l" Tag="l" Click="Key_Click" />
+                    <Button Grid.Column="9" Style="{StaticResource KeyStyle}" Content="'" Tag="'" Click="Key_Click" />
+                </Grid>
+                <Grid Margin="0,3,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="2*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Button x:Name="ShiftButton" Grid.Column="0" Style="{StaticResource KeyStyle}" FontSize="16" Content="大写" Tag="SHIFT" Click="Key_Click" />
+                    <Button Grid.Column="1" Style="{StaticResource KeyStyle}" Content="z" Tag="z" Click="Key_Click" />
+                    <Button Grid.Column="2" Style="{StaticResource KeyStyle}" Content="x" Tag="x" Click="Key_Click" />
+                    <Button Grid.Column="3" Style="{StaticResource KeyStyle}" Content="c" Tag="c" Click="Key_Click" />
+                    <Button Grid.Column="4" Style="{StaticResource KeyStyle}" Content="v" Tag="v" Click="Key_Click" />
+                    <Button Grid.Column="5" Style="{StaticResource KeyStyle}" Content="b" Tag="b" Click="Key_Click" />
+                    <Button Grid.Column="6" Style="{StaticResource KeyStyle}" Content="n" Tag="n" Click="Key_Click" />
+                    <Button Grid.Column="7" Style="{StaticResource KeyStyle}" Content="m" Tag="m" Click="Key_Click" />
+                    <Button Grid.Column="8" Style="{StaticResource KeyStyle}" Content="&#44;" Tag="&#44;" Click="Key_Click" />
+                    <Button Grid.Column="9" Style="{StaticResource KeyStyle}" Content="/" Tag="/" Click="Key_Click" />
+                </Grid>
+                <!-- 底栏：符号页切换 + 光标移动 + 空格 + 回车 + 关闭 -->
+                <Grid Margin="0,3,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="2*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="3*" />
+                        <ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="2*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Button Grid.Column="0" Style="{StaticResource KeyStyle}" FontSize="16" Content="符号" Tag="SYM" Click="Key_Click" />
+                    <Button Grid.Column="1" Style="{StaticResource KeyStyle}" Content="&#x2190;" Tag="LEFT" Click="Key_Click" />
+                    <Button Grid.Column="2" Style="{StaticResource KeyStyle}" Content="空格" Tag=" " Click="Key_Click" />
+                    <Button Grid.Column="3" Style="{StaticResource KeyStyle}" Content="&#x2192;" Tag="RIGHT" Click="Key_Click" />
+                    <Button Grid.Column="4" Style="{StaticResource KeyStyle}" Content="." Tag="." Click="Key_Click" />
+                    <Button Grid.Column="5" Style="{StaticResource KeyStyle}" FontSize="16" Content="回车" Tag="ENTER" Click="Key_Click" />
+                    <Button Grid.Column="6" Style="{StaticResource KeyStyle}" FontSize="16" Content="收起" Tag="CLOSE" Click="Key_Click" />
+                </Grid>
+            </StackPanel>
+
+            <!-- ========== 符号页 ========== -->
+            <StackPanel x:Name="SymbolsPanel" Visibility="Collapsed">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Button Grid.Column="0" Style="{StaticResource KeyStyle}" Content="1" Tag="1" Click="Key_Click" />
+                    <Button Grid.Column="1" Style="{StaticResource KeyStyle}" Content="2" Tag="2" Click="Key_Click" />
+                    <Button Grid.Column="2" Style="{StaticResource KeyStyle}" Content="3" Tag="3" Click="Key_Click" />
+                    <Button Grid.Column="3" Style="{StaticResource KeyStyle}" Content="4" Tag="4" Click="Key_Click" />
+                    <Button Grid.Column="4" Style="{StaticResource KeyStyle}" Content="5" Tag="5" Click="Key_Click" />
+                    <Button Grid.Column="5" Style="{StaticResource KeyStyle}" Content="6" Tag="6" Click="Key_Click" />
+                    <Button Grid.Column="6" Style="{StaticResource KeyStyle}" Content="7" Tag="7" Click="Key_Click" />
+                    <Button Grid.Column="7" Style="{StaticResource KeyStyle}" Content="8" Tag="8" Click="Key_Click" />
+                    <Button Grid.Column="8" Style="{StaticResource KeyStyle}" Content="9" Tag="9" Click="Key_Click" />
+                    <Button Grid.Column="9" Style="{StaticResource KeyStyle}" Content="0" Tag="0" Click="Key_Click" />
+                    <Button Grid.Column="10" Style="{StaticResource KeyStyle}" FontSize="16" Content="退格" Tag="BACK" Click="Key_Click" />
+                </Grid>
+                <Grid Margin="0,3,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Button Grid.Column="0" Style="{StaticResource KeyStyle}" Content="!" Tag="!" Click="Key_Click" />
+                    <Button Grid.Column="1" Style="{StaticResource KeyStyle}" Content="@" Tag="@" Click="Key_Click" />
+                    <Button Grid.Column="2" Style="{StaticResource KeyStyle}" Content="#" Tag="#" Click="Key_Click" />
+                    <Button Grid.Column="3" Style="{StaticResource KeyStyle}" Content="$" Tag="$" Click="Key_Click" />
+                    <Button Grid.Column="4" Style="{StaticResource KeyStyle}" Content="%" Tag="%" Click="Key_Click" />
+                    <Button Grid.Column="5" Style="{StaticResource KeyStyle}" Content="^" Tag="^" Click="Key_Click" />
+                    <Button Grid.Column="6" Style="{StaticResource KeyStyle}" Content="&amp;" Tag="&amp;" Click="Key_Click" />
+                    <Button Grid.Column="7" Style="{StaticResource KeyStyle}" Content="*" Tag="*" Click="Key_Click" />
+                    <Button Grid.Column="8" Style="{StaticResource KeyStyle}" Content="(" Tag="(" Click="Key_Click" />
+                    <Button Grid.Column="9" Style="{StaticResource KeyStyle}" Content=")" Tag=")" Click="Key_Click" />
+                </Grid>
+                <Grid Margin="0,3,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Button Grid.Column="0" Style="{StaticResource KeyStyle}" Content="-" Tag="-" Click="Key_Click" />
+                    <Button Grid.Column="1" Style="{StaticResource KeyStyle}" Content="_" Tag="_" Click="Key_Click" />
+                    <Button Grid.Column="2" Style="{StaticResource KeyStyle}" Content="=" Tag="=" Click="Key_Click" />
+                    <Button Grid.Column="3" Style="{StaticResource KeyStyle}" Content="+" Tag="+" Click="Key_Click" />
+                    <Button Grid.Column="4" Style="{StaticResource KeyStyle}" Content="[" Tag="[" Click="Key_Click" />
+                    <Button Grid.Column="5" Style="{StaticResource KeyStyle}" Content="]" Tag="]" Click="Key_Click" />
+                    <Button Grid.Column="6" Style="{StaticResource KeyStyle}" Content="{}{" Tag="{}{" Click="Key_Click" />
+                    <Button Grid.Column="7" Style="{StaticResource KeyStyle}" Content="{}}" Tag="{}}" Click="Key_Click" />
+                    <Button Grid.Column="8" Style="{StaticResource KeyStyle}" Content=";" Tag=";" Click="Key_Click" />
+                    <Button Grid.Column="9" Style="{StaticResource KeyStyle}" Content=":" Tag=":" Click="Key_Click" />
+                </Grid>
+                <Grid Margin="0,3,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Button Grid.Column="0" Style="{StaticResource KeyStyle}" Content="'" Tag="'" Click="Key_Click" />
+                    <Button Grid.Column="1" Style="{StaticResource KeyStyle}" Content="&quot;" Tag="&quot;" Click="Key_Click" />
+                    <Button Grid.Column="2" Style="{StaticResource KeyStyle}" Content="`" Tag="`" Click="Key_Click" />
+                    <Button Grid.Column="3" Style="{StaticResource KeyStyle}" Content="~" Tag="~" Click="Key_Click" />
+                    <Button Grid.Column="4" Style="{StaticResource KeyStyle}" Content="/" Tag="/" Click="Key_Click" />
+                    <Button Grid.Column="5" Style="{StaticResource KeyStyle}" Content="\" Tag="\" Click="Key_Click" />
+                    <Button Grid.Column="6" Style="{StaticResource KeyStyle}" Content="|" Tag="|" Click="Key_Click" />
+                    <Button Grid.Column="7" Style="{StaticResource KeyStyle}" Content="&lt;" Tag="&lt;" Click="Key_Click" />
+                    <Button Grid.Column="8" Style="{StaticResource KeyStyle}" Content="&gt;" Tag="&gt;" Click="Key_Click" />
+                    <Button Grid.Column="9" Style="{StaticResource KeyStyle}" Content="?" Tag="?" Click="Key_Click" />
+                </Grid>
+                <Grid Margin="0,3,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="2*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="3*" />
+                        <ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="2*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Button Grid.Column="0" Style="{StaticResource KeyStyle}" FontSize="16" Content="字母" Tag="ABC" Click="Key_Click" />
+                    <Button Grid.Column="1" Style="{StaticResource KeyStyle}" Content="&#x2190;" Tag="LEFT" Click="Key_Click" />
+                    <Button Grid.Column="2" Style="{StaticResource KeyStyle}" Content="空格" Tag=" " Click="Key_Click" />
+                    <Button Grid.Column="3" Style="{StaticResource KeyStyle}" Content="&#x2192;" Tag="RIGHT" Click="Key_Click" />
+                    <Button Grid.Column="4" Style="{StaticResource KeyStyle}" Content="." Tag="." Click="Key_Click" />
+                    <Button Grid.Column="5" Style="{StaticResource KeyStyle}" FontSize="16" Content="回车" Tag="ENTER" Click="Key_Click" />
+                    <Button Grid.Column="6" Style="{StaticResource KeyStyle}" FontSize="16" Content="收起" Tag="CLOSE" Click="Key_Click" />
+                </Grid>
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</Window>

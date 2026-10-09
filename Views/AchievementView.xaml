@@ -7,7 +7,9 @@
         TextOptions.TextFormattingMode="Display"
         TextOptions.TextRenderingMode="Grayscale"
         UseLayoutRounding="True"
-        SnapsToDevicePixels="True">
+        SnapsToDevicePixels="True"
+        KeyboardNavigation.DirectionalNavigation="Cycle"
+        KeyboardNavigation.TabNavigation="Cycle">
 
     <Grid Margin="36,24,36,24">
         <Grid.RowDefinitions>
@@ -40,7 +42,8 @@
             </StackPanel>
             <Button Grid.Column="1" Content="刷新游戏列表" VerticalAlignment="Center"
                     Command="{Binding LoadGamesCommand}" IsEnabled="{Binding IsLoadingGames, Converter={StaticResource BoolInvertConverter}}"
-                    Padding="16,6" Height="36" FontSize="14">
+                    Padding="16,6" Height="36" FontSize="14"
+                    FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}">
                 <Button.Background>
                     <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                 </Button.Background>
@@ -59,7 +62,8 @@
                                QuerySubmitted="SearchBox_QuerySubmitted"
                                TextChanged="SearchBox_TextChanged"
                                Height="36"
-                               Margin="0,0,12,0" HorizontalAlignment="Stretch">
+                               Margin="0,0,12,0" HorizontalAlignment="Stretch"
+                               FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}">
                 <ui:AutoSuggestBox.Background>
                     <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                 </ui:AutoSuggestBox.Background>
@@ -73,7 +77,8 @@
                 <ComboBox x:Name="ViewModeComboBox" ItemsSource="{Binding ViewModeOptions}"
                           SelectedItem="{Binding SelectedViewMode, Mode=TwoWay}"
                           SelectionChanged="ViewModeComboBox_SelectionChanged"
-                          Padding="12,6" HorizontalContentAlignment="Center">
+                          Padding="12,6" HorizontalContentAlignment="Center"
+                          FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}">
                     <ComboBox.Background>
                         <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                     </ComboBox.Background>
@@ -85,7 +90,8 @@
                 <ComboBox x:Name="SortComboBox" ItemsSource="{Binding SortOptions}"
                           SelectedItem="{Binding SelectedSortOption, Mode=TwoWay}"
                           SelectionChanged="SortComboBox_SelectionChanged"
-                          MinWidth="90" Padding="12,6" HorizontalContentAlignment="Center">
+                          MinWidth="90" Padding="12,6" HorizontalContentAlignment="Center"
+                          FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}">
                     <ComboBox.Background>
                         <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                     </ComboBox.Background>
@@ -115,7 +121,10 @@
                                     Tag="{Binding}"
                                     Cursor="Hand"
                                     MouseDoubleClick="Card_MouseDoubleClick"
-                                    ToolTip="双击打开成就编辑">
+                                    ToolTip="双击打开成就编辑（手柄按 A 打开）"
+                                    Focusable="True"
+                                    FocusVisualStyle="{StaticResource GamepadFocusVisualLargeStyle}"
+                                    controls:GamepadClick.Enable="True">
                                 <controls:ClippingBorder.Background>
                                     <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
                                 </controls:ClippingBorder.Background>
@@ -189,7 +198,8 @@
                                     </StackPanel>
                                     <Button Grid.Column="1" Content="成就管理" Tag="{Binding}"
                                             Click="ListItemEditButton_Click"
-                                            Padding="12,6" VerticalAlignment="Center">
+                                            Padding="12,6" VerticalAlignment="Center"
+                                            FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}">
                                         <Button.Background>
                                             <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                                         </Button.Background>
