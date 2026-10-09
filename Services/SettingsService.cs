@@ -41,6 +41,9 @@ public bool ShowTrainerSections { get; set; } = true;
     public string EncryptedGuardData { get; set; } = string.Empty;
     // 免启动破解用的 Steam Web API Key（选填）：补全模拟器成就/库存信息，不填则跳过
     public string CrackWebApiKey { get; set; } = string.Empty;
+    // 手柄适配：开关 + 灵敏度倍率（影响导航重复间隔，默认 1.0）
+    public bool EnableGamepad { get; set; }
+    public double GamepadSensitivity { get; set; } = 1.0;
 }
 
 public interface ISettingsService

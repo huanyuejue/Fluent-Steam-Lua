@@ -1,7 +1,8 @@
-﻿<Window x:Class="SteamLuaManager.Views.MainWindow"
+<Window x:Class="SteamLuaManager.Views.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.inkore.net/lib/ui/wpf/modern"
+        xmlns:controls="clr-namespace:SteamLuaManager.Controls"
         Title="Fluent Steam Lua 管理工具"
         Icon="pack://application:,,,/Assets/app.ico"
         Height="780" Width="1070"
@@ -35,7 +36,9 @@
                            IsBackEnabled="False"
                            IsBackButtonVisible="Collapsed"
                            SelectionChanged="NavView_SelectionChanged"
-                           Background="Transparent">
+                           Background="Transparent"
+                           KeyboardNavigation.DirectionalNavigation="Cycle"
+                           KeyboardNavigation.TabNavigation="Cycle">
             <ui:NavigationView.Resources>
                 <SolidColorBrush x:Key="NavigationViewDefaultPaneBackground" Color="Transparent"/>
                 <SolidColorBrush x:Key="NavigationViewExpandedPaneBackground" Color="Transparent"/>
@@ -170,6 +173,9 @@
                                 <Border x:Name="MenuItemBorder" Padding="10,8" Cursor="Hand" CornerRadius="6"
                                         Background="Transparent" BorderThickness="0"
                                         Tag="{Binding}"
+                                        Focusable="True"
+                                        FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"
+                                        controls:GamepadClick.Enable="True"
                                         MouseLeftButtonDown="FabMenuItem_MouseLeftButtonDown"
                                         MouseEnter="FabMenuItem_MouseEnter"
                                         MouseLeave="FabMenuItem_MouseLeave">
@@ -260,6 +266,9 @@
                                 <Border x:Name="AccountItemBorder" Padding="8,6" Margin="0,1,0,0" CornerRadius="4"
                                         Background="Transparent" BorderThickness="0" Cursor="Hand"
                                         Tag="{Binding}"
+                                        Focusable="True"
+                                        FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"
+                                        controls:GamepadClick.Enable="True"
                                         MouseLeftButtonDown="AccountItem_Click"
                                         MouseEnter="FabSubmenuItem_MouseEnter"
                                         MouseLeave="FabSubmenuItem_MouseLeave">
@@ -354,6 +363,9 @@
                                 <Border x:Name="KernelItemBorder" Padding="8,6" Margin="0,1,0,0" CornerRadius="4"
                                         Background="Transparent" BorderThickness="0"
                                         Cursor="Hand" Tag="{Binding}"
+                                        Focusable="True"
+                                        FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"
+                                        controls:GamepadClick.Enable="True"
                                         MouseLeftButtonDown="KernelItem_Click"
                                         MouseEnter="KernelMenuItem_MouseEnter"
                                         MouseLeave="FabSubmenuItem_MouseLeave">
@@ -393,6 +405,9 @@
                     Width="44" Height="44" CornerRadius="22"
                     BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1" Cursor="Hand"
                     Effect="{StaticResource FabShadow}"
+                    Focusable="True"
+                    FocusVisualStyle="{StaticResource GamepadFocusVisualLargeStyle}"
+                    controls:GamepadClick.Enable="True"
                     MouseLeftButtonDown="SteamFab_MouseLeftButtonDown"
                     MouseLeftButtonUp="SteamFab_MouseLeftButtonUp"
                     MouseMove="SteamFab_MouseMove"

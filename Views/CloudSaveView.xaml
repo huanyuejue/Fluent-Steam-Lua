@@ -6,7 +6,9 @@
         TextOptions.TextFormattingMode="Display"
         TextOptions.TextRenderingMode="Grayscale"
         UseLayoutRounding="True"
-        SnapsToDevicePixels="True">
+        SnapsToDevicePixels="True"
+        KeyboardNavigation.DirectionalNavigation="Cycle"
+        KeyboardNavigation.TabNavigation="Cycle">
 
     <controls:SmoothScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <StackPanel Margin="36,24,36,24">
@@ -32,7 +34,8 @@
                         <Button Content="测试连接" Command="{Binding TestConnectionCommand}"
                                 Padding="12,4" Margin="0,0,8,0" VerticalAlignment="Center"
                                 Visibility="{Binding IsCloudProvider, Converter={StaticResource BoolToVisibilityConverter}}"
-                                IsEnabled="{Binding IsBusy, Converter={StaticResource BoolInvertConverter}}">
+                                IsEnabled="{Binding IsBusy, Converter={StaticResource BoolInvertConverter}}"
+                                FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}">
                             <Button.Background>
                                 <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                             </Button.Background>
@@ -40,14 +43,16 @@
                         <ComboBox ItemsSource="{Binding CloudProviders}"
                                   SelectedValue="{Binding SelectedProvider}"
                                   SelectedValuePath="Id" DisplayMemberPath="DisplayName"
-                                  Padding="8,4" MinWidth="140" Margin="0,0,12,0" VerticalAlignment="Center">
+                                  Padding="8,4" MinWidth="140" Margin="0,0,12,0" VerticalAlignment="Center"
+                                  FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}">
                         <ComboBox.Background>
                             <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                         </ComboBox.Background>
                     </ComboBox>
                     <ui:ToggleSwitch IsOn="{Binding IsCloudEnabled, Mode=TwoWay}"
                                      IsEnabled="{Binding IsBusy, Converter={StaticResource BoolInvertConverter}}"
-                                     OnContent="开" OffContent="关" VerticalAlignment="Center"/>
+                                     OnContent="开" OffContent="关" VerticalAlignment="Center"
+                                     FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                 </StackPanel>
             </ui:SettingsCard>
             <TextBlock Text="{Binding ProviderStatusLine}" FontSize="12" Margin="0,0,0,8"
@@ -62,21 +67,24 @@
                 <StackPanel Orientation="Horizontal">
                     <TextBox Text="{Binding SyncPathText, Mode=OneWay}"
                              ToolTip="{Binding SyncPathText}"
-                             IsReadOnly="True" Width="240" Padding="8,6" Margin="0,0,4,0">
+                             IsReadOnly="True" Width="240" Padding="8,6" Margin="0,0,4,0"
+                             FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}">
                         <TextBox.Background>
                             <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                         </TextBox.Background>
                     </TextBox>
                     <Button Content="自定义" Command="{Binding BrowseSyncPathCommand}"
                             Padding="12,6" Margin="4,0"
-                            IsEnabled="{Binding IsBusy, Converter={StaticResource BoolInvertConverter}}">
+                            IsEnabled="{Binding IsBusy, Converter={StaticResource BoolInvertConverter}}"
+                            FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}">
                         <Button.Background>
                             <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                         </Button.Background>
                     </Button>
                     <Button Content="重置" Command="{Binding ResetSyncPathCommand}"
                             Padding="12,6" Margin="4,0"
-                            IsEnabled="{Binding IsBusy, Converter={StaticResource BoolInvertConverter}}">
+                            IsEnabled="{Binding IsBusy, Converter={StaticResource BoolInvertConverter}}"
+                            FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}">
                         <Button.Background>
                             <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                         </Button.Background>
@@ -97,25 +105,30 @@
                                 <Button Content="登录" Padding="20,6" Margin="0,0,8,0"
                                         Command="{Binding SignInCommand}"
                                         Visibility="{Binding IsProviderSignedIn, Converter={StaticResource InvertedBoolToVisibilityConverter}}"
-                                        IsEnabled="{Binding IsSigningIn, Converter={StaticResource BoolInvertConverter}}"/>
+                                        IsEnabled="{Binding IsSigningIn, Converter={StaticResource BoolInvertConverter}}"
+                                        FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                                 <Button Content="切换账号" Padding="20,6" Margin="0,0,8,0"
                                         Command="{Binding SignInCommand}"
                                         Visibility="{Binding IsProviderSignedIn, Converter={StaticResource BoolToVisibilityConverter}}"
-                                        IsEnabled="{Binding IsSigningIn, Converter={StaticResource BoolInvertConverter}}"/>
+                                        IsEnabled="{Binding IsSigningIn, Converter={StaticResource BoolInvertConverter}}"
+                                        FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                                 <Button Content="退出登录" Padding="20,6" Margin="0,0,8,0"
                                         Command="{Binding SignOutCommand}"
-                                        Visibility="{Binding IsProviderSignedIn, Converter={StaticResource BoolToVisibilityConverter}}">
+                                        Visibility="{Binding IsProviderSignedIn, Converter={StaticResource BoolToVisibilityConverter}}"
+                                        FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}">
                                     <Button.Foreground>
                                         <SolidColorBrush Color="#E74856"/>
                                     </Button.Foreground>
                                 </Button>
                                 <Button Content="取消" Padding="20,6"
                                         Command="{Binding CancelSignInCommand}"
-                                        IsEnabled="{Binding IsSigningIn}"/>
+                                        IsEnabled="{Binding IsSigningIn}"
+                                        FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                             </StackPanel>
                             <Button Content="清空" Padding="20,6" HorizontalAlignment="Right"
                                     Command="{Binding ClearAuthLogCommand}"
-                                    IsEnabled="{Binding IsSigningIn, Converter={StaticResource BoolInvertConverter}}"/>
+                                    IsEnabled="{Binding IsSigningIn, Converter={StaticResource BoolInvertConverter}}"
+                                    FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                         </Grid>
                         <ScrollViewer MaxHeight="160" VerticalScrollBarVisibility="Auto"
                                       Visibility="{Binding AuthLogLines.Count, Converter={StaticResource NonZeroToVisibilityConverter}}">
@@ -154,28 +167,36 @@
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
                             <TextBlock Grid.Row="0" Grid.Column="0" Text="Account ID *" VerticalAlignment="Center" FontSize="12" Margin="0,4"/>
-                            <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding R2AccountId, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Margin="0,4"/>
+                            <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding R2AccountId, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Margin="0,4"
+                                     FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                             <TextBlock Grid.Row="1" Grid.Column="0" Text="Access Key ID *" VerticalAlignment="Center" FontSize="12" Margin="0,4"/>
-                            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding R2AccessKeyId, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Margin="0,4"/>
+                            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding R2AccessKeyId, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Margin="0,4"
+                                     FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                             <TextBlock Grid.Row="2" Grid.Column="0" Text="Secret Key *" VerticalAlignment="Center" FontSize="12" Margin="0,4"/>
                             <PasswordBox Grid.Row="2" Grid.Column="1" x:Name="R2SecretBox" Padding="8,6" Margin="0,4"
-                                         PasswordChanged="R2SecretBox_PasswordChanged"/>
+                                         PasswordChanged="R2SecretBox_PasswordChanged"
+                                         FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                             <TextBlock Grid.Row="3" Grid.Column="0" Text="Bucket *" VerticalAlignment="Center" FontSize="12" Margin="0,4"/>
-                            <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding R2Bucket, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Margin="0,4"/>
+                            <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding R2Bucket, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Margin="0,4"
+                                     FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                             <TextBlock Grid.Row="4" Grid.Column="0" Text="Key Prefix" VerticalAlignment="Center" FontSize="12" Margin="0,4"/>
-                            <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding R2KeyPrefix, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Margin="0,4"/>
+                            <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding R2KeyPrefix, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Margin="0,4"
+                                     FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                             <TextBlock Grid.Row="5" Grid.Column="0" Text="Endpoint" VerticalAlignment="Center" FontSize="12" Margin="0,4"/>
-                            <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding R2Endpoint, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Margin="0,4"/>
+                            <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding R2Endpoint, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Margin="0,4"
+                                     FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                         </Grid>
                         <TextBlock Text="Endpoint 留空则用默认地址；Key Prefix 为云端目录前缀，两台机器填一致才能互通"
                                    FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                         <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                             <Button Content="保存 R2 凭证并切换" Padding="20,6" Margin="0,0,8,0"
-                                    Command="{Binding SaveR2Command}"/>
+                                    Command="{Binding SaveR2Command}"
+                                    FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                             <Button Content="清除凭证" Padding="20,6"
                                     Command="{Binding SignOutCommand}" CommandParameter="r2"
-                                    Visibility="{Binding IsProviderSignedIn, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    Visibility="{Binding IsProviderSignedIn, Converter={StaticResource BoolToVisibilityConverter}}"
+                                    FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}">
                                 <Button.Foreground>
                                     <SolidColorBrush Color="#E74856"/>
                                 </Button.Foreground>
@@ -208,27 +229,38 @@
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
                             <TextBlock Grid.Row="0" Grid.Column="0" Text="Access Key ID *" VerticalAlignment="Center" FontSize="12" Margin="0,4"/>
-                            <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding S3AccessKeyId, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Margin="0,4"/>
+                            <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding S3AccessKeyId, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Margin="0,4"
+                                     FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                             <TextBlock Grid.Row="1" Grid.Column="0" Text="Secret Key *" VerticalAlignment="Center" FontSize="12" Margin="0,4"/>
                             <PasswordBox Grid.Row="1" Grid.Column="1" x:Name="S3SecretBox" Padding="8,6" Margin="0,4"
-                                         PasswordChanged="S3SecretBox_PasswordChanged"/>
+                                         PasswordChanged="S3SecretBox_PasswordChanged"
+                                         FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                             <TextBlock Grid.Row="2" Grid.Column="0" Text="Bucket *" VerticalAlignment="Center" FontSize="12" Margin="0,4"/>
-                            <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding S3Bucket, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Margin="0,4"/>
+                            <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding S3Bucket, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Margin="0,4"
+                                     FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                             <TextBlock Grid.Row="3" Grid.Column="0" Text="Endpoint *" VerticalAlignment="Center" FontSize="12" Margin="0,4"/>
-                            <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding S3Endpoint, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Margin="0,4"/>
+                            <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding S3Endpoint, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Margin="0,4"
+                                     FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                             <TextBlock Grid.Row="4" Grid.Column="0" Text="Region *" VerticalAlignment="Center" FontSize="12" Margin="0,4"/>
-                            <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding S3Region, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Margin="0,4"/>
+                            <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding S3Region, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Margin="0,4"
+                                     FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                             <TextBlock Grid.Row="5" Grid.Column="0" Text="Key Prefix" VerticalAlignment="Center" FontSize="12" Margin="0,4"/>
-                            <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding S3KeyPrefix, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Margin="0,4"/>
+                            <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding S3KeyPrefix, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Margin="0,4"
+                                     FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                             <TextBlock Grid.Row="6" Grid.Column="0" Text="CA 证书" VerticalAlignment="Center" FontSize="12" Margin="0,4"/>
                             <StackPanel Grid.Row="6" Grid.Column="1" Orientation="Horizontal" Margin="0,4">
-                                <TextBox Text="{Binding S3CaCertPath}" IsReadOnly="True" Width="220" Padding="8,6" Margin="0,0,8,0"/>
-                                <Button Content="选择" Padding="12,6" Command="{Binding BrowseCaCertCommand}"/>
+                                <TextBox Text="{Binding S3CaCertPath}" IsReadOnly="True" Width="220" Padding="8,6" Margin="0,0,8,0"
+                                         FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
+                                <Button Content="选择" Padding="12,6" Command="{Binding BrowseCaCertCommand}"
+                                        FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                             </StackPanel>
                             <StackPanel Grid.Row="7" Grid.Column="1" Orientation="Horizontal" Margin="0,4">
-                                <CheckBox Content="携带签名载荷" IsChecked="{Binding S3SignPayload}" Margin="0,0,16,0"/>
-                                <CheckBox Content="允许 HTTP" IsChecked="{Binding S3AllowInsecureHttp}" Margin="0,0,16,0"/>
-                                <CheckBox Content="跳过 TLS 校验" IsChecked="{Binding S3AllowInsecureTls}"/>
+                                <CheckBox Content="携带签名载荷" IsChecked="{Binding S3SignPayload}" Margin="0,0,16,0"
+                                          FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
+                                <CheckBox Content="允许 HTTP" IsChecked="{Binding S3AllowInsecureHttp}" Margin="0,0,16,0"
+                                          FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
+                                <CheckBox Content="跳过 TLS 校验" IsChecked="{Binding S3AllowInsecureTls}"
+                                          FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                             </StackPanel>
                         </Grid>
                         <TextBlock Text="Endpoint 填带 https:// 的完整地址；Region 按服务商要求填写（如 us-east-1）；Key Prefix 两台机器填一致才能互通；“携带签名载荷”仅部分老旧 S3 需要，默认不勾"
@@ -236,10 +268,12 @@
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                         <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                             <Button Content="保存 S3 凭证并切换" Padding="20,6" Margin="0,0,8,0"
-                                    Command="{Binding SaveS3Command}"/>
+                                    Command="{Binding SaveS3Command}"
+                                    FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                             <Button Content="清除凭证" Padding="20,6"
                                     Command="{Binding SignOutCommand}" CommandParameter="s3"
-                                    Visibility="{Binding IsProviderSignedIn, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    Visibility="{Binding IsProviderSignedIn, Converter={StaticResource BoolToVisibilityConverter}}"
+                                    FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}">
                                 <Button.Foreground>
                                     <SolidColorBrush Color="#E74856"/>
                                 </Button.Foreground>
@@ -266,14 +300,16 @@
                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                             <ComboBox ItemsSource="{Binding SortOptions}"
                                       SelectedItem="{Binding SelectedSortOption}"
-                                      Padding="8,4" MinWidth="110" Margin="0,0,8,0" VerticalAlignment="Center">
+                                      Padding="8,4" MinWidth="110" Margin="0,0,8,0" VerticalAlignment="Center"
+                                      FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}">
                                 <ComboBox.Background>
                                     <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                                 </ComboBox.Background>
                             </ComboBox>
                             <Button Content="刷新" Padding="12,6"
                                     Command="{Binding RefreshCommand}"
-                                    IsEnabled="{Binding IsBusy, Converter={StaticResource BoolInvertConverter}}">
+                                    IsEnabled="{Binding IsBusy, Converter={StaticResource BoolInvertConverter}}"
+                                    FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}">
                                 <Button.Background>
                                     <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                                 </Button.Background>
@@ -320,14 +356,16 @@
                                         <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                                             <Button Content="打开路径" Padding="12,6"
                                                     Command="{Binding DataContext.OpenSaveFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                    CommandParameter="{Binding AppId}">
+                                                    CommandParameter="{Binding AppId}"
+                                                    FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}">
                                                 <Button.Background>
                                                     <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                                                 </Button.Background>
                                             </Button>
                                             <Button Content="删除存档" Padding="12,6" Margin="8,0,0,0"
                                                     Command="{Binding DataContext.DeleteGameCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                    CommandParameter="{Binding}">
+                                                    CommandParameter="{Binding}"
+                                                    FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}">
                                                 <Button.Background>
                                                     <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                                                 </Button.Background>

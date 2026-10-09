@@ -6,7 +6,9 @@
         TextOptions.TextFormattingMode="Display"
         TextOptions.TextRenderingMode="Grayscale"
         UseLayoutRounding="True"
-        SnapsToDevicePixels="True">
+        SnapsToDevicePixels="True"
+        KeyboardNavigation.DirectionalNavigation="Cycle"
+        KeyboardNavigation.TabNavigation="Cycle">
 
 
     <controls:SmoothScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
@@ -53,7 +55,8 @@
                                            FontSize="14" MinWidth="200"
                                            HorizontalAlignment="Stretch"
                                            QuerySubmitted="SearchBox_QuerySubmitted"
-                                           TextChanged="SearchBox_TextChanged">
+                                           TextChanged="SearchBox_TextChanged"
+                                           FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}">
                             <ui:AutoSuggestBox.Background>
                                 <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                             </ui:AutoSuggestBox.Background>
@@ -63,7 +66,8 @@
                         </ui:AutoSuggestBox>
                         <Button Grid.Column="1" Command="{Binding RefreshKeyCacheCommand}"
                                 Padding="16,6" Height="36" FontSize="14" Margin="8,0,0,0"
-                                Visibility="{Binding IsLocalCacheMode, Converter={StaticResource BoolToVisibilityConverter}}">
+                                Visibility="{Binding IsLocalCacheMode, Converter={StaticResource BoolToVisibilityConverter}}"
+                                FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}">
                             <Button.Background>
                                 <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                             </Button.Background>
@@ -73,7 +77,8 @@
                             </StackPanel>
                         </Button>
                         <Button Grid.Column="2" Command="{Binding ClearLogCommand}"
-                                Padding="16,6" Height="36" FontSize="14" Margin="8,0,0,0">
+                                Padding="16,6" Height="36" FontSize="14" Margin="8,0,0,0"
+                                FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}">
                             <Button.Background>
                                 <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                             </Button.Background>
@@ -89,15 +94,18 @@
                         <CheckBox Content="DLC入库" IsChecked="{Binding IncludeDlc}"
                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                   FontSize="13" Margin="0,0,32,0"
-                                  ToolTip="勾选后，入库时将同时入库该游戏的全部DLC（仅本地缓存仓库模式生效）"/>
+                                  ToolTip="勾选后，入库时将同时入库该游戏的全部DLC（仅本地缓存仓库模式生效）"
+                                  FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                         <CheckBox Content="固定游戏版本" IsChecked="{Binding PinManifest}"
                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                   FontSize="13" Margin="0,0,32,0"
-                                  ToolTip="勾选后，入库的游戏将固定到当前游戏最新版本，后续游戏更新也不会跟随触发更新，D加密游戏推荐勾选，以防止游戏更新导致D加密授权失效（仅本地缓存仓库模式生效）"/>
+                                  ToolTip="勾选后，入库的游戏将固定到当前游戏最新版本，后续游戏更新也不会跟随触发更新，D加密游戏推荐勾选，以防止游戏更新导致D加密授权失效（仅本地缓存仓库模式生效）"
+                                  FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                         <CheckBox Content="获取名称注释" IsChecked="{Binding FetchNameComments}"
                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                   FontSize="13"
-                                  ToolTip="勾选后，入库时查询各游戏/仓库的中文名并写入注释；不勾选则只写ID，速度更快（仅本地缓存仓库模式生效）。仅推荐有代理/梯子的用户勾选，否则大概率会严重延长 Lua 生成时间"/>
+                                  ToolTip="勾选后，入库时查询各游戏/仓库的中文名并写入注释；不勾选则只写ID，速度更快（仅本地缓存仓库模式生效）。仅推荐有代理/梯子的用户勾选，否则大概率会严重延长 Lua 生成时间"
+                                  FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                     </StackPanel>
                 </StackPanel>
             </Border>
@@ -124,7 +132,8 @@
                     <Button x:Name="CopyLogButton" Content="复制日志"
                             HorizontalAlignment="Right" VerticalAlignment="Top"
                             Margin="0,8,8,0" Padding="8,4" FontSize="12"
-                            Click="CopyLogButton_Click" Visibility="Collapsed"/>
+                            Click="CopyLogButton_Click" Visibility="Collapsed"
+                            FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                 </Grid>
             </Border>
 
@@ -169,7 +178,8 @@
                                     <Button Tag="{Binding}"
                                             Click="GameInfoButton_Click"
                                             Padding="16,6" Height="36" FontSize="14"
-                                            Focusable="False" Margin="0,0,8,0">
+                                            FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"
+                                            Margin="0,0,8,0">
                                         <Button.Background>
                                             <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                                         </Button.Background>
@@ -178,7 +188,7 @@
                                     <Button Command="{Binding DataContext.DownloadGameCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                             CommandParameter="{Binding}"
                                             Padding="16,6" Height="36" FontSize="14"
-                                            Focusable="False"
+                                            FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"
                                             IsEnabled="{Binding DataContext.IsDownloading, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolInvertConverter}}">
                                         <Button.Background>
                                             <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>

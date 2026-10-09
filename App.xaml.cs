@@ -1,4 +1,4 @@
-﻿using System.Windows;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Interop;
@@ -128,6 +128,17 @@ public partial class App : Application
         var settings = settingsService.Load();
 
         LogService.SetEnabled(settings.EnableLogging);
+
+        // 手柄适配：按设置启动轮询（XInput DLL 缺失时 Start 内部静默失败）
+        try
+        {
+            OnScreenKeyboardService.SetEnabled(settings.EnableGamepad);
+            var gamepad = ServiceProvider.GetRequiredService<IGamepadService>();
+            gamepad.SetSensitivity(settings.GamepadSensitivity);
+            if (settings.EnableGamepad)
+                gamepad.Start();
+        }
+        catch (Exception ex) { LogService.Warn("系统", $"手柄服务启动失败: {ex.Message}"); }
         try
         {
             // 新版首次启动打扫更新残留（备份目录、暂存目录、临时包），静默失败
@@ -221,6 +232,8 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        try { ServiceProvider?.GetService<IGamepadService>()?.Stop(); } catch { }
+        try { OnScreenKeyboardService.SetEnabled(false); } catch { }
         LogService.Info("系统", "程序退出");
         LogService.Shutdown();
         if (_singleInstanceMutex != null)
@@ -574,6 +587,7 @@ public partial class App : Application
         services.AddSingleton<IManifestHubKeyService, ManifestHubKeyService>();
         services.AddSingleton<IOnlineFixService, OnlineFixService>();
         services.AddSingleton<ICrackToolService, CrackToolService>();
+        services.AddSingleton<IGamepadService, GamepadService>();
 
         services.AddTransient<MainViewModel>();
         services.AddTransient<SettingsViewModel>();
