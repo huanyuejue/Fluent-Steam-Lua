@@ -16,6 +16,7 @@ public interface IFeedbackService
 public class FeedbackService : IFeedbackService
 {
     private readonly IHttpClientProvider _httpClientProvider;
+    private readonly IOpenSteamToolService _openSteamToolService;
 
     // 反馈通道凭证构建时注入（环境变量 RESEND_API_KEY），源码与仓库中永不出现明文
     private static string ResendApiKey => FeedbackSecrets.ResendApiKey;
@@ -30,9 +31,10 @@ public class FeedbackService : IFeedbackService
     // 附件总大小上限（Base64 编码后），与接口限制对齐
     public const long MaxAttachmentsBytes = 40L * 1024 * 1024;
 
-    public FeedbackService(IHttpClientProvider httpClientProvider)
+    public FeedbackService(IHttpClientProvider httpClientProvider, IOpenSteamToolService openSteamToolService)
     {
         _httpClientProvider = httpClientProvider;
+        _openSteamToolService = openSteamToolService;
     }
 
     public async Task SubmitAsync(string title, string body, string? contact, bool attachLog = false, IEnumerable<string>? attachmentPaths = null, CancellationToken ct = default)
@@ -57,7 +59,24 @@ public class FeedbackService : IFeedbackService
         var version = Assembly.GetExecutingAssembly().GetName().Version;
         var versionText = version is not null ? $"{version.Major}.{version.Minor}.{version.Build}" : "未知";
         var contactLine = string.IsNullOrWhiteSpace(contact) ? "未填写" : contact.Trim();
-        var text = $"{body}\n\n---\n版本：{versionText}\n系统：{Environment.OSVersion.VersionString}\n联系方式：{contactLine}";
+        // 内核版本读本地 DLL（SHA/标记位解析），卡住超过 5 秒直接记未知，不拖提交
+        var kernelText = "未知";
+        try
+        {
+            var kernelTask = _openSteamToolService.GetLocalVersionAsync();
+            var finished = await Task.WhenAny(kernelTask, Task.Delay(TimeSpan.FromSeconds(5), ct));
+            if (finished == kernelTask)
+            {
+                var v = await kernelTask;
+                // 版本读不到不代表没装：老内核既不在 SHA 表里也没打标记位，单独区分
+                kernelText = v ?? (_openSteamToolService.IsInstalled ? "已安装（版本未知）" : "未安装");
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            kernelText = "未知";
+        }
+        var text = $"{body}\n\n---\n版本：{versionText}\n内核：{kernelText}\n系统：{Environment.OSVersion.VersionString}\n联系方式：{contactLine}";
 
         var attachments = new List<Dictionary<string, string>>();
         if (attachLog)
