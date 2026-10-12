@@ -6,7 +6,9 @@
         TextOptions.TextFormattingMode="Display"
         TextOptions.TextRenderingMode="Grayscale"
         UseLayoutRounding="True"
-        SnapsToDevicePixels="True">
+        SnapsToDevicePixels="True"
+        KeyboardNavigation.DirectionalNavigation="Cycle"
+        KeyboardNavigation.TabNavigation="Cycle">
 
     <controls:SmoothScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <StackPanel Margin="36,24,36,24">
@@ -59,11 +61,13 @@
                                      VerticalContentAlignment="Center"
                                      HorizontalAlignment="Stretch"
                                      Background="Transparent"
-                                     IsEnabled="{Binding IsRunning, Converter={StaticResource BoolInvertConverter}}"/>
+                                     IsEnabled="{Binding IsRunning, Converter={StaticResource BoolInvertConverter}}"
+                                     FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                         </Grid>
 
                         <Button Grid.Column="1" Command="{Binding StartExtractionCommand}"
-                                Padding="16,6" Height="36" Margin="8,0,4,0">
+                                Padding="16,6" Height="36" Margin="8,0,4,0"
+                                FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}">
                             <Button.Background>
                                 <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                             </Button.Background>
@@ -78,7 +82,8 @@
                         </Button>
 
                         <Button Grid.Column="2" Command="{Binding ClearLogCommand}"
-                                Padding="16,6" Height="36" Margin="4,0,0,0">
+                                Padding="16,6" Height="36" Margin="4,0,0,0"
+                                FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}">
                             <Button.Background>
                                 <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                             </Button.Background>
@@ -95,28 +100,34 @@
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                         <Button Content="账号登录" Command="{Binding OpenLoginCommand}"
                                 Padding="16,6" Height="32" FontSize="13" Margin="0,0,8,0"
-                                Visibility="{Binding IsLoggedOn, Converter={StaticResource InvertedBoolToVisibilityConverter}}"/>
+                                Visibility="{Binding IsLoggedOn, Converter={StaticResource InvertedBoolToVisibilityConverter}}"
+                                FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                         <Button Content="切换账号" Command="{Binding OpenLoginCommand}"
                                 Padding="16,6" Height="32" FontSize="13" Margin="0,0,8,0"
-                                Visibility="{Binding IsLoggedOn, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                Visibility="{Binding IsLoggedOn, Converter={StaticResource BoolToVisibilityConverter}}"
+                                FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                         <Button Content="退出" Command="{Binding LogoutCommand}"
                                 Padding="16,6" Height="32" FontSize="13"
-                                Visibility="{Binding IsLoggedOn, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                Visibility="{Binding IsLoggedOn, Converter={StaticResource BoolToVisibilityConverter}}"
+                                FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                     </StackPanel>
 
                     <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
                         <CheckBox Content="固定游戏版本" IsChecked="{Binding PinManifest}"
                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                   FontSize="13" Margin="0,0,32,0"
-                                  ToolTip="获取游戏Depots的最新清单ID并写入Lua"/>
+                                  ToolTip="获取游戏Depots的最新清单ID并写入Lua"
+                                  FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                         <CheckBox Content="提取游戏成就文件" IsChecked="{Binding ExtractAchievements}"
                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                   FontSize="13" Margin="0,0,32,0"
-                                  ToolTip="从Steam缓存提取游戏的成就文件"/>
+                                  ToolTip="从Steam缓存提取游戏的成就文件"
+                                  FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                         <CheckBox Content="提取 Manifest 清单文件" IsChecked="{Binding DownloadManifests}"
                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                   FontSize="13"
-                                  ToolTip="登录后从 Steam CDN 下载各仓库的 Manifest 文件到提取目录"/>
+                                  ToolTip="登录后从 Steam CDN 下载各仓库的 Manifest 文件到提取目录"
+                                  FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                     </StackPanel>
                 </StackPanel>
             </Border>
@@ -143,7 +154,8 @@
                     <Button x:Name="CopyLogButton" Content="复制日志"
                             HorizontalAlignment="Right" VerticalAlignment="Top"
                             Margin="0,8,8,0" Padding="8,4" FontSize="12"
-                            Click="CopyLogButton_Click" Visibility="Collapsed">
+                            Click="CopyLogButton_Click" Visibility="Collapsed"
+                            FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}">
                         <Button.Background>
                             <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                         </Button.Background>

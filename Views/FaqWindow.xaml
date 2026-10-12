@@ -8,7 +8,9 @@
         TextOptions.TextFormattingMode="Display"
         TextOptions.TextRenderingMode="Grayscale"
         UseLayoutRounding="True"
-        SnapsToDevicePixels="True">
+        SnapsToDevicePixels="True"
+        KeyboardNavigation.DirectionalNavigation="Cycle"
+        KeyboardNavigation.TabNavigation="Cycle">
     <Window.Resources>
         <!-- 标题栏开关：全透明，无悬停无选中染色 -->
         <Style x:Key="FaqHeaderToggleStyle" TargetType="ToggleButton">
@@ -42,7 +44,8 @@
                             </Border.Background>
                             <StackPanel>
                                 <ToggleButton x:Name="HeaderSite" Style="{StaticResource FaqHeaderToggleStyle}"
-                                              IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
+                                              IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
+                                              FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
@@ -127,7 +130,8 @@
         <ui:AutoSuggestBox Grid.Row="0" x:Name="SearchBox"
                            Text="{Binding SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                            PlaceholderText="搜索问题关键字…" Padding="8,6" Height="36" FontSize="14" Margin="0,0,0,12"
-                           VerticalContentAlignment="Center">
+                           VerticalContentAlignment="Center"
+                           FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}">
             <ui:AutoSuggestBox.Background>
                 <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
             </ui:AutoSuggestBox.Background>
@@ -154,7 +158,8 @@
                                         <TextBox Text="{Binding Answer, Mode=OneWay}" IsReadOnly="True"
                                                  FontSize="13" TextWrapping="Wrap" BorderThickness="0"
                                                  IsInactiveSelectionHighlightEnabled="True"
-                                                 Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                                                 Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                 FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}">
                                             <TextBox.Background>
                                                 <SolidColorBrush Color="Transparent"/>
                                             </TextBox.Background>

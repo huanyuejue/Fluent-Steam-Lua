@@ -145,7 +145,29 @@ Style="{StaticResource SettingsCardStyle}">
                                          Description="点击关闭按钮时不退出程序，而是隐藏到系统托盘"
 Style="{StaticResource SettingsCardStyle}">
                             <ui:ToggleSwitch IsOn="{Binding MinimizeToTray}"
-                                             OnContent="开" OffContent="关"/>
+                                             OnContent="开" OffContent="关"
+                                             FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
+                        </ui:SettingsCard>
+
+                        <ui:SettingsCard Header="手柄操作" Margin="0,0,0,8"
+                                         Description="LB/RB 切页，A 确认，B 返回；左摇杆导航，右摇杆鼠标，LT/RT 滚动。无响应时加入 Steam 非游戏列表并关闭控制器映射。"
+                                         Style="{StaticResource SettingsCardStyle}">
+                            <ui:ToggleSwitch IsOn="{Binding EnableGamepad}"
+                                             OnContent="开" OffContent="关"
+                                             FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
+                        </ui:SettingsCard>
+
+                        <ui:SettingsCard Header="手柄灵敏度" Margin="0,0,0,8"
+                                         Description="方向导航与滚动的重复触发速度倍率（0.5~2.0）"
+Style="{StaticResource SettingsCardStyle}">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <Slider Minimum="0.5" Maximum="2.0" Value="{Binding GamepadSensitivity}"
+                                        Width="160" TickFrequency="0.1" IsSnapToTickEnabled="True"
+                                        FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
+                                <TextBlock Text="{Binding GamepadSensitivity, StringFormat=N1}"
+                                           VerticalAlignment="Center" Margin="8,0,0,0"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            </StackPanel>
                         </ui:SettingsCard>
 
                         <ui:SettingsCard Header="Bin 成就文件夹" Margin="0,0,0,8"

@@ -15,7 +15,9 @@
         TextOptions.TextFormattingMode="Display"
         TextOptions.TextRenderingMode="Grayscale"
         UseLayoutRounding="True"
-        SnapsToDevicePixels="True">
+        SnapsToDevicePixels="True"
+        KeyboardNavigation.DirectionalNavigation="Cycle"
+        KeyboardNavigation.TabNavigation="Cycle">
 
     <Grid Background="Transparent" Margin="36,28,36,24">
         <Grid.RowDefinitions>
@@ -38,12 +40,17 @@
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                <Button Content="重新加载" Command="{Binding ReloadCommand}" Margin="0,0,6,0" Height="36" Padding="16,6"/>
-                <Button Content="全部解锁" Command="{Binding UnlockAllCommand}" Margin="0,0,6,0" Height="36" Padding="16,6"/>
-                <Button Content="全部锁定" Command="{Binding LockAllCommand}" Margin="0,0,6,0" Height="36" Padding="16,6"/>
-                <Button Content="反选" Command="{Binding InvertAllCommand}" Margin="0,0,6,0" Height="36" Padding="16,6"/>
+                <Button Content="重新加载" Command="{Binding ReloadCommand}" Margin="0,0,6,0" Height="36" Padding="16,6"
+                        FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
+                <Button Content="全部解锁" Command="{Binding UnlockAllCommand}" Margin="0,0,6,0" Height="36" Padding="16,6"
+                        FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
+                <Button Content="全部锁定" Command="{Binding LockAllCommand}" Margin="0,0,6,0" Height="36" Padding="16,6"
+                        FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
+                <Button Content="反选" Command="{Binding InvertAllCommand}" Margin="0,0,6,0" Height="36" Padding="16,6"
+                        FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                 <Button Content="保存到 Steam" Command="{Binding SaveCommand}" Height="36" Padding="16,6"
-                        Style="{StaticResource AccentButtonStyle}"/>
+                        Style="{StaticResource AccentButtonStyle}"
+                        FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
             </StackPanel>
         </Grid>
 
@@ -94,7 +101,8 @@
                                                              OnContent="" OffContent=""
                                                              Width="44" MinWidth="0"
                                                              HorizontalAlignment="Left" VerticalAlignment="Center"
-                                                             Margin="0,0,8,0"/>
+                                                             Margin="0,0,8,0"
+                                                             FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                                             <Border Grid.Column="1" Width="52" Height="52" CornerRadius="6"
                                                     Background="{DynamicResource ControlFillColorDefaultBrush}" Margin="0,0,10,0">
                                                 <Border.Style>

@@ -4,7 +4,9 @@
         Title="Steam 账号登录" Width="560" SizeToContent="Height"
         WindowStartupLocation="CenterScreen" ResizeMode="NoResize"
         TextOptions.TextFormattingMode="Display"
-        TextOptions.TextRenderingMode="Grayscale">
+        TextOptions.TextRenderingMode="Grayscale"
+        KeyboardNavigation.DirectionalNavigation="Cycle"
+        KeyboardNavigation.TabNavigation="Cycle">
     <StackPanel Margin="24,20,24,20">
         <TextBlock Text="Steam 账号登录" FontSize="20" FontWeight="SemiBold"
                    Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
@@ -22,7 +24,8 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
                 <Button x:Name="MethodLocalButton" Grid.Column="0" Click="MethodLocalButton_Click"
-                        Padding="16,14" Margin="0,0,6,0" HorizontalContentAlignment="Left">
+                        Padding="16,14" Margin="0,0,6,0" HorizontalContentAlignment="Left"
+                        FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}">
                     <Button.Content>
                         <StackPanel>
                             <TextBlock Text="本地凭证登录" FontSize="15" FontWeight="SemiBold"
@@ -34,7 +37,8 @@
                     </Button.Content>
                 </Button>
                 <Button x:Name="MethodPasswordButton" Grid.Column="1" Click="MethodPasswordButton_Click"
-                        Padding="16,14" Margin="6,0,0,0" HorizontalContentAlignment="Left">
+                        Padding="16,14" Margin="6,0,0,0" HorizontalContentAlignment="Left"
+                        FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}">
                     <Button.Content>
                         <StackPanel>
                             <TextBlock Text="账号密码登录" FontSize="15" FontWeight="SemiBold"
@@ -59,6 +63,7 @@
                     <Style TargetType="ListBoxItem">
                         <Setter Property="Margin" Value="0,0,6,6"/>
                         <Setter Property="Padding" Value="0"/>
+                        <Setter Property="FocusVisualStyle" Value="{StaticResource GamepadFocusVisualLargeStyle}"/>
                         <Setter Property="Template">
                             <Setter.Value>
                                 <ControlTemplate TargetType="ListBoxItem">
@@ -113,9 +118,11 @@
             </ListBox>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button x:Name="LocalLoginButton" Content="本地登录" Click="LocalLoginButton_Click"
-                        Padding="16,6" Height="36" Margin="0,0,8,0"/>
+                        Padding="16,6" Height="36" Margin="0,0,8,0"
+                        FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                 <Button Content="返回" Click="BackButton_Click"
-                        Padding="16,6" Height="36"/>
+                        Padding="16,6" Height="36"
+                        FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
             </StackPanel>
         </StackPanel>
 
@@ -126,7 +133,8 @@
             <StackPanel x:Name="CredentialPanel">
                 <Grid Margin="0,0,0,8">
                     <TextBox x:Name="UsernameBox" Padding="8,6" Height="36" FontSize="14"
-                             VerticalContentAlignment="Center"/>
+                             VerticalContentAlignment="Center"
+                             FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                     <TextBlock Text="输入 Steam 用户名"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                IsHitTestVisible="False" VerticalAlignment="Center" Margin="10,0,0,0">
@@ -145,27 +153,33 @@
                 <Grid Margin="0,0,0,8">
                     <PasswordBox x:Name="PasswordBox" Padding="8,6" Height="36" FontSize="14"
                                  VerticalContentAlignment="Center"
-                                 PasswordChanged="PasswordBox_PasswordChanged"/>
+                                 PasswordChanged="PasswordBox_PasswordChanged"
+                                 FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                     <TextBlock x:Name="PasswordHint" Text="输入 Steam 密码"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                IsHitTestVisible="False" VerticalAlignment="Center" Margin="10,0,0,0"/>
                 </Grid>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                     <Button x:Name="PasswordLoginButton" Content="登录" Click="PasswordLoginButton_Click"
-                            Padding="16,6" Height="36" Margin="0,0,8,0"/>
+                            Padding="16,6" Height="36" Margin="0,0,8,0"
+                            FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                     <Button Content="返回" Click="BackButton_Click"
-                            Padding="16,6" Height="36"/>
+                            Padding="16,6" Height="36"
+                            FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                 </StackPanel>
             </StackPanel>
             <StackPanel x:Name="TwoFactorPanel" Visibility="Collapsed">
                 <TextBlock x:Name="TwoFactorPrompt" FontSize="13" Margin="0,0,0,8" TextWrapping="Wrap"
                            Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-                <TextBox x:Name="TwoFactorCodeBox" Padding="8,6" Height="36" FontSize="14" Margin="0,0,0,8"/>
+                <TextBox x:Name="TwoFactorCodeBox" Padding="8,6" Height="36" FontSize="14" Margin="0,0,0,8"
+                         FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                     <Button Content="确定" Click="TwoFactorOkButton_Click"
-                            Padding="16,6" Height="36" Margin="0,0,8,0"/>
+                            Padding="16,6" Height="36" Margin="0,0,8,0"
+                            FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                     <Button Content="取消验证" Click="TwoFactorCancelButton_Click"
-                            Padding="16,6" Height="36"/>
+                            Padding="16,6" Height="36"
+                            FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
                 </StackPanel>
             </StackPanel>
         </StackPanel>
@@ -173,6 +187,7 @@
         <TextBlock x:Name="StatusText" FontSize="12" Margin="0,12,0,0" TextWrapping="Wrap"
                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
         <Button Content="关闭" Click="CloseButton_Click" HorizontalAlignment="Right"
-                Padding="16,6" Margin="0,12,0,0"/>
+                Padding="16,6" Margin="0,12,0,0"
+                FocusVisualStyle="{StaticResource GamepadFocusVisualStyle}"/>
     </StackPanel>
 </Window>
