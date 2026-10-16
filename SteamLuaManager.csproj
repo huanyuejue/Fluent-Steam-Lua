@@ -42,7 +42,7 @@
   </ItemGroup>
 
   <PropertyGroup>
-    <!-- CloudRedirect 原生 DLL 版本钉死：构建时自动拉取官方 Release 成品并验签，仓库内不存放源码与二进制 -->
+    <!-- CloudRedirect 原生 DLL 版本钉死：构建时自动拉取自家保留仓 Release 成品并验签，仓库内不存放源码与二进制 -->
     <CloudRedirectVersion>v2.6.5</CloudRedirectVersion>
     <CloudRedirectDllDir>$(ProjectDir)obj\CloudRedirectDll\$(CloudRedirectVersion)</CloudRedirectDllDir>
   </PropertyGroup>
@@ -57,6 +57,11 @@
     <Compile Remove="CrackTool\**\*" />
     <EmbeddedResource Remove="CrackTool\**\*" />
     <None Remove="CrackTool\**\*" />
+    <!-- thirdparty 是外部源码归档（CloudRedirect 保留库自有工程），不参与本工程编译 -->
+    <Compile Remove="thirdparty\**\*" />
+    <EmbeddedResource Remove="thirdparty\**\*" />
+    <None Remove="thirdparty\**\*" />
+    <Page Remove="thirdparty\**\*" />
   </ItemGroup>
 
   <ItemGroup>
@@ -119,7 +124,7 @@
         }
         else
         {
-            var baseUrl = $"https://github.com/Selectively11/CloudRedirect/releases/download/{Version}";
+            var baseUrl = $"https://github.com/huanyuejue/CloudRedirect/releases/download/{Version}";
             var tmpRoot = Path.Combine(Path.GetTempPath(), "cloudredirect_" + Guid.NewGuid().ToString("N"));
             try
             {
