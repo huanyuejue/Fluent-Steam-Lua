@@ -416,7 +416,7 @@ public partial class CloudSaveViewModel : ObservableObject
                     _settingsService.Save(settings);
                     if (restartNow)
                     {
-                        var result = SteamProcess.RestartSteam(_steamPathService);
+                        var result = await SteamProcess.RestartSteamAsync(_steamPathService);
                         if (!result.Ok)
                         {
                             SetListStatus(result.Message);
@@ -462,7 +462,7 @@ public partial class CloudSaveViewModel : ObservableObject
             $"{doneMessage}，需重启 Steam 后生效。\n\n是否立即重启 Steam？",
             "立即重启", "暂不重启");
         if (!restart) return;
-        var result = SteamProcess.RestartSteam(_steamPathService);
+        var result = await SteamProcess.RestartSteamAsync(_steamPathService);
         if (!result.Ok)
         {
             SetListStatus(result.Message);

@@ -14,6 +14,7 @@ using System.Windows.Interop;
 using System.Windows.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Win32;
+using CommunityToolkit.Mvvm.ComponentModel;
 using iNKORE.UI.WPF.Modern;
 using iNKORE.UI.WPF.Modern.Controls;
 using iNKORE.UI.WPF.Modern.Controls.Helpers;
@@ -64,6 +65,16 @@ public partial class MainWindow : Window
     private bool _tomlFetching;
     private TrayIconManager? _trayIcon;
     private bool _exitRequested;
+    private readonly DispatcherTimer _steamStatusTimer = new() { Interval = TimeSpan.FromSeconds(1) };
+    private readonly CancellationTokenSource _steamCts = new();
+    private readonly FabMenuItem _steamToggleMenuItem = new("toggle", "启动 Steam", "\uE768");
+    private readonly FabMenuItem _steamRestartMenuItem = new("restart", "重启 Steam", "\uE777");
+    private readonly FabMenuItem _steamAccountMenuItem = new("account", "切换 Steam 账号", "\uE77B", HasSubmenu: true);
+    private Task? _steamStatusRefreshTask;
+    private bool _steamStateKnown;
+    private bool _steamIsRunning;
+    private bool _steamOperationActive;
+    private bool _windowClosed;
 
     // 拖拽状态
     private bool _isDragging;
@@ -119,14 +130,16 @@ public partial class MainWindow : Window
         ContentTransition.Content = _homeView;
         SteamMenuList.ItemsSource = new[]
         {
-            new FabMenuItem("start", "启动 Steam", "\uE768"),
+            _steamToggleMenuItem,
             FabMenuItem.Separator(),
-            new FabMenuItem("restart", "重启 Steam", "\uE777"),
+            _steamRestartMenuItem,
             FabMenuItem.Separator(),
-            new FabMenuItem("account", "切换 Steam 账号", "\uE77B", HasSubmenu: true),
+            _steamAccountMenuItem,
             FabMenuItem.Separator(),
             new FabMenuItem("kernel", "OpenSteamTool管理", "\uE737", HasSubmenu: true)
         };
+        UpdateSteamMenuState();
+        _steamStatusTimer.Tick += SteamStatusTimer_Tick;
 
         settingsViewModel.PropertyChanged += SettingsViewModel_PropertyChanged;
         Closed += MainWindow_Closed;
@@ -248,6 +261,11 @@ public partial class MainWindow : Window
 
     private void MainWindow_Closed(object? sender, EventArgs e)
     {
+        _windowClosed = true;
+        _steamStatusTimer.Stop();
+        _steamStatusTimer.Tick -= SteamStatusTimer_Tick;
+        _steamCts.Cancel();
+        _steamCts.Dispose();
         SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
         _settingsViewModel.PropertyChanged -= SettingsViewModel_PropertyChanged;
         DisposeIfNeeded(_viewModel);
@@ -324,6 +342,10 @@ public partial class MainWindow : Window
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
     {
+        _steamStatusTimer.Start();
+        await RefreshSteamStatusAsync();
+        if (_windowClosed) return;
+
         if (_viewModel.LoadedCommand.CanExecute(null))
             await _viewModel.LoadedCommand.ExecuteAsync(null);
 
@@ -862,6 +884,8 @@ public partial class MainWindow : Window
             var show = SteamPanel.Visibility != Visibility.Visible;
             if (show)
             {
+                await RefreshSteamStatusAsync();
+                if (_windowClosed) return;
                 SteamPanel.Visibility = Visibility.Visible;
                 PositionSteamPanel();
                 ((Storyboard)SteamPanel.Resources["OpenPanel"]).Begin(SteamPanel);
@@ -913,30 +937,104 @@ public partial class MainWindow : Window
 
     private async void FabMenuItem_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (sender is not Border { Tag: FabMenuItem item }) return;
+        if (sender is not Border { Tag: FabMenuItem item } || !item.IsEnabled) return;
         LogService.Info("操作", $"悬浮菜单: {item.Header}");
 
         switch (item.Action)
         {
-            case "start":
+            case "toggle":
                 SteamPanel.Visibility = Visibility.Collapsed;
-                var startResult = SteamProcess.LaunchSteam(_steamPathService);
-                if (!startResult.Ok)
-                    await ShowModernDialogAsync(startResult.Title, startResult.Message);
+                // 在共用操作锁内重新检测进程，按执行时的真实状态决定启停。
+                await RunSteamOperationAsync(token => SteamProcess.ToggleSteamAsync(_steamPathService, token));
                 break;
             case "restart":
                 SteamPanel.Visibility = Visibility.Collapsed;
-                var restartResult = SteamProcess.RestartSteam(_steamPathService);
-                if (!restartResult.Ok)
-                    await ShowModernDialogAsync(restartResult.Title, restartResult.Message);
+                await RunSteamOperationAsync(token => SteamProcess.RestartSteamAsync(_steamPathService, cancellationToken: token));
                 break;
+        }
+    }
+
+    private async void SteamStatusTimer_Tick(object? sender, EventArgs e)
+    {
+        await RefreshSteamStatusAsync();
+    }
+
+    private Task RefreshSteamStatusAsync()
+    {
+        if (_windowClosed) return Task.CompletedTask;
+        // 周期检测、展开菜单和操作结束共用一次检测，不累积后台任务。
+        if (_steamStatusRefreshTask is { IsCompleted: false }) return _steamStatusRefreshTask;
+        return _steamStatusRefreshTask = RefreshSteamStatusCoreAsync();
+    }
+
+    private async Task RefreshSteamStatusCoreAsync()
+    {
+        UpdateSteamMenuState();
+        try
+        {
+            var status = await Task.Run(() =>
+            {
+                var known = SteamProcess.TryGetSteamRunning(out var running);
+                return (Known: known, Running: running);
+            }, _steamCts.Token);
+            if (_windowClosed) return;
+            _steamStateKnown = status.Known;
+            if (status.Known) _steamIsRunning = status.Running;
+            UpdateSteamMenuState();
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    private void UpdateSteamMenuState()
+    {
+        _steamToggleMenuItem.Header = _steamIsRunning ? "关闭 Steam" : "启动 Steam";
+        _steamToggleMenuItem.IsStop = _steamIsRunning;
+        var enabled = _steamStateKnown && !_steamOperationActive && !SteamProcess.IsOperationInProgress;
+        _steamToggleMenuItem.IsEnabled = enabled;
+        _steamRestartMenuItem.IsEnabled = enabled;
+        _steamAccountMenuItem.IsEnabled = enabled;
+        AccountList.IsEnabled = enabled;
+    }
+
+    private async Task RunSteamOperationAsync(Func<CancellationToken, Task<SteamProcess.SteamLaunchResult>> operation)
+    {
+        if (_windowClosed || _steamOperationActive || SteamProcess.IsOperationInProgress) return;
+        _steamOperationActive = true;
+        UpdateSteamMenuState();
+        try
+        {
+            var result = await operation(_steamCts.Token);
+            if (!_windowClosed && !result.Ok)
+                await ShowModernDialogAsync(result.Title, result.Message);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            if (!_windowClosed)
+                await ShowModernDialogAsync("错误", $"Steam 操作失败：{ex.Message}");
+        }
+        finally
+        {
+            await RefreshSteamStatusAsync();
+            _steamOperationActive = false;
+            if (!_windowClosed) UpdateSteamMenuState();
         }
     }
 
     // ========== Steam 账号切换 ==========
 
-    private sealed record FabMenuItem(string Action, string Header, string Glyph, bool HasSubmenu = false, bool IsSeparator = false)
+    private sealed class FabMenuItem(string Action, string Header, string Glyph, bool HasSubmenu = false, bool IsSeparator = false) : ObservableObject
     {
+        public string Action { get; } = Action;
+        public string Glyph { get; } = Glyph;
+        public bool HasSubmenu { get; } = HasSubmenu;
+        public bool IsSeparator { get; } = IsSeparator;
+        private string _header = Header;
+        public string Header { get => _header; set => SetProperty(ref _header, value); }
+        private bool _isStop;
+        public bool IsStop { get => _isStop; set => SetProperty(ref _isStop, value); }
+        private bool _isEnabled = true;
+        public bool IsEnabled { get => _isEnabled; set => SetProperty(ref _isEnabled, value); }
         public static FabMenuItem Separator() => new("separator", string.Empty, string.Empty, IsSeparator: true);
     }
 
@@ -1033,26 +1131,15 @@ public partial class MainWindow : Window
 
     private async Task SwitchSteamAccountAsync(SteamAccount target)
     {
-        try
+        await RunSteamOperationAsync(token => SteamProcess.RestartSteamAsync(_steamPathService, beforeLaunch: () =>
         {
-            SteamProcess.KillSteamProcesses();
             using (var key = Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam", writable: true))
             {
                 if (key == null)
-                {
-                    await ShowModernDialogAsync("错误", "无法打开注册表 Steam 项");
-                    return;
-                }
+                    throw new InvalidOperationException("无法打开注册表 Steam 项");
                 key.SetValue("AutoLoginUser", target.AccountName, RegistryValueKind.String);
             }
-            var launchResult = SteamProcess.LaunchSteam(_steamPathService);
-            if (!launchResult.Ok)
-                await ShowModernDialogAsync(launchResult.Title, launchResult.Message);
-        }
-        catch (Exception ex)
-        {
-            await ShowModernDialogAsync("错误", $"切换账号失败：{ex.Message}");
-        }
+        }, cancellationToken: token));
     }
 
     private List<SteamAccount>? ParseLoginUsersVdf()
@@ -1734,9 +1821,7 @@ public partial class MainWindow : Window
         var dialogResult = await resultDialog.ShowAsync();
         if (!anyOk || dialogResult != ContentDialogResult.Primary) return;
 
-        var restartResult = SteamProcess.RestartSteam(_steamPathService);
-        if (!restartResult.Ok)
-            await ShowModernDialogAsync(restartResult.Title, restartResult.Message);
+        await RunSteamOperationAsync(token => SteamProcess.RestartSteamAsync(_steamPathService, cancellationToken: token));
     }
 
     private void PositionSubmenuRelative(Border submenu, Border trigger, ItemsControl list, double subW, double subH)

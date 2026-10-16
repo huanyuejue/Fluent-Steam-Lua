@@ -169,7 +169,7 @@
                                         Visibility="Collapsed"/>
                                 <Border x:Name="MenuItemBorder" Padding="10,8" Cursor="Hand" CornerRadius="6"
                                         Background="Transparent" BorderThickness="0"
-                                        Tag="{Binding}"
+                                        Tag="{Binding}" IsEnabled="{Binding IsEnabled}"
                                         MouseLeftButtonDown="FabMenuItem_MouseLeftButtonDown"
                                         MouseEnter="FabMenuItem_MouseEnter"
                                         MouseLeave="FabMenuItem_MouseLeave">
@@ -179,8 +179,14 @@
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" Orientation="Horizontal">
-                                            <ui:FontIcon Glyph="{Binding Glyph}" FontSize="14" Margin="0,0,8,0"
-                                                         Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                            <Grid Width="14" Height="14" Margin="0,0,8,0" VerticalAlignment="Center">
+                                                <ui:FontIcon x:Name="MenuGlyph" Glyph="{Binding Glyph}" FontSize="14"
+                                                             Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                                <!-- 实心圆角方块：与播放三角对应的停止符号，随主题取色。 -->
+                                                <Rectangle x:Name="StopIcon" Width="10" Height="10" RadiusX="1.5" RadiusY="1.5"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                           Fill="{DynamicResource TextFillColorPrimaryBrush}" Visibility="Collapsed"/>
+                                            </Grid>
                                             <TextBlock Text="{Binding Header}" FontSize="13" VerticalAlignment="Center"
                                                        Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
                                         </StackPanel>
@@ -192,6 +198,14 @@
                                 </Border>
                             </Grid>
                             <DataTemplate.Triggers>
+                                <DataTrigger Binding="{Binding IsStop}" Value="True">
+                                    <Setter TargetName="MenuGlyph" Property="Visibility" Value="Collapsed"/>
+                                    <Setter TargetName="StopIcon" Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsEnabled}" Value="False">
+                                    <Setter TargetName="MenuItemBorder" Property="Opacity" Value="0.45"/>
+                                    <Setter TargetName="MenuItemBorder" Property="Cursor" Value="Arrow"/>
+                                </DataTrigger>
                                 <DataTrigger Binding="{Binding IsSeparator}" Value="True">
                                     <Setter TargetName="Divider" Property="Visibility" Value="Visible"/>
                                     <Setter TargetName="MenuItemBorder" Property="Visibility" Value="Collapsed"/>
