@@ -47,7 +47,9 @@ public class OpenSteamToolService : IOpenSteamToolService
     private const string GitHubOwner = "huanyuejue";
     private const string GitHubRepo = "OpenSteamTool";
     private static string GitHubLatestUrl => $"https://api.github.com/repos/{GitHubOwner}/{GitHubRepo}/releases/latest";
-    private static readonly string[] RequiredDlls = ["dwmapi.dll", "xinput1_4.dll", "OpenSteamTool.dll"];
+    private static readonly string[] RequiredDlls = ["version.dll", "xinput1_4.dll", "OpenSteamTool.dll"];
+    // 退役劫持 DLL（不再安装）：只在卸载/安装/禁用时顺手清理，有则删、无则过；启用时故意不恢复
+    private static readonly string[] LegacyDlls = ["dwmapi.dll"];
     private static readonly Dictionary<string, string> EmbeddedVersionMap = new()
     {
         ["115ec256c7c5b066926015a24120cf6e7d9e5a7a5b87441817c2de11cc3f9fec"] = "v1.2.0",
@@ -261,12 +263,14 @@ public class OpenSteamToolService : IOpenSteamToolService
             status?.Report("正在解压并安装 DLL...");
             using var archive = ZipFile.OpenRead(downloadedZip);
             var extracted = 0;
+            var extractedVersion = false;
             foreach (var entry in archive.Entries)
             {
                 ct.ThrowIfCancellationRequested();
                 var fileName = Path.GetFileName(entry.Name);
                 if (string.IsNullOrEmpty(fileName)) continue;
                 if (!RequiredDlls.Contains(fileName, StringComparer.OrdinalIgnoreCase)) continue;
+                if (fileName.Equals("version.dll", StringComparison.OrdinalIgnoreCase)) extractedVersion = true;
 
                 var targetPath = Path.Combine(steamPath, fileName);
                 try
@@ -282,6 +286,24 @@ public class OpenSteamToolService : IOpenSteamToolService
 
             if (extracted == 0)
                 throw new InvalidOperationException("压缩包中未找到 OpenSteamTool DLL 文件");
+            if (!extractedVersion)
+                LogService.Warn("内核", "压缩包中缺少 version.dll，早注隔离不可用，请更新到新版发行包");
+
+            // 退役残留：旧部署的根目录 dwmapi.dll 会让新版 Steam 启动失败，安装成功即顺手清除（有则删，无则过）
+            foreach (var dll in LegacyDlls)
+            {
+                var legacyPath = Path.Combine(steamPath, dll);
+                if (!File.Exists(legacyPath)) continue;
+                try
+                {
+                    File.Delete(legacyPath);
+                    status?.Report($"已清除退役残留 {dll}");
+                }
+                catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+                {
+                    throw new InvalidOperationException($"无法清除退役残留 {dll}，文件正被占用，请确保 Steam 已关闭后再试", ex);
+                }
+            }
 
             status?.Report("安装完成");
         }
@@ -311,6 +333,24 @@ public class OpenSteamToolService : IOpenSteamToolService
                 }
             }
         }
+        // 退役残留：根目录与 bin 目录的 dwmapi.dll，有则删、无则过（bin 里的劫持同样会炸新版 Steam）
+        foreach (var dll in LegacyDlls)
+        {
+            foreach (var rel in new[] { dll, Path.Combine("bin", dll) })
+            {
+                var path = Path.Combine(steamPath, rel);
+                if (!File.Exists(path)) continue;
+                try
+                {
+                    File.Delete(path);
+                    removed++;
+                }
+                catch (Exception ex) when (ex is UnauthorizedAccessException || ex is IOException)
+                {
+                    throw new InvalidOperationException($"无法删除 {rel}，文件正被占用，请确保 Steam 已关闭后再试", ex);
+                }
+            }
+        }
         if (removed == 0)
             throw new InvalidOperationException("未检测到已安装的 OpenSteamTool 文件");
         return Task.CompletedTask;
@@ -323,7 +363,9 @@ public class OpenSteamToolService : IOpenSteamToolService
         var steamPath = GetSteamPath() ?? throw new InvalidOperationException("无法检测 Steam 路径");
         var done = 0;
         var skipped = new List<string>();
-        foreach (var dll in RequiredDlls)
+        // 退役残留一并禁用：否则“禁用内核”后它仍会被加载，新版 Steam 照样起不来；
+        // 它是退役文件，Enable 时故意不恢复（见 EnableKernelAsync）
+        foreach (var dll in RequiredDlls.Concat(LegacyDlls))
         {
             var path = Path.Combine(steamPath, dll);
             var disabledPath = path + ".disabled";
@@ -357,6 +399,7 @@ public class OpenSteamToolService : IOpenSteamToolService
         var steamPath = GetSteamPath() ?? throw new InvalidOperationException("无法检测 Steam 路径");
         var done = 0;
         var skipped = new List<string>();
+        // 退役文件故意不在此恢复：dwmapi.dll.disabled 留在原地即可（加载器不理 .disabled 后缀）
         foreach (var dll in RequiredDlls)
         {
             var path = Path.Combine(steamPath, dll);

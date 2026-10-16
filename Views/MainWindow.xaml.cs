@@ -1384,7 +1384,7 @@ public partial class MainWindow : Window
 
         var confirmed = await ShowModernConfirmAsync(
             "确认卸载",
-            "确定要卸载 OpenSteamTool 吗？\n这将删除以下文件：\n• dwmapi.dll\n• xinput1_4.dll\n• OpenSteamTool.dll",
+            "确定要卸载 OpenSteamTool 吗？\n这将删除以下文件：\n• version.dll\n• xinput1_4.dll\n• OpenSteamTool.dll",
             "卸载");
         if (!confirmed) return;
 
