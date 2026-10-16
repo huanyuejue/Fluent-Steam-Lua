@@ -166,6 +166,7 @@ public class TrainerAutoLaunchService : ITrainerAutoLaunchService
             Process.Start(new ProcessStartInfo
             {
                 FileName = binding.TrainerFilePath,
+                WorkingDirectory = Path.GetDirectoryName(binding.TrainerFilePath) ?? string.Empty,
                 UseShellExecute = true
             });
 

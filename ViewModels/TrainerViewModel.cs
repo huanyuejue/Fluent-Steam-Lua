@@ -597,6 +597,7 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
             Process.Start(new ProcessStartInfo
             {
                 FileName = exePath,
+                WorkingDirectory = Path.GetDirectoryName(exePath) ?? string.Empty,
                 UseShellExecute = true,
                 WindowStyle = ProcessWindowStyle.Hidden,
                 CreateNoWindow = true
@@ -661,6 +662,7 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
             Process.Start(new ProcessStartInfo
             {
                 FileName = exePath,
+                WorkingDirectory = Path.GetDirectoryName(exePath) ?? string.Empty,
                 UseShellExecute = true,
                 WindowStyle = ProcessWindowStyle.Hidden,
                 CreateNoWindow = true
@@ -826,11 +828,19 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
         // 已下载则直接打开
         if (trainer.IsDownloaded && !string.IsNullOrWhiteSpace(trainer.DownloadUrl))
         {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            var openPsi = new System.Diagnostics.ProcessStartInfo
             {
                 FileName = trainer.DownloadUrl,
                 UseShellExecute = true
-            });
+            };
+            // 本地文件才定工作目录（URL 走浏览器，与目录无关）
+            if (!string.IsNullOrEmpty(trainer.DownloadUrl) &&
+                !trainer.DownloadUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+            {
+                var downloadDir = Path.GetDirectoryName(trainer.DownloadUrl);
+                if (!string.IsNullOrEmpty(downloadDir)) openPsi.WorkingDirectory = downloadDir;
+            }
+            System.Diagnostics.Process.Start(openPsi);
             return;
         }
 
@@ -956,6 +966,7 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
                 FileName = item.FilePath,
+                WorkingDirectory = Path.GetDirectoryName(item.FilePath) ?? string.Empty,
                 UseShellExecute = true
             });
     }

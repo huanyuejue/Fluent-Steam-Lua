@@ -51,6 +51,7 @@ public sealed class SteamTicketExtractor
             var psi = new ProcessStartInfo
             {
                 FileName = Environment.ProcessPath ?? "SteamLuaManager.exe",
+                WorkingDirectory = Path.GetDirectoryName(Environment.ProcessPath) ?? string.Empty,
                 UseShellExecute = false,
                 CreateNoWindow = true
             };

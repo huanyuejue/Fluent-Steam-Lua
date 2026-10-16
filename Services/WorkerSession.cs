@@ -41,6 +41,7 @@ public sealed class WorkerSession : IDisposable
         {
             FileName = Environment.ProcessPath ?? "SteamLuaManager.exe",
             Arguments = $"--worker serve {appId} {pipeName}",
+            WorkingDirectory = Path.GetDirectoryName(Environment.ProcessPath) ?? string.Empty,
             UseShellExecute = false,
             CreateNoWindow = true
         };

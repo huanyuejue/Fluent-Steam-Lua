@@ -60,6 +60,9 @@ public static class SteamProcess
             Process.Start(new ProcessStartInfo
             {
                 FileName = exePath,
+                // 子进程默认继承本工具的 CWD；Steam 必须以自家目录为 CWD 启动，
+                // 否则旧版 OST 按 CWD 定位 steamclient 会直接初始化失败
+                WorkingDirectory = path,
                 UseShellExecute = true
             })?.Dispose();
             return new SteamLaunchResult(true, string.Empty, string.Empty);
