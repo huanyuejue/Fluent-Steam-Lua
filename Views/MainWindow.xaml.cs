@@ -57,11 +57,6 @@ public partial class MainWindow : Window
     private readonly CrackToolView _crackToolView;
     private readonly AboutView _aboutView;
     private readonly IOpenSteamToolService _openSteamToolService;
-    private CancellationTokenSource? _kernelCts;
-    // toml 获取独立 cts：跟内核下载的 _kernelCts 分开，互不干扰；
-    // _tomlFetching 防重入：静默下载时手快再点一次会撞 ContentDialog 互斥直接闪退
-    private CancellationTokenSource? _tomlCts;
-    private bool _tomlFetching;
     private TrayIconManager? _trayIcon;
     private bool _exitRequested;
 
@@ -69,7 +64,6 @@ public partial class MainWindow : Window
     private bool _isDragging;
     private Point _dragStartPoint;
     private Border? _accountMenuTrigger;
-    private Border? _kernelMenuTrigger;
 
     // 浮动按钮初始位置（右下角偏移）
     private const double FabInitRight = 24;
@@ -230,7 +224,6 @@ public partial class MainWindow : Window
                 {
                     SteamPanel.Visibility = Visibility.Collapsed;
                     AccountSubmenu.Visibility = Visibility.Collapsed;
-                    KernelSubmenu.Visibility = Visibility.Collapsed;
                 }
                 break;
             case nameof(SettingsViewModel.IsCardRefreshVisible):
@@ -331,7 +324,7 @@ public partial class MainWindow : Window
             FabMenuItem.Separator(),
             new FabMenuItem("account", L.Get("Main_FabAccount"), "\uE77B", HasSubmenu: true),
             FabMenuItem.Separator(),
-            new FabMenuItem("kernel", L.Get("Main_FabKernel"), "\uE737", HasSubmenu: true)
+            new FabMenuItem("kernel", L.Get("Main_FabKernel"), "\uE737")
         };
     }
 
@@ -403,7 +396,7 @@ public partial class MainWindow : Window
                 L.Get("Main_ForeignBody", foreignName),
                 L.Get("Main_Purify"));
             if (goPurify)
-                await PurifyKernelAsync();
+                OpenSteamToolWindow();
         }
 
         // OST 已安装时检测逻辑优先返回，开机即便混装了第三方也不会报；
@@ -420,7 +413,7 @@ public partial class MainWindow : Window
                         L.Get("Main_ConflictBody", string.Join("\n", foreign.Select(f => $"• {f.RelativePath}（{f.Owner}）"))),
                         L.Get("Main_Purify"));
                     if (goPurifyMixed)
-                        await PurifyKernelAsync();
+                        OpenSteamToolWindow();
                 }
             }
             catch (Exception ex)
@@ -498,43 +491,6 @@ public partial class MainWindow : Window
         return await dialog.ShowAsync() == ContentDialogResult.Primary;
     }
 
-    private void ShowKernelOverlay(string status)
-    {
-        KernelOverlayGrid.Visibility = Visibility.Visible;
-        KernelOverlayStatus.Text = status;
-        KernelOverlayHint.Visibility = Visibility.Collapsed;
-        KernelOverlayProgressBar.Visibility = Visibility.Collapsed;
-        KernelOverlayPercent.Visibility = Visibility.Collapsed;
-        KernelOverlayRing.IsActive = true;
-    }
-
-    private void UpdateKernelOverlayProgress(int percent)
-    {
-        KernelOverlayRing.IsActive = false;
-        KernelOverlayRing.Visibility = Visibility.Collapsed;
-        KernelOverlayProgressBar.Visibility = Visibility.Visible;
-        KernelOverlayPercent.Visibility = Visibility.Visible;
-        KernelOverlayProgressBar.Value = percent;
-        KernelOverlayPercent.Text = $"{percent}%";
-    }
-
-    private void ShowKernelDownloadHint()
-    {
-        KernelOverlayHint.Visibility = Visibility.Visible;
-    }
-
-    private void HideKernelOverlay()
-    {
-        KernelOverlayRing.IsActive = false;
-        KernelOverlayGrid.Visibility = Visibility.Collapsed;
-    }
-
-    private void KernelCancelButton_Click(object sender, RoutedEventArgs e)
-    {
-        _kernelCts?.Cancel();
-        _tomlCts?.Cancel();
-    }
-
     // 背景材质只影响美观，任何异常都回退纯色不断运行；
     // 材质在部分机器（远程桌面/基础显示驱动/异 DPI）首帧布局阶段翻车，
     // 之前是 XAML 硬编码导致崩在 Show 之前，连兜底都来不及
@@ -590,7 +546,6 @@ public partial class MainWindow : Window
         var brush = new SolidColorBrush(color) { Opacity = 0.85 };
         SteamPanel.Background = brush;
         AccountSubmenu.Background = brush;
-        KernelSubmenu.Background = brush;
         SteamFab.Background = brush;
     }
 
@@ -609,7 +564,6 @@ public partial class MainWindow : Window
             source = GetParentSafe(source);
         }
         AccountSubmenu.Visibility = Visibility.Collapsed;
-        KernelSubmenu.Visibility = Visibility.Collapsed;
         ((Storyboard)SteamPanel.Resources["ClosePanel"]).Begin(SteamPanel);
         await Task.Delay(100);
         SteamPanel.Visibility = Visibility.Collapsed;
@@ -934,13 +888,7 @@ public partial class MainWindow : Window
         {
             case "account":
                 _accountMenuTrigger = b;
-                KernelSubmenu.Visibility = Visibility.Collapsed;
                 ShowAccountSubmenu(b);
-                break;
-            case "kernel":
-                _kernelMenuTrigger = b;
-                AccountSubmenu.Visibility = Visibility.Collapsed;
-                ShowKernelSubmenu(b);
                 break;
         }
     }
@@ -954,8 +902,6 @@ public partial class MainWindow : Window
 
         if (item.Action == "account")
             _ = DelayedHideSubmenuAsync(AccountSubmenu, b);
-        else if (item.Action == "kernel")
-            _ = DelayedHideSubmenuAsync(KernelSubmenu, b);
     }
 
     private async void FabMenuItem_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -977,7 +923,18 @@ public partial class MainWindow : Window
                 if (!restartResult.Ok)
                     await ShowModernDialogAsync(restartResult.Title, restartResult.Message);
                 break;
+            case "kernel":
+                SteamPanel.Visibility = Visibility.Collapsed;
+                OpenSteamToolWindow();
+                break;
         }
+    }
+
+    // OST 管理独立成窗后不再走二级菜单：模态打开，同一时刻只允许一个实例
+    private void OpenSteamToolWindow()
+    {
+        var win = new OpenSteamToolWindow(_openSteamToolService, _steamPathService) { Owner = this };
+        win.ShowDialog();
     }
 
     // ========== Steam 账号切换 ==========
@@ -1139,648 +1096,6 @@ public partial class MainWindow : Window
     {
         var match = Regex.Match(block, $"\\\"{Regex.Escape(key)}\\\"\\s+\\\"([^\\\"]*)\\\"");
         return match.Success ? match.Groups[1].Value : string.Empty;
-    }
-
-    // ========== OpenSteamTool 内核管理 ==========
-
-    private sealed record KernelMenuItem(string Action, string Header, string Description, string IconGlyph, Brush Foreground, Brush DescriptionForeground, bool IsEnabled = true, bool IsSeparator = false)
-    {
-        public static KernelMenuItem Separator() => new("separator", string.Empty, string.Empty, string.Empty, Brushes.Transparent, Brushes.Transparent, IsSeparator: true);
-    }
-
-    private void KernelSubmenu_MouseEnter(object sender, MouseEventArgs e)
-    {
-    }
-
-    private void KernelSubmenu_MouseLeave(object sender, MouseEventArgs e)
-    {
-        if (_kernelMenuTrigger != null)
-            _ = DelayedHideSubmenuAsync(KernelSubmenu, _kernelMenuTrigger);
-    }
-
-    private async void ShowKernelSubmenu(Border trigger)
-    {
-        var steamPath = _openSteamToolService.GetSteamPath();
-        if (steamPath == null)
-        {
-            KernelSubmenu.Visibility = Visibility.Collapsed;
-            return;
-        }
-
-        var localVersion = await _openSteamToolService.GetLocalVersionAsync() ?? L.Get("Main_Unknown");
-        var isLight = ThemeManager.Current.ActualApplicationTheme == ApplicationTheme.Light;
-        var primaryBrush = isLight
-            ? new SolidColorBrush(Color.FromArgb(0xFF, 0x1A, 0x1A, 0x1A))
-            : new SolidColorBrush(Color.FromArgb(0xFF, 0xE5, 0xE5, 0xE5));
-        var criticalBrush = isLight
-            ? new SolidColorBrush(Color.FromArgb(0xFF, 0xC0, 0x00, 0x00))
-            : new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0x55, 0x55));
-        var secondaryBrush = isLight
-            ? new SolidColorBrush(Color.FromArgb(0x9E, 0x00, 0x00, 0x00))
-            : new SolidColorBrush(Color.FromArgb(0x9E, 0xFF, 0xFF, 0xFF));
-        var disabledBrush = isLight
-            ? new SolidColorBrush(Color.FromArgb(0x5C, 0x00, 0x00, 0x00))
-            : new SolidColorBrush(Color.FromArgb(0x5E, 0xFF, 0xFF, 0xFF));
-        var isInstalled = _openSteamToolService.IsInstalled;
-        var hasDisabled = _openSteamToolService.HasDisabledKernel;
-
-        KernelList.ItemsSource = new[]
-        {
-            new KernelMenuItem("install", L.Get("Main_KmInstall"), hasDisabled ? L.Get("Main_KmDisabledHint") : (isInstalled ? L.Get("Main_KmInstalled") : L.Get("Main_KmInstallDesc")), "\uE737",
-                !isInstalled && !hasDisabled ? primaryBrush : disabledBrush,
-                !isInstalled && !hasDisabled ? secondaryBrush : disabledBrush,
-                !isInstalled && !hasDisabled),
-            KernelMenuItem.Separator(),
-            new KernelMenuItem("update", L.Get("Main_KmUpdate"), hasDisabled ? L.Get("Main_KmDisabledHint") : (isInstalled ? L.Get("Main_KmLocalVersion", localVersion) : L.Get("Main_KmInstallFirst")), "\uE777",
-                isInstalled && !hasDisabled ? primaryBrush : disabledBrush,
-                isInstalled && !hasDisabled ? secondaryBrush : disabledBrush,
-                isInstalled && !hasDisabled),
-            KernelMenuItem.Separator(),
-            new KernelMenuItem("toggle-disable", hasDisabled ? L.Get("Main_KmEnable") : L.Get("Main_KmDisable"), hasDisabled ? L.Get("Main_KmRestoreDisabled") : (isInstalled ? L.Get("Main_KmDisableTemp") : L.Get("Main_KmInstallFirst")), "\uE7E8",
-                isInstalled || hasDisabled ? primaryBrush : disabledBrush,
-                isInstalled || hasDisabled ? secondaryBrush : disabledBrush,
-                isInstalled || hasDisabled),
-            KernelMenuItem.Separator(),
-            new KernelMenuItem("uninstall", L.Get("Main_KmUninstall"), hasDisabled ? L.Get("Main_KmDisabledHint") : (isInstalled ? L.Get("Main_KmRemove") : L.Get("Main_KmNotInstalled")), "\uE74D",
-                isInstalled && !hasDisabled ? criticalBrush : disabledBrush,
-                isInstalled && !hasDisabled ? secondaryBrush : disabledBrush,
-                isInstalled && !hasDisabled),
-            KernelMenuItem.Separator(),
-            new KernelMenuItem("purify", L.Get("Main_KmPurify"), L.Get("Main_KmPurifyDesc"), "\uE71C",
-                primaryBrush, secondaryBrush),
-            KernelMenuItem.Separator(),
-            new KernelMenuItem("fetch-toml", L.Get("Main_KmFetch"), L.Get("Main_KmFetchDesc"), "\uE896",
-                primaryBrush, secondaryBrush)
-        };
-
-        PositionSubmenuRelative(KernelSubmenu, trigger, KernelList, 180, 270);
-        KernelSubmenu.Visibility = Visibility.Visible;
-        ((Storyboard)KernelSubmenu.Resources["OpenSubmenu"]).Begin(KernelSubmenu);
-    }
-
-    private async void KernelItem_Click(object sender, MouseButtonEventArgs e)
-    {
-        if (sender is not Border b || b.Tag is not KernelMenuItem item || !item.IsEnabled || item.IsSeparator) return;
-        KernelSubmenu.Visibility = Visibility.Collapsed;
-        SteamPanel.Visibility = Visibility.Collapsed;
-        LogService.Info(L.Get("LogCat_Op"), L.Get("Main_LogKernelAction", item.Header));
-
-        switch (item.Action)
-        {
-            case "install":
-                await InstallKernelAsync();
-                break;
-            case "update":
-                await UpdateKernelAsync();
-                break;
-            case "toggle-disable":
-                await ToggleKernelAsync();
-                break;
-            case "uninstall":
-                await UninstallKernelAsync();
-                break;
-            case "purify":
-                await PurifyKernelAsync();
-                break;
-            case "fetch-toml":
-                await FetchTomlFilesAsync();
-                break;
-        }
-    }
-
-    private void KernelMenuItem_MouseEnter(object sender, MouseEventArgs e)
-    {
-        if (sender is not Border { Tag: KernelMenuItem item } border || !item.IsEnabled) return;
-        border.Background = (Brush)Application.Current.FindResource("SystemControlHighlightListMediumBrush");
-    }
-
-    private async Task InstallKernelAsync()
-    {
-        if (_openSteamToolService.IsInstalled)
-        {
-            var confirmed = await ShowModernConfirmAsync(
-                L.Get("Main_InstConfirmTitle"),
-                L.Get("Main_InstConfirmBody"),
-                L.Get("Main_Reinstall"));
-            if (!confirmed) return;
-        }
-
-        try
-        {
-            var (version, downloadUrl, _) = await _openSteamToolService.GetRemoteInfoAsync();
-            if (string.IsNullOrEmpty(downloadUrl))
-            {
-                await ShowModernDialogAsync(L.Get("Main_DialogError"), L.Get("Main_NoDownloadUrl"));
-                return;
-            }
-
-            if (!await RunKernelDownloadAsync(downloadUrl))
-                return;
-
-            await ShowModernDialogAsync(L.Get("Main_InstDone"), L.Get("Main_InstDoneBody", version));
-            RefreshTitle();
-        }
-        catch (OperationCanceledException) { }
-        catch (Exception ex)
-        {
-            await ShowModernDialogAsync(L.Get("Main_DialogError"), L.Get("Main_InstFailed", ex.Message));
-        }
-    }
-
-    // 统一的内核下载流程，Install/Update 共用；返回 false 表示已取消
-    private async Task<bool> RunKernelDownloadAsync(string downloadUrl)
-    {
-        ShowKernelOverlay(L.Get("Main_OvDownloading"));
-        _kernelCts = new CancellationTokenSource();
-        try
-        {
-            var status = new Progress<string>(msg => KernelOverlayStatus.Text = msg);
-            var progress = new Progress<int>(pct => UpdateKernelOverlayProgress(pct));
-            ShowKernelDownloadHint();
-            await _openSteamToolService.InstallAsync(downloadUrl, status, progress, _kernelCts.Token);
-            return true;
-        }
-        catch (OperationCanceledException)
-        {
-            return false;
-        }
-        finally
-        {
-            _kernelCts?.Dispose();
-            _kernelCts = null;
-            HideKernelOverlay();
-        }
-    }
-
-    private async Task UpdateKernelAsync()
-    {
-        if (!_openSteamToolService.IsInstalled)
-        {
-            await ShowModernDialogAsync(L.Get("Main_Tip"), L.Get("Main_NotInstalledBody"));
-            return;
-        }
-
-        var localVersion = await _openSteamToolService.GetLocalVersionAsync() ?? L.Get("Main_Unknown");
-        var localDisplay = localVersion;
-
-        try
-        {
-            var (remoteVersion, downloadUrl, releaseUrl) = await _openSteamToolService.GetRemoteInfoAsync();
-            if (string.IsNullOrEmpty(downloadUrl))
-            {
-                await ShowModernDialogAsync(L.Get("Main_DialogError"), L.Get("Main_NoRemoteInfo"));
-                return;
-            }
-
-            if (localVersion != L.Get("Main_Unknown"))
-            {
-                // fork 仓库 tag 不带 v 前缀（如 1.4.9），老版本本地号带 v（如 v1.4.7），统一去掉前缀再比对
-                var localVer = Version.TryParse(localVersion.Trim().TrimStart('v', 'V'), out var lv) ? lv : null;
-                var remoteVer = Version.TryParse(remoteVersion.Trim().TrimStart('v', 'V'), out var rv) ? rv : null;
-                if (localVer != null && remoteVer != null && localVer >= remoteVer)
-                {
-                    await ShowModernDialogAsync(L.Get("Main_NoUpdate"), L.Get("Main_NoUpdateBody", localVersion, remoteVersion));
-                    return;
-                }
-            }
-
-            var updateDialog = new ContentDialog
-            {
-                Title = L.Get("Main_UpdateAvail"),
-                Content = new TextBlock
-                {
-                    Text = L.Get("Main_UpdateAvailBody", localDisplay, remoteVersion),
-                    TextWrapping = TextWrapping.Wrap,
-                    MaxWidth = 420
-                },
-                PrimaryButtonText = L.Get("Main_Update"),
-                SecondaryButtonText = L.Get("Main_GoRelease"),
-                CloseButtonText = L.Get("Common_Cancel"),
-                DefaultButton = ContentDialogButton.Primary
-            };
-            var dialogResult = await updateDialog.ShowAsync();
-            if (dialogResult == ContentDialogResult.Secondary)
-            {
-                Process.Start(new ProcessStartInfo(releaseUrl) { UseShellExecute = true });
-                return;
-            }
-            if (dialogResult != ContentDialogResult.Primary) return;
-
-            if (!await RunKernelDownloadAsync(downloadUrl))
-                return;
-
-            await ShowModernDialogAsync(L.Get("Main_UpdDone"), L.Get("Main_UpdDoneBody", remoteVersion));
-            RefreshTitle();
-        }
-        catch (OperationCanceledException) { }
-        catch (Exception ex)
-        {
-            await ShowModernDialogAsync(L.Get("Main_DialogError"), L.Get("Main_UpdCheckFailed", ex.Message));
-        }
-    }
-
-    private async Task ToggleKernelAsync()
-    {
-        // 启用：.disabled 文件未被加载，重命名随时安全
-        if (_openSteamToolService.HasDisabledKernel)
-        {
-            try
-            {
-                var done = await _openSteamToolService.EnableKernelAsync();
-                await ShowModernDialogAsync(L.Get("Main_EnableDone"), L.Get("Main_EnableDoneBody", done));
-                RefreshTitle();
-            }
-            catch (Exception ex)
-            {
-                await ShowModernDialogAsync(L.Get("Main_DialogError"), L.Get("Main_EnableFailed", ex.Message));
-            }
-            return;
-        }
-
-        if (!_openSteamToolService.IsInstalled)
-        {
-            await ShowModernDialogAsync(L.Get("Main_Tip"), L.Get("Main_InstalledNotFound"));
-            return;
-        }
-        // 禁用：重命名被加载的 DLL 不可靠，Steam 关闭门禁
-        if (SteamProcess.IsSteamRunning())
-        {
-            await ShowModernDialogAsync(L.Get("Main_DialogSteamBusy"), L.Get("Main_SteamRunningDisable"));
-            return;
-        }
-        try
-        {
-            var done = await _openSteamToolService.DisableKernelAsync();
-            await ShowModernDialogAsync(L.Get("Main_DisableDone"), L.Get("Main_DisableDoneBody", done));
-            RefreshTitle();
-        }
-        catch (Exception ex)
-        {
-            await ShowModernDialogAsync(L.Get("Main_DialogError"), L.Get("Main_DisableFailed", ex.Message));
-        }
-    }
-
-    private async Task UninstallKernelAsync()
-    {
-        if (!_openSteamToolService.IsInstalled)
-        {
-            await ShowModernDialogAsync(L.Get("Main_Tip"), L.Get("Main_InstalledNotFound"));
-            return;
-        }
-
-        var confirmed = await ShowModernConfirmAsync(
-            L.Get("Main_UninstConfirmTitle"),
-            L.Get("Main_UninstConfirmBody"),
-            L.Get("Main_Uninstall"));
-        if (!confirmed) return;
-
-        try
-        {
-            await _openSteamToolService.UninstallAsync();
-            await ShowModernDialogAsync(L.Get("Main_UninstDone"), L.Get("Main_UninstDoneBody"));
-            RefreshTitle();
-        }
-        catch (Exception ex)
-        {
-            await ShowModernDialogAsync(L.Get("Main_DialogError"), L.Get("Main_UninstFailed", ex.Message));
-        }
-    }
-
-    private async Task PurifyKernelAsync()
-    {
-        // 删文件前 Steam 必须完全退出，否则占用的 DLL 删不动（更新器同款教训）
-        if (SteamProcess.IsSteamRunning())
-        {
-            await ShowModernDialogAsync(L.Get("Main_DialogSteamBusy"), L.Get("Main_SteamRunningPurify"));
-            return;
-        }
-
-        List<ForeignKernelFile> found;
-        try
-        {
-            found = (await _openSteamToolService.ScanForeignKernelsAsync()).ToList();
-        }
-        catch (Exception ex)
-        {
-            await ShowModernDialogAsync(L.Get("Main_DialogError"), L.Get("Main_DialogScanFailed", ex.Message));
-            return;
-        }
-
-        if (found.Count == 0)
-        {
-            await ShowModernDialogAsync(L.Get("Main_DialogNoForeign"), L.Get("Main_DialogNoForeignBody"));
-            return;
-        }
-
-        var confirmed = await ShowModernConfirmAsync(
-            L.Get("Main_DialogConfirmPurify"),
-            L.Get("Main_DialogConfirmPurifyBody", string.Join("\n", found.Select(f => $"• {f.RelativePath}（{f.Owner}）"))),
-            L.Get("Main_Delete"));
-        if (!confirmed) return;
-
-        try
-        {
-            var (removed, failed) = await _openSteamToolService.PurifyForeignKernelsAsync(found.Select(f => f.RelativePath));
-            RefreshTitle();
-            if (failed.Count == 0)
-            {
-                // OST 已在位就只报完成；只有没装时才顺势问装不装，
-                // 否则点安装会撞进“已安装是否重新安装”的二次确认
-                if (_openSteamToolService.IsInstalled)
-                {
-                    await ShowModernDialogAsync(L.Get("Main_DialogPurifyDone"),
-                        L.Get("Main_DialogPurifyDoneBody", removed));
-                }
-                else
-                {
-                    var goInstall = await ShowModernConfirmAsync(
-                        L.Get("Main_DialogPurifyDone"),
-                        L.Get("Main_PurifyDoneAskBody", removed),
-                        L.Get("Main_Install"));
-                    if (goInstall)
-                        await InstallKernelAsync();
-                }
-            }
-            else
-            {
-                await ShowModernDialogAsync(L.Get("Main_DialogPurifyPartial"),
-                    L.Get("Main_DialogPurifyPartialBody", removed, failed.Count,
-                    string.Join("\n", failed.Select(f => $"• {f}"))));
-            }
-        }
-        catch (Exception ex)
-        {
-            await ShowModernDialogAsync(L.Get("Main_DialogError"), L.Get("Main_DialogPurifyFailed", ex.Message));
-        }
-    }
-
-    private async Task FetchTomlFilesAsync()
-    {
-        // 防重入：上一次全流程（确认框/下载/结果框）没走完又点一次，
-        // 两个 ContentDialog 互斥直接闪退（已实测）。静默吞掉，只记日志。
-        if (_tomlFetching)
-        {
-            LogService.Info(L.Get("LogCat_Op"), L.Get("Main_LogTomlDupClick"));
-            return;
-        }
-        _tomlFetching = true;
-        try
-        {
-            await FetchTomlFilesCoreAsync();
-        }
-        finally
-        {
-            _tomlFetching = false;
-        }
-    }
-
-    private async Task FetchTomlFilesCoreAsync()
-    {
-        // 先识别再问：把构建ID和两个SHA摆出来让用户确认，避免下错版本
-        SteamDllTomlInfo? info;
-        try
-        {
-            info = await _openSteamToolService.DetectSteamDllInfoAsync();
-        }
-        catch (Exception ex)
-        {
-            await ShowModernDialogAsync(L.Get("Main_DialogError"), L.Get("Main_TomlDetectFailed", ex.Message));
-            return;
-        }
-
-        if (info == null)
-        {
-            await ShowModernDialogAsync(L.Get("Main_SteamNotFoundTitle"), L.Get("Main_SteamNotFoundBody"));
-            return;
-        }
-
-        // 确认框抄删除存档的结构化面板：分节标题加粗 + 条目 + 灰色路径，平铺没识别感不干
-        var secondary = Application.Current.TryFindResource("TextFillColorSecondaryBrush") as Brush
-            ?? Brushes.Gray;
-        var fetchPanel = new StackPanel { MaxWidth = 560 };
-        fetchPanel.Children.Add(new TextBlock
-        {
-            Text = L.Get("Main_TomlResult"),
-            FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(0, 0, 0, 2)
-        });
-        fetchPanel.Children.Add(new TextBlock
-        {
-            Text = L.Get("Main_TomlClientSha"),
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 6, 0, 0)
-        });
-        fetchPanel.Children.Add(new TextBlock
-        {
-            Text = info.ClientSha,
-            TextWrapping = TextWrapping.Wrap,
-            FontSize = 12,
-            Foreground = secondary
-        });
-        fetchPanel.Children.Add(new TextBlock
-        {
-            Text = L.Get("Main_TomlUiSha"),
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 6, 0, 0)
-        });
-        fetchPanel.Children.Add(new TextBlock
-        {
-            Text = info.UiSha,
-            TextWrapping = TextWrapping.Wrap,
-            FontSize = 12,
-            Foreground = secondary
-        });
-        fetchPanel.Children.Add(new TextBlock
-        {
-            Text = L.Get("Main_TomlWillFetch"),
-            FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(0, 12, 0, 2)
-        });
-        foreach (var (channel, component) in new[] { ("pattern", "steamclient"), ("pattern", "steamui"), ("ipc", "steamclient") })
-        {
-            var sha = component == "steamui" ? info.UiSha : info.ClientSha;
-            fetchPanel.Children.Add(new TextBlock
-            {
-                Text = $"- {channel}/{component}/{sha}.toml",
-                TextWrapping = TextWrapping.Wrap,
-                FontSize = 12,
-                Foreground = secondary,
-                Margin = new Thickness(0, 4, 0, 0)
-            });
-        }
-        fetchPanel.Children.Add(new TextBlock
-        {
-            Text = L.Get("Main_TomlNotes"),
-            FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(0, 12, 0, 2)
-        });
-        fetchPanel.Children.Add(new TextBlock
-        {
-            Text = L.Get("Main_TomlOverwrite"),
-            TextWrapping = TextWrapping.Wrap
-        });
-        fetchPanel.Children.Add(new TextBlock
-        {
-            Text = L.Get("Main_TomlAsk"),
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 6, 0, 0)
-        });
-        var fetchDialog = new ContentDialog
-        {
-            Title = L.Get("Main_TomlTitle"),
-            Content = new ScrollViewer
-            {
-                Content = fetchPanel,
-                MaxHeight = 440,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto
-            },
-            PrimaryButtonText = L.Get("Main_Fetch"),
-            CloseButtonText = L.Get("Common_Cancel"),
-            DefaultButton = ContentDialogButton.Primary
-        };
-        if (await fetchDialog.ShowAsync() != ContentDialogResult.Primary) return;
-
-        ShowKernelOverlay(L.Get("Main_OvFetchingToml"));
-        _tomlCts = new CancellationTokenSource();
-        IReadOnlyList<TomlFetchResult> results;
-        try
-        {
-            var status = new Progress<string>(msg => KernelOverlayStatus.Text = msg);
-            var progress = new Progress<int>(pct => UpdateKernelOverlayProgress(pct));
-            ShowKernelDownloadHint();
-            results = await _openSteamToolService.FetchTomlFilesAsync(info, status, progress, _tomlCts.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            return;
-        }
-        catch (Exception ex)
-        {
-            await ShowModernDialogAsync(L.Get("Main_DialogError"), L.Get("Main_TomlFailed", ex.Message));
-            return;
-        }
-        finally
-        {
-            _tomlCts?.Dispose();
-            _tomlCts = null;
-            HideKernelOverlay();
-            // 注意：_tomlFetching 不在这里清，归外层 wrapper 管——结果框还开着时
-            // 就清掉，对方点一次菜单就能再弹确认框叠上来，前面修的闪退白修了
-        }
-
-        var ok = results.Where(r => r.Success).ToList();
-        var failed = results.Where(r => !r.Success).ToList();
-        var notFound = failed.Where(r => r.NotFound).ToList();
-        var netFailed = failed.Where(r => !r.NotFound).ToList();
-        LogService.Info(L.Get("LogCat_Op"), L.Get("Main_LogTomlDone", ok.Count, failed.Count, notFound.Count));
-
-        // 结果框抄确认框的结构：分节 + 灰色路径。404 和网络失败 advice 不能混：
-        // 404=上游没这个版本（多为 Beta 版 Steam），让人更新正式版；其他失败=网络问题，让人查网络
-        var resultPanel = new StackPanel { MaxWidth = 560 };
-        if (ok.Count > 0)
-        {
-            resultPanel.Children.Add(new TextBlock
-            {
-                Text = L.Get("Main_TomlReady"),
-                FontWeight = FontWeights.SemiBold,
-                Margin = new Thickness(0, 0, 0, 2)
-            });
-            foreach (var r in ok)
-            {
-                resultPanel.Children.Add(new TextBlock
-                {
-                    Text = $"• {r.FileName}",
-                    TextWrapping = TextWrapping.Wrap,
-                    FontSize = 12,
-                    Foreground = secondary,
-                    Margin = new Thickness(0, 4, 0, 0)
-                });
-            }
-        }
-        if (notFound.Count > 0)
-        {
-            resultPanel.Children.Add(new TextBlock
-            {
-                Text = L.Get("Main_TomlNoUpstream"),
-                FontWeight = FontWeights.SemiBold,
-                Margin = new Thickness(0, 12, 0, 2)
-            });
-            foreach (var r in notFound)
-            {
-                resultPanel.Children.Add(new TextBlock
-                {
-                    Text = $"• {r.FileName}",
-                    TextWrapping = TextWrapping.Wrap,
-                    FontSize = 12,
-                    Foreground = secondary,
-                    Margin = new Thickness(0, 4, 0, 0)
-                });
-            }
-            resultPanel.Children.Add(new TextBlock
-            {
-                Text = L.Get("Main_TomlBetaHint"),
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 6, 0, 0)
-            });
-        }
-        if (netFailed.Count > 0)
-        {
-            resultPanel.Children.Add(new TextBlock
-            {
-                Text = L.Get("Main_TomlDlFailed"),
-                FontWeight = FontWeights.SemiBold,
-                Margin = new Thickness(0, 12, 0, 2)
-            });
-            foreach (var r in netFailed)
-            {
-                resultPanel.Children.Add(new TextBlock
-                {
-                    Text = $"• {r.FileName}：{r.Error}",
-                    TextWrapping = TextWrapping.Wrap,
-                    FontSize = 12,
-                    Foreground = secondary,
-                    Margin = new Thickness(0, 4, 0, 0)
-                });
-            }
-            resultPanel.Children.Add(new TextBlock
-            {
-                Text = L.Get("Main_TomlCheckNet"),
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 6, 0, 0)
-            });
-        }
-        // 全失败就别留重启按钮和重启文案：啥都没拿到，重启也没用
-        var anyOk = ok.Count > 0;
-        if (anyOk)
-        {
-            resultPanel.Children.Add(new TextBlock
-            {
-                Text = L.Get("Main_TomlRestartHint"),
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 6, 0, 0)
-            });
-        }
-        // 左蓝重启、右灰确定：Primary 点了就是重启，X/Esc/确定走 None 直接关，不会误重启。
-        // 全失败时只要确定一个钮（重启了也没用，不给）。
-        var resultDialog = new ContentDialog
-        {
-            Title = failed.Count == 0 ? L.Get("Main_TomlDone") : L.Get("Main_TomlPartial"),
-            Content = new ScrollViewer
-            {
-                Content = resultPanel,
-                MaxHeight = 440,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto
-            },
-            PrimaryButtonText = anyOk ? L.Get("Main_FabRestart") : L.Get("Common_Confirm"),
-            SecondaryButtonText = anyOk ? L.Get("Common_Confirm") : null,
-            DefaultButton = ContentDialogButton.Primary
-        };
-        var dialogResult = await resultDialog.ShowAsync();
-        if (!anyOk || dialogResult != ContentDialogResult.Primary) return;
-
-        var restartResult = SteamProcess.RestartSteam(_steamPathService);
-        if (!restartResult.Ok)
-            await ShowModernDialogAsync(restartResult.Title, restartResult.Message);
     }
 
     private void PositionSubmenuRelative(Border submenu, Border trigger, ItemsControl list, double subW, double subH)

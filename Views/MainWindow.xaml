@@ -297,98 +297,6 @@
                 </ItemsControl>
             </Border>
 
-            <!-- 内核管理子菜单 -->
-            <Border x:Name="KernelSubmenu" Canvas.Left="0" Canvas.Top="0"
-                    Width="180" Padding="4" CornerRadius="8"
-                    BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1"
-                    Effect="{StaticResource FloatingShadow}"
-                    Visibility="Collapsed"
-                    MouseEnter="KernelSubmenu_MouseEnter"
-                    MouseLeave="KernelSubmenu_MouseLeave">
-                <Border.RenderTransform>
-                    <ScaleTransform ScaleX="0.9" ScaleY="0.9"/>
-                </Border.RenderTransform>
-                <Border.RenderTransformOrigin>0.5,0.5</Border.RenderTransformOrigin>
-                <Border.Resources>
-                    <Storyboard x:Key="OpenSubmenu">
-                        <DoubleAnimation Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.12">
-                            <DoubleAnimation.EasingFunction>
-                                <CubicEase EasingMode="EaseOut"/>
-                            </DoubleAnimation.EasingFunction>
-                        </DoubleAnimation>
-                        <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX" From="0.9" To="1" Duration="0:0:0.12">
-                            <DoubleAnimation.EasingFunction>
-                                <CubicEase EasingMode="EaseOut"/>
-                            </DoubleAnimation.EasingFunction>
-                        </DoubleAnimation>
-                        <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY" From="0.9" To="1" Duration="0:0:0.12">
-                            <DoubleAnimation.EasingFunction>
-                                <CubicEase EasingMode="EaseOut"/>
-                            </DoubleAnimation.EasingFunction>
-                        </DoubleAnimation>
-                    </Storyboard>
-                    <Storyboard x:Key="CloseSubmenu">
-                        <DoubleAnimation Storyboard.TargetProperty="Opacity" From="1" To="0" Duration="0:0:0.08">
-                            <DoubleAnimation.EasingFunction>
-                                <CubicEase EasingMode="EaseIn"/>
-                            </DoubleAnimation.EasingFunction>
-                        </DoubleAnimation>
-                        <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX" From="1" To="0.9" Duration="0:0:0.08">
-                            <DoubleAnimation.EasingFunction>
-                                <CubicEase EasingMode="EaseIn"/>
-                            </DoubleAnimation.EasingFunction>
-                        </DoubleAnimation>
-                        <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY" From="1" To="0.9" Duration="0:0:0.08">
-                            <DoubleAnimation.EasingFunction>
-                                <CubicEase EasingMode="EaseIn"/>
-                            </DoubleAnimation.EasingFunction>
-                        </DoubleAnimation>
-                    </Storyboard>
-                </Border.Resources>
-                <ItemsControl x:Name="KernelList" Margin="0">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <Grid>
-                                <Border x:Name="Divider" Height="1" Margin="6,2"
-                                        Background="{DynamicResource DividerStrokeColorDefaultBrush}"
-                                        Visibility="Collapsed"/>
-                                <Border x:Name="KernelItemBorder" Padding="8,6" Margin="0,1,0,0" CornerRadius="4"
-                                        Background="Transparent" BorderThickness="0"
-                                        Cursor="Hand" Tag="{Binding}"
-                                        MouseLeftButtonDown="KernelItem_Click"
-                                        MouseEnter="KernelMenuItem_MouseEnter"
-                                        MouseLeave="FabSubmenuItem_MouseLeave">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock x:Name="KernelIcon" Text="{Binding IconGlyph}" FontSize="16" Margin="0,0,8,0"
-                                                   VerticalAlignment="Center" FontFamily="Segoe MDL2 Assets"
-                                                   Foreground="{Binding Foreground}"/>
-                                        <StackPanel Grid.Column="1">
-                                            <TextBlock x:Name="KernelTitle" Text="{Binding Header}" FontSize="13" FontWeight="SemiBold"
-                                                       Foreground="{Binding Foreground}"/>
-                                        <TextBlock x:Name="KernelDescription" Text="{Binding Description}" FontSize="11"
-                                                       Foreground="{Binding DescriptionForeground}"/>
-                                        </StackPanel>
-                                    </Grid>
-                                </Border>
-                            </Grid>
-                            <DataTemplate.Triggers>
-                                <DataTrigger Binding="{Binding IsSeparator}" Value="True">
-                                    <Setter TargetName="Divider" Property="Visibility" Value="Visible"/>
-                                    <Setter TargetName="KernelItemBorder" Property="Visibility" Value="Collapsed"/>
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding IsEnabled}" Value="False">
-                                    <Setter TargetName="KernelItemBorder" Property="Cursor" Value="Arrow"/>
-                                </DataTrigger>
-                            </DataTemplate.Triggers>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </Border>
-
             <!-- 可拖拽按钮 -->
             <Border x:Name="SteamFab" Canvas.Left="0" Canvas.Top="0"
                     Width="44" Height="44" CornerRadius="22"
@@ -403,41 +311,6 @@
                      HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
         </Canvas>
-
-        <!-- OpenSteamTool 安装/更新遮罩层 -->
-        <Grid x:Name="KernelOverlayGrid" Panel.ZIndex="210"
-              Visibility="Collapsed" Background="#80000000" IsHitTestVisible="True">
-            <Border HorizontalAlignment="Center" VerticalAlignment="Center"
-                    Width="400" MinHeight="150" CornerRadius="12"
-                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1">
-                <StackPanel Margin="24,20">
-                    <TextBlock x:Name="KernelOverlayStatus" FontSize="14" TextAlignment="Center"
-                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                               TextWrapping="Wrap"/>
-                    <TextBlock x:Name="KernelOverlayHint" FontSize="11" TextAlignment="Center"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Margin="0,4,0,0" Visibility="Collapsed"
-                                                               Text="{l:Loc Overlay_SlowHint}"/>
-                    <Grid Margin="0,12,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <ProgressBar x:Name="KernelOverlayProgressBar" Minimum="0" Maximum="100" Value="0"
-                                     Height="6" Visibility="Collapsed"/>
-                        <TextBlock x:Name="KernelOverlayPercent" Grid.Column="1" FontSize="12"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                   Margin="10,0,0,0" Visibility="Collapsed" Text="0%"/>
-                    </Grid>
-                    <ui:ProgressRing x:Name="KernelOverlayRing" IsActive="True" Width="28" Height="28"
-                                     Margin="0,12,0,0" HorizontalAlignment="Left"/>
-                    <Button x:Name="KernelCancelButton" Content="{l:Loc Common_Cancel}" Margin="0,14,0,0"
-                            Padding="12,6" FontSize="13" HorizontalAlignment="Center"
-                            Click="KernelCancelButton_Click"/>
-                </StackPanel>
-            </Border>
-        </Grid>
 
         <!-- DLC 查询遮罩层 -->
         <Grid Panel.ZIndex="200"
@@ -514,6 +387,6 @@
 
         <!-- 获取游戏信息不再使用窗口级模态遮罩：后台获取期间用户可正常操作，
              进度收敛到主页顶部的内联提示（RefreshProgressText + 取消按钮），
-             完成后提示自动收起。内核安装等短时强一致操作仍走 KernelOverlayGrid。 -->
+             完成后提示自动收起。内核安装等短时强一致操作已移入独立的 OST 管理窗。 -->
     </Grid>
 </Window>

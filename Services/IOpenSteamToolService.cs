@@ -11,6 +11,24 @@ using System.Text.RegularExpressions;
 
 namespace SteamLuaManager.Services;
 
+// 注入入口（二选一）：Dwmapi 反作弊友好（默认），Version 用于首载隔离
+public enum InjectionMode
+{
+    None,
+    Dwmapi,
+    Version
+}
+
+// 磁盘上两个入口 DLL 的激活组合（只看激活文件是否存在）：
+// 内核启用态下用来区分「两个都激活」与「一个都没激活」两种异常配置
+public enum InjectionEntryState
+{
+    None,       // 无激活入口（未安装 / 内核禁用 / 两个入口都在 .disabled）
+    Dwmapi,     // 仅 dwmapi 激活
+    Version,    // 仅 version 激活
+    BothActive  // 两个都激活：version 先注入、实际生效的是它
+}
+
 public interface IOpenSteamToolService
 {
     bool IsInstalled { get; }
@@ -20,8 +38,16 @@ public interface IOpenSteamToolService
     Task<(string version, string downloadUrl, string releaseUrl)> GetRemoteInfoAsync();
     Task InstallAsync(string downloadUrl, IProgress<string>? status = null, IProgress<int>? downloadProgress = null, CancellationToken ct = default);
     Task UninstallAsync();
+    // 卸载确认框用的实际存在文件清单（相对 Steam 根目录，含停用副本与 bin 残留）
+    IReadOnlyList<string> GetInstalledKernelFiles();
     Task<int> DisableKernelAsync();
     Task<int> EnableKernelAsync();
+    // 当前生效的注入入口；内核被禁用或未安装时返回 None
+    InjectionMode GetInjectionMode();
+    // 磁盘上两个入口 DLL 的激活组合，供界面区分双入口冲突/缺入口两种异常
+    InjectionEntryState GetEntryState();
+    // 切换注入入口；要求内核处于启用态（入口文件可改名），Steam 需已关闭
+    Task SwitchInjectionModeAsync(InjectionMode mode);
     Task<IReadOnlyList<ForeignKernelFile>> ScanForeignKernelsAsync();
     Task<(int removed, List<string> failed)> PurifyForeignKernelsAsync(IEnumerable<string> relativePaths);
     Task<SteamDllTomlInfo?> DetectSteamDllInfoAsync();
@@ -47,9 +73,21 @@ public class OpenSteamToolService : IOpenSteamToolService
     private const string GitHubOwner = "huanyuejue";
     private const string GitHubRepo = "OpenSteamTool";
     private static string GitHubLatestUrl => $"https://api.github.com/repos/{GitHubOwner}/{GitHubRepo}/releases/latest";
-    private static readonly string[] RequiredDlls = ["version.dll", "xinput1_4.dll", "OpenSteamTool.dll"];
-    // 退役劫持 DLL（不再安装）：只在卸载/安装/禁用时顺手清理，有则删、无则过；启用时故意不恢复
-    private static readonly string[] LegacyDlls = ["dwmapi.dll"];
+    // 内核本体（核心 + 副加载器）：禁用/启用内核时整体施加/移除停用后缀
+    private static readonly string[] KernelBodyDlls = ["OpenSteamTool.dll", "xinput1_4.dll"];
+    // 注入入口（二选一）：dwmapi 反作弊友好（默认），version 用于首载隔离
+    private static readonly string[] InjectionEntryDlls = ["dwmapi.dll", "version.dll"];
+    private const string DefaultInjectionEntry = "dwmapi.dll";
+    // 禁用内核用独立后缀：与注入入口停用用的 .disabled 分开，
+    // 否则出厂即停用的 version.dll.disabled 会被误判成「内核被禁用」
+    private const string KernelDisabledSuffix = ".off";
+    // 注入入口停用后缀：沿用 OST 出厂约定（出厂的 version.dll.disabled 即由此而来）
+    private const string EntryDisabledSuffix = ".disabled";
+    // 安装包内允许落盘的文件：含出厂即停用的入口副本（version.dll.disabled）
+    private static readonly HashSet<string> InstallWhitelist = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "dwmapi.dll", "version.dll", "dwmapi.dll.disabled", "version.dll.disabled", "xinput1_4.dll", "OpenSteamTool.dll"
+    };
     private static readonly Dictionary<string, string> EmbeddedVersionMap = new()
     {
         ["115ec256c7c5b066926015a24120cf6e7d9e5a7a5b87441817c2de11cc3f9fec"] = "v1.2.0",
@@ -79,7 +117,8 @@ public class OpenSteamToolService : IOpenSteamToolService
 
     public bool IsInstalled => _steamPathService.DetectSteamToolType() == SteamToolType.OpenSteamTool;
 
-    // 任一内核 DLL 存在 .disabled 后缀即视为有被临时禁用的内核
+    // 内核本体（核心/副加载器）存在 .off 停用副本即视为内核被禁用；
+    // 只看本体不看入口，避免出厂 version.dll.disabled 干扰判断
     public bool HasDisabledKernel
     {
         get
@@ -88,7 +127,7 @@ public class OpenSteamToolService : IOpenSteamToolService
             {
                 var steamPath = GetSteamPath();
                 if (string.IsNullOrEmpty(steamPath)) return false;
-                return RequiredDlls.Any(dll => File.Exists(Path.Combine(steamPath, dll + ".disabled")));
+                return KernelBodyDlls.Any(dll => File.Exists(Path.Combine(steamPath, dll + KernelDisabledSuffix)));
             }
             catch
             {
@@ -179,9 +218,11 @@ public class OpenSteamToolService : IOpenSteamToolService
     {
         ct.ThrowIfCancellationRequested();
         var steamPath = GetSteamPath() ?? throw new InvalidOperationException(L.Get("Svc_CantDetectSteamPath"));
+        // 覆盖前先记下用户选定的注入入口，装完照旧恢复，别把 version 模式用户悄悄拉回 dwmapi
+        var priorMode = GetInjectionMode();
 
         // 目标文件被 Steam 占用时覆盖必失败，先探后下，免得白下几个包才报错
-        foreach (var dll in RequiredDlls)
+        foreach (var dll in KernelBodyDlls.Concat(InjectionEntryDlls))
         {
             var targetPath = Path.Combine(steamPath, dll);
             if (!File.Exists(targetPath)) continue;
@@ -263,14 +304,14 @@ public class OpenSteamToolService : IOpenSteamToolService
             status?.Report(L.Get("Kernel_Extracting"));
             using var archive = ZipFile.OpenRead(downloadedZip);
             var extracted = 0;
-            var extractedVersion = false;
+            var extractedEntry = false;
             foreach (var entry in archive.Entries)
             {
                 ct.ThrowIfCancellationRequested();
                 var fileName = Path.GetFileName(entry.Name);
                 if (string.IsNullOrEmpty(fileName)) continue;
-                if (!RequiredDlls.Contains(fileName, StringComparer.OrdinalIgnoreCase)) continue;
-                if (fileName.Equals("version.dll", StringComparison.OrdinalIgnoreCase)) extractedVersion = true;
+                if (!InstallWhitelist.Contains(fileName)) continue;
+                if (fileName is "dwmapi.dll" or "version.dll") extractedEntry = true;
 
                 var targetPath = Path.Combine(steamPath, fileName);
                 try
@@ -286,23 +327,19 @@ public class OpenSteamToolService : IOpenSteamToolService
 
             if (extracted == 0)
                 throw new InvalidOperationException(L.Get("Kernel_ZipNoDll"));
-            if (!extractedVersion)
-                LogService.Warn(L.Get("LogCat_Kernel"), L.Get("Kernel_ZipNoVersionDll"));
+            if (!extractedEntry)
+                LogService.Warn(L.Get("LogCat_Kernel"), L.Get("Kernel_ZipNoEntryDll"));
 
-            // 退役残留：旧部署的根目录 dwmapi.dll 会让新版 Steam 启动失败，安装成功即顺手清除（有则删，无则过）
-            foreach (var dll in LegacyDlls)
+            // 装完归一注入入口：默认 dwmapi，用户原选 version 则保持 version，
+            // 避免升级后旧入口与新入口同时激活
+            var targetMode = priorMode == InjectionMode.Version ? InjectionMode.Version : InjectionMode.Dwmapi;
+            try
             {
-                var legacyPath = Path.Combine(steamPath, dll);
-                if (!File.Exists(legacyPath)) continue;
-                try
-                {
-                    File.Delete(legacyPath);
-                    status?.Report(L.Get("Kernel_CleanedLegacy", dll));
-                }
-                catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
-                {
-                    throw new InvalidOperationException(L.Get("Kernel_CleanLegacyFailed", dll), ex);
-                }
+                SetInjectionMode(steamPath, targetMode);
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            {
+                throw new InvalidOperationException(L.Get("Kernel_SwitchEntryFailed", ex.Message), ex);
             }
 
             status?.Report(L.Get("Kernel_Installed"));
@@ -317,28 +354,13 @@ public class OpenSteamToolService : IOpenSteamToolService
     {
         var steamPath = GetSteamPath() ?? throw new InvalidOperationException(L.Get("Svc_CantDetectSteamPath"));
         var removed = 0;
-        foreach (var dll in RequiredDlls)
+        // 内核本体与两个注入入口的所有形态（激活 / 停用 / 禁用内核）一并清掉
+        foreach (var name in KernelBodyDlls.Concat(InjectionEntryDlls))
         {
-            var path = Path.Combine(steamPath, dll);
-            if (File.Exists(path))
+            foreach (var suffix in new[] { "", EntryDisabledSuffix, KernelDisabledSuffix })
             {
-                try
-                {
-                    File.Delete(path);
-                    removed++;
-                }
-                catch (Exception ex) when (ex is UnauthorizedAccessException || ex is IOException)
-                {
-                    throw new InvalidOperationException(L.Get("Kernel_CantDelete", dll), ex);
-                }
-            }
-        }
-        // 退役残留：根目录与 bin 目录的 dwmapi.dll，有则删、无则过（bin 里的劫持同样会炸新版 Steam）
-        foreach (var dll in LegacyDlls)
-        {
-            foreach (var rel in new[] { dll, Path.Combine("bin", dll) })
-            {
-                var path = Path.Combine(steamPath, rel);
+                var file = name + suffix;
+                var path = Path.Combine(steamPath, file);
                 if (!File.Exists(path)) continue;
                 try
                 {
@@ -347,8 +369,29 @@ public class OpenSteamToolService : IOpenSteamToolService
                 }
                 catch (Exception ex) when (ex is UnauthorizedAccessException || ex is IOException)
                 {
-                    throw new InvalidOperationException(L.Get("Kernel_CantDelete", rel), ex);
+                    throw new InvalidOperationException(L.Get("Kernel_CantDelete", file), ex);
                 }
+            }
+        }
+        // 旧版 OST 曾把 dwmapi.dll 劫持进 bin 子目录，新版主入口只落 Steam 根目录，
+        // 卸载时顺手清掉 bin 里的孤儿残留——bin 里的劫持会炸新版 Steam
+        foreach (var rel in new[]
+                 {
+                     Path.Combine("bin", DefaultInjectionEntry),
+                     Path.Combine("bin", DefaultInjectionEntry + EntryDisabledSuffix),
+                     Path.Combine("bin", DefaultInjectionEntry + KernelDisabledSuffix)
+                 })
+        {
+            var path = Path.Combine(steamPath, rel);
+            if (!File.Exists(path)) continue;
+            try
+            {
+                File.Delete(path);
+                removed++;
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException || ex is IOException)
+            {
+                throw new InvalidOperationException(L.Get("Kernel_CantDelete", rel), ex);
             }
         }
         if (removed == 0)
@@ -356,19 +399,44 @@ public class OpenSteamToolService : IOpenSteamToolService
         return Task.CompletedTask;
     }
 
-    // 临时禁用：逐个给已存在的内核 DLL 加 .disabled 后缀，返回实际处理数；
+    // 卸载预览：枚举当前真实存在的 OST 文件（本体/入口的激活、停用、禁用三种形态 + bin 孤儿残留），
+    // 确认框按这份磁盘实测清单展示，避免文案写死三件套、与部署形态脱节
+    public IReadOnlyList<string> GetInstalledKernelFiles()
+    {
+        var steamPath = GetSteamPath();
+        var list = new List<string>();
+        if (string.IsNullOrEmpty(steamPath)) return list;
+        foreach (var name in KernelBodyDlls.Concat(InjectionEntryDlls))
+        {
+            foreach (var suffix in new[] { "", EntryDisabledSuffix, KernelDisabledSuffix })
+            {
+                var rel = name + suffix;
+                if (File.Exists(Path.Combine(steamPath, rel))) list.Add(rel);
+            }
+        }
+        foreach (var suffix in new[] { "", EntryDisabledSuffix, KernelDisabledSuffix })
+        {
+            var rel = Path.Combine("bin", DefaultInjectionEntry + suffix);
+            if (File.Exists(Path.Combine(steamPath, rel))) list.Add(rel);
+        }
+        return list;
+    }
+
+    // 临时禁用：给内核本体与当前激活入口加 .off 后缀，返回实际处理数；
     // 已是禁用态或目标后缀已存在的跳过，调用方负责 Steam 关闭门禁
     public Task<int> DisableKernelAsync()
     {
         var steamPath = GetSteamPath() ?? throw new InvalidOperationException(L.Get("Svc_CantDetectSteamPath"));
         var done = 0;
         var skipped = new List<string>();
-        // 退役残留一并禁用：否则“禁用内核”后它仍会被加载，新版 Steam 照样起不来；
-        // 它是退役文件，Enable 时故意不恢复（见 EnableKernelAsync）
-        foreach (var dll in RequiredDlls.Concat(LegacyDlls))
+        // 内核本体必禁；入口只禁当前激活的那个——未激活的入口本就是 .disabled，不动它
+        var targets = new List<string>(KernelBodyDlls);
+        var activeEntry = ActiveEntryFile(steamPath);
+        if (activeEntry != null) targets.Add(activeEntry);
+        foreach (var dll in targets)
         {
             var path = Path.Combine(steamPath, dll);
-            var disabledPath = path + ".disabled";
+            var disabledPath = path + KernelDisabledSuffix;
             if (!File.Exists(path)) continue;
             if (File.Exists(disabledPath))
             {
@@ -393,17 +461,16 @@ public class OpenSteamToolService : IOpenSteamToolService
         return Task.FromResult(done);
     }
 
-    // 启用：去掉所有已存在的 .disabled 后缀，返回实际处理数；目标原名已存在的跳过，避免覆盖
+    // 启用：把内核本体与注入入口的 .off 副本还原回原名，返回实际处理数；原名已存在的跳过，避免覆盖
     public Task<int> EnableKernelAsync()
     {
         var steamPath = GetSteamPath() ?? throw new InvalidOperationException(L.Get("Svc_CantDetectSteamPath"));
         var done = 0;
         var skipped = new List<string>();
-        // 退役文件故意不在此恢复：dwmapi.dll.disabled 留在原地即可（加载器不理 .disabled 后缀）
-        foreach (var dll in RequiredDlls)
+        foreach (var dll in KernelBodyDlls.Concat(InjectionEntryDlls))
         {
             var path = Path.Combine(steamPath, dll);
-            var disabledPath = path + ".disabled";
+            var disabledPath = path + KernelDisabledSuffix;
             if (!File.Exists(disabledPath)) continue;
             if (File.Exists(path))
             {
@@ -426,6 +493,96 @@ public class OpenSteamToolService : IOpenSteamToolService
             LogService.Warn(L.Get("LogCat_Kernel"), L.Get("Kernel_LogSkippedExists", string.Join(", ", skipped)));
         LogService.Info(L.Get("LogCat_Kernel"), L.Get("Kernel_LogEnabled", done));
         return Task.FromResult(done);
+    }
+
+    // ========== 注入入口切换 ==========
+
+    // 当前激活的注入入口文件（dwmapi 优先）；未安装或被禁用时为 null
+    private static string? ActiveEntryFile(string steamPath)
+    {
+        foreach (var dll in InjectionEntryDlls)
+        {
+            if (File.Exists(Path.Combine(steamPath, dll))) return dll;
+        }
+        return null;
+    }
+
+    // 磁盘上两个入口 DLL 的激活组合；只反映文件现状，未安装/禁用的语义由调用方结合状态判断
+    public InjectionEntryState GetEntryState()
+    {
+        var steamPath = GetSteamPath();
+        if (string.IsNullOrEmpty(steamPath)) return InjectionEntryState.None;
+        var dwmapi = File.Exists(Path.Combine(steamPath, "dwmapi.dll"));
+        var version = File.Exists(Path.Combine(steamPath, "version.dll"));
+        if (dwmapi && version) return InjectionEntryState.BothActive;
+        if (dwmapi) return InjectionEntryState.Dwmapi;
+        if (version) return InjectionEntryState.Version;
+        return InjectionEntryState.None;
+    }
+
+    // 当前生效的注入方式。两个入口同时激活时以 version 为准：它作为 steam.exe 的
+    // 静态导入先注入，dwmapi 之后即便被加载，再去加载本体也已是空操作、不产生效果。
+    public InjectionMode GetInjectionMode()
+    {
+        return GetEntryState() switch
+        {
+            InjectionEntryState.Dwmapi => InjectionMode.Dwmapi,
+            InjectionEntryState.Version => InjectionMode.Version,
+            InjectionEntryState.BothActive => InjectionMode.Version,
+            _ => InjectionMode.None
+        };
+    }
+
+    // 切换注入入口：只有内核处于启用态（入口文件可改名）时才允许，
+    // 否则 .off 下的入口无法安全归一
+    public Task SwitchInjectionModeAsync(InjectionMode mode)
+    {
+        var steamPath = GetSteamPath() ?? throw new InvalidOperationException(L.Get("Svc_CantDetectSteamPath"));
+        if (mode is not (InjectionMode.Dwmapi or InjectionMode.Version))
+            throw new InvalidOperationException(L.Get("Kernel_SwitchEntryInvalid"));
+        if (HasDisabledKernel)
+            throw new InvalidOperationException(L.Get("Kernel_SwitchEntryNeedEnabled"));
+        try
+        {
+            SetInjectionMode(steamPath, mode);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException || ex is IOException)
+        {
+            throw new InvalidOperationException(L.Get("Kernel_SwitchEntryFailed", ex.Message), ex);
+        }
+        LogService.Info(L.Get("LogCat_Kernel"), L.Get("Kernel_LogEntrySwitched", mode == InjectionMode.Version ? "version.dll" : "dwmapi.dll"));
+        return Task.CompletedTask;
+    }
+
+    // 幂等归一：目标入口置为激活（清理冗余 .disabled 副本），另一入口置为停用
+    private static void SetInjectionMode(string steamPath, InjectionMode mode)
+    {
+        var activeName = mode == InjectionMode.Version ? "version.dll" : DefaultInjectionEntry;
+        var otherName = activeName == "version.dll" ? "dwmapi.dll" : "version.dll";
+
+        var activePath = Path.Combine(steamPath, activeName);
+        var activeDisabled = activePath + EntryDisabledSuffix;
+        if (!File.Exists(activePath))
+        {
+            if (File.Exists(activeDisabled))
+                File.Move(activeDisabled, activePath);
+            else
+                throw new IOException(L.Get("Kernel_EntryFileMissing", activeName));
+        }
+        else if (File.Exists(activeDisabled))
+        {
+            File.Delete(activeDisabled);
+        }
+
+        var otherPath = Path.Combine(steamPath, otherName);
+        var otherDisabled = otherPath + EntryDisabledSuffix;
+        if (File.Exists(otherPath))
+        {
+            if (File.Exists(otherDisabled))
+                File.Delete(otherPath);
+            else
+                File.Move(otherPath, otherDisabled);
+        }
     }
 
     // 第三方内核指纹（相对 Steam 根目录）：只收文件，不收目录；
