@@ -43,7 +43,7 @@ public class UpdateService : IUpdateService
         var (looseAssetUrl, singleAssetUrl) = ExtractAssetUrls(doc.RootElement);
 
         var (latestNumeric, latestSuffix) = ParseReleaseVersion(tagName)
-            ?? throw new InvalidOperationException($"无法识别最新版本号：{tagName}");
+            ?? throw new InvalidOperationException(L.Get("Svc_UpdBadTag", tagName));
         var assemblyVersion = Assembly.GetExecutingAssembly().GetName().Version ?? new Version(1, 0, 0);
         // Revision 纳入比较：否则装着 1.4.8.1 会永远提示更新；-1 兜底（理论上到不了，实测为 0）
         var currentNumeric = new Version(assemblyVersion.Major, assemblyVersion.Minor, assemblyVersion.Build,

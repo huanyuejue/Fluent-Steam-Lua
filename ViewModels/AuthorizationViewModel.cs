@@ -65,13 +65,13 @@ public partial class AuthorizationViewModel : ObservableObject, IDisposable
         switch (severity)
         {
             case InfoBarSeverity.Error:
-                LogService.Error("授权", text);
+                LogService.Error(L.Get("LogCat_Auth"), text);
                 break;
             case InfoBarSeverity.Warning:
-                LogService.Warn("授权", text);
+                LogService.Warn(L.Get("LogCat_Auth"), text);
                 break;
             default:
-                LogService.Info("授权", text);
+                LogService.Info(L.Get("LogCat_Auth"), text);
                 break;
         }
     }
@@ -105,7 +105,7 @@ public partial class AuthorizationViewModel : ObservableObject, IDisposable
         var id = ExtractAppIdText.Trim();
         if (!uint.TryParse(id, out var appId) || appId == 0)
         {
-            SetStatus(InfoBarSeverity.Warning, "AppID 无效", "请输入 1~4294967295 之间的数字 AppID");
+            SetStatus(InfoBarSeverity.Warning, L.Get("Auth_InvalidAppId"), L.Get("Auth_InvalidAppIdBody"));
             return;
         }
 
@@ -113,8 +113,8 @@ public partial class AuthorizationViewModel : ObservableObject, IDisposable
         IsBusy = true;
         LastExtractPath = "";
         LastExtractSummary = "";
-        SetStatus(InfoBarSeverity.Informational, "正在提取",
-            $"正在提取 AppID {appId} 的授权票据…请确认 Steam 已运行并登录拥有该游戏的账号");
+        SetStatus(InfoBarSeverity.Informational, L.Get("Auth_ExtractingTitle"),
+            L.Get("Auth_ExtractingBody", appId));
         _extractCts = new CancellationTokenSource();
         var ct = _extractCts.Token;
 
@@ -123,20 +123,20 @@ public partial class AuthorizationViewModel : ObservableObject, IDisposable
             var result = await _authorizationService.ExtractAsync(appId, ct);
             LastExtractPath = result.OutputPath;
             LastExtractSummary =
-                $"已提取 AppID {result.Ticket.AppId} 授权\n" +
-                $"AppTicket：{result.Ticket.AppTicket.Length} 字节\n" +
-                $"ETicket：{result.Ticket.ETicket.Length} 字节\n" +
-                $"保存位置：{result.OutputPath}";
-            SetStatus(InfoBarSeverity.Success, "提取完成",
-                "已提取授权票据并保存。授权文件有效期为 30 分钟，请尽快使用。");
+                L.Get("Auth_SummaryTitle", result.Ticket.AppId) + "\n" +
+                L.Get("Auth_SummaryAppTicket", result.Ticket.AppTicket.Length) + "\n" +
+                L.Get("Auth_SummaryETicket", result.Ticket.ETicket.Length) + "\n" +
+                L.Get("Auth_SummaryPath", result.OutputPath);
+            SetStatus(InfoBarSeverity.Success, L.Get("Auth_DoneTitle"),
+                L.Get("Auth_ExtractSavedNote"));
         }
         catch (OperationCanceledException)
         {
-            SetStatus(InfoBarSeverity.Informational, "已取消", "提取已取消");
+            SetStatus(InfoBarSeverity.Informational, L.Get("Auth_CancelledTitle"), L.Get("Auth_CancelledBody"));
         }
         catch (Exception ex)
         {
-            SetStatus(InfoBarSeverity.Error, "提取失败", ex.Message);
+            SetStatus(InfoBarSeverity.Error, L.Get("Auth_ExtractFailed"), ex.Message);
         }
         finally
         {
@@ -159,7 +159,7 @@ public partial class AuthorizationViewModel : ObservableObject, IDisposable
         try
         {
             Clipboard.SetText(LastExtractPath);
-            SetStatus(InfoBarSeverity.Informational, "路径已复制", "tickets.txt 的保存路径已复制到剪贴板");
+            SetStatus(InfoBarSeverity.Informational, L.Get("Auth_PathCopied"), L.Get("Auth_PathCopiedBody"));
         }
         catch { }
     }
@@ -194,8 +194,8 @@ public partial class AuthorizationViewModel : ObservableObject, IDisposable
     {
         var dialog = new OpenFileDialog
         {
-            Title = "选择 tickets.txt",
-            Filter = "票据文件|tickets.txt;*.txt|所有文件|*.*",
+            Title = L.Get("Auth_PickTickets"),
+            Filter = L.Get("Auth_TicketsFilter"),
             CheckFileExists = true,
             Multiselect = false
         };
@@ -210,45 +210,45 @@ public partial class AuthorizationViewModel : ObservableObject, IDisposable
     {
         if (string.IsNullOrWhiteSpace(path))
         {
-            SetStatus(InfoBarSeverity.Warning, "未选择文件", "请拖入或选择有效的 tickets.txt 文件");
+            SetStatus(InfoBarSeverity.Warning, L.Get("Auth_NoFile"), L.Get("Auth_NoFileBody"));
             return;
         }
         if (IsImporting || IsExtracting)
         {
-            SetStatus(InfoBarSeverity.Informational, "正在处理", "存在进行中的操作，请稍候再试");
+            SetStatus(InfoBarSeverity.Informational, L.Get("Auth_Processing"), L.Get("Auth_ProcessingBody"));
             return;
         }
 
         IsImporting = true;
         IsBusy = true;
         LastImportSummary = "";
-        SetStatus(InfoBarSeverity.Informational, "正在导入", $"正在解析 {Path.GetFileName(path)}…");
+        SetStatus(InfoBarSeverity.Informational, L.Get("Auth_ImportingTitle"), L.Get("Auth_ImportingBody", Path.GetFileName(path)));
         try
         {
             var parse = _authorizationService.ParseTicketsFile(path);
             if (!parse.Ok)
             {
-                SetStatus(InfoBarSeverity.Error, "文件解析失败", parse.Error ?? "未知解析错误");
+                SetStatus(InfoBarSeverity.Error, L.Get("Auth_ParseFailed"), parse.Error ?? L.Get("Auth_UnknownParseError"));
                 return;
             }
 
-            SetStatus(InfoBarSeverity.Informational, "正在校验清单",
-                $"正在检查 AppID {parse.AppId} 的 Lua 清单入库状态…");
+            SetStatus(InfoBarSeverity.Informational, L.Get("Auth_CheckingManifest"),
+                L.Get("Auth_CheckingManifestBody", parse.AppId));
 
             var check = _authorizationService.CheckLuaManifest(parse.AppId);
             switch (check.Status)
             {
                 case LuaManifestCheckStatus.NotConfigured:
-                    SetStatus(InfoBarSeverity.Error, "未配置 Lua 清单目录", check.Message ?? "未检测到 Lua 清单目录");
+                    SetStatus(InfoBarSeverity.Error, L.Get("Auth_NoManifestDir"), check.Message ?? L.Get("Auth_NoManifestDirBody"));
                     return;
                 case LuaManifestCheckStatus.NotFound:
-                    SetStatus(InfoBarSeverity.Warning, "游戏未入库", check.Message ?? "该授权只适用于通过 Lua 清单入库的游戏");
+                    SetStatus(InfoBarSeverity.Warning, L.Get("Auth_GameNotImported"), check.Message ?? L.Get("Auth_GameNotImportedBody"));
                     return;
                 case LuaManifestCheckStatus.DisabledOnly:
-                    SetStatus(InfoBarSeverity.Warning, "清单已禁用", check.Message ?? "清单已被禁用，请先启用");
+                    SetStatus(InfoBarSeverity.Warning, L.Get("Auth_ManifestDisabled"), check.Message ?? L.Get("Auth_ManifestDisabledBody"));
                     return;
                 case LuaManifestCheckStatus.NoAddAppId:
-                    SetStatus(InfoBarSeverity.Error, "缺少 addappid 配置", check.Message ?? "Lua 清单中缺少 addappid 入库配置");
+                    SetStatus(InfoBarSeverity.Error, L.Get("Auth_NoAddAppId"), check.Message ?? L.Get("Auth_NoAddAppIdBody"));
                     return;
             }
 
@@ -257,15 +257,15 @@ public partial class AuthorizationViewModel : ObservableObject, IDisposable
                 var confirmed = await ConfirmRemoveLegacyAsync(parse.AppId);
                 if (!confirmed)
                 {
-                    SetStatus(InfoBarSeverity.Informational, "已取消",
-                        "已停止导入，旧授权语句未移除。");
+                    SetStatus(InfoBarSeverity.Informational, L.Get("Auth_CancelledTitle"),
+                        L.Get("Auth_CancelledImportBody"));
                     return;
                 }
 
                 var removeError = _authorizationService.RemoveLegacyTicketLines(check.LuaFilePath, parse.AppId);
                 if (removeError != null)
                 {
-                    SetStatus(InfoBarSeverity.Error, "清理旧授权语句失败", removeError);
+                    SetStatus(InfoBarSeverity.Error, L.Get("Auth_RemoveLegacyFailed"), removeError);
                     return;
                 }
             }
@@ -274,17 +274,16 @@ public partial class AuthorizationViewModel : ObservableObject, IDisposable
             var import = _authorizationService.ImportTicket(ticket);
             var warning = string.IsNullOrEmpty(import.Warning) ? "" : $"\n\n{import.Warning}";
             LastImportSummary =
-                $"AppID：{import.AppId}\n" +
-                $"AppTicket：{import.AppTicketBytes} 字节\n" +
-                $"ETicket：{import.ETicketBytes} 字节\n" +
-                $"清单状态：已检测到生效 Lua 清单";
-            SetStatus(InfoBarSeverity.Success, "授权导入成功",
-                $"AppID {import.AppId} 的 AppTicket（{import.AppTicketBytes} 字节）和 ETicket（{import.ETicketBytes} 字节）" +
-                $"已写入 Steam 凭据存储，现有旧票据已由本次导入的新票据覆盖。授权有效期约 30 分钟，请尽快启动游戏完成授权。" + warning);
+                L.Get("Auth_ImportSummaryAppId", import.AppId) + "\n" +
+                L.Get("Auth_SummaryAppTicket", import.AppTicketBytes) + "\n" +
+                L.Get("Auth_SummaryETicket", import.ETicketBytes) + "\n" +
+                L.Get("Auth_ManifestActive");
+            SetStatus(InfoBarSeverity.Success, L.Get("Auth_ImportOk"),
+                L.Get("Auth_ImportOkBody", import.AppId, import.AppTicketBytes, import.ETicketBytes) + warning);
         }
         catch (Exception ex)
         {
-            SetStatus(InfoBarSeverity.Error, "导入失败", ex.Message);
+            SetStatus(InfoBarSeverity.Error, L.Get("Auth_ImportFailed"), ex.Message);
         }
         finally
         {
@@ -296,9 +295,8 @@ public partial class AuthorizationViewModel : ObservableObject, IDisposable
     private async Task<bool> ConfirmRemoveLegacyAsync(uint appId)
     {
         return await _dialogService.ShowConfirmAsync(
-            "检测到旧授权语句",
-            $"Lua 清单中仍包含 AppID {appId} 的旧 setAppTicket/setETicket 语句。" +
-            "继续使用注册表授权前需要移除这些语句，否则 Steam 重启或 Lua 热重载后会将其写回，覆盖刚导入的新授权。",
-            "移除并继续", "取消");
+            L.Get("Auth_LegacyTitle"),
+            L.Get("Auth_LegacyBody", appId),
+            L.Get("Auth_RemoveAndContinue"), L.Get("Common_Cancel"));
     }
 }

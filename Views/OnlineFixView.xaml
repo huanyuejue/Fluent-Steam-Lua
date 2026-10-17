@@ -1,6 +1,7 @@
 <UserControl xmlns:controls="clr-namespace:SteamLuaManager.Controls" x:Class="SteamLuaManager.Views.OnlineFixView"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:l="clr-namespace:SteamLuaManager.Markup"
         xmlns:ui="http://schemas.inkore.net/lib/ui/wpf/modern"
         Background="Transparent"
         TextOptions.TextFormattingMode="Display"
@@ -53,20 +54,20 @@
 
         <!-- 标题 -->
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
-            <TextBlock Text="联机" FontSize="28" FontWeight="SemiBold"
+            <TextBlock Text="{l:Loc Online_Title}" FontSize="28" FontWeight="SemiBold"
                        Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-            <TextBlock Text="使用内核内置的480联机方式，若不可用则考虑下载使用OnlineFix补丁（不一定有）"
+            <TextBlock Text="{l:Loc Online_Desc480}"
                        FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                        Visibility="{Binding IsShowing480, Converter={StaticResource BoolToVisibilityConverter}}"/>
             <StackPanel Visibility="{Binding IsShowingPatch, Converter={StaticResource BoolToVisibilityConverter}}">
-                <TextBlock Text="搜索OnlineFix联机补丁：注意核对补丁的适配版本与来源(Steam/微软商店/Epic）后再下载，压缩包解压密码为online-fix.me"
+                <TextBlock Text="{l:Loc Online_DescPatch1}"
                            FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                <TextBlock Text="仅支持使用游戏的英文名进行搜索，不支持中文"
+                <TextBlock Text="{l:Loc Online_DescPatch2}"
                            FontSize="12" Margin="0,2,0,0" TextWrapping="Wrap"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                <TextBlock Text="因源网站为境外俄罗斯站点，国内裸连访问会非常慢，刚需代理或梯子才能正常搜索下载"
+                <TextBlock Text="{l:Loc Online_DescPatch3}"
                            FontSize="12" Margin="0,2,0,0" TextWrapping="Wrap"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
             </StackPanel>
@@ -83,11 +84,11 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
-                <RadioButton Grid.Column="0" Content="480 联机"
+                <RadioButton Grid.Column="0" Content="{l:Loc Online_Pill480}"
                              IsChecked="{Binding IsShowing480}"
                              Style="{StaticResource PillButtonStyle}"
                              Command="{Binding Show480ViewCommand}"/>
-                <RadioButton Grid.Column="1" Content="OnlineFix 补丁"
+                <RadioButton Grid.Column="1" Content="{l:Loc Online_PillPatch}"
                              IsChecked="{Binding IsShowingPatch}"
                              Style="{StaticResource PillButtonStyle}"
                              Command="{Binding ShowPatchViewCommand}"/>
@@ -108,32 +109,32 @@
                             <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
                         </Border.Background>
                         <StackPanel>
-                            <TextBlock Text="什么是 480 联机" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"
+                            <TextBlock Text="{l:Loc Online_WhatIs480}" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"
                                        Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
                             <TextBlock FontSize="13" TextWrapping="Wrap" Margin="0,0,0,6"
                                        Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                       Text="OST 内核会在游戏启动时截获启动参数，把 AppID 改写为 480（Spacewar），从而让 Steam 以为你在玩同一款游戏，实现大厅匹配联机。这是纯内存欺骗，不替换任何游戏文件。"/>
-                            <TextBlock Text="启用步骤" FontSize="16" FontWeight="SemiBold" Margin="0,8,0,8"
+                                       Text="{l:Loc Online_WhatIs480Body}"/>
+                            <TextBlock Text="{l:Loc Online_StepsTitle}" FontSize="16" FontWeight="SemiBold" Margin="0,8,0,8"
                                        Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
                             <TextBlock FontSize="13" TextWrapping="Wrap" Margin="0,0,0,2"
                                        Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                       Text="1. 打开 Steam 游戏库，右键目标游戏 → 属性"/>
+                                       Text="{l:Loc Online_Step1}"/>
                             <TextBlock FontSize="13" TextWrapping="Wrap" Margin="0,0,0,2"
                                        Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                       Text="2. 在启动选项（高级用户）一栏填入下面框内的参数"/>
+                                       Text="{l:Loc Online_Step2}"/>
                             <TextBlock FontSize="13" TextWrapping="Wrap" Margin="0,0,0,6"
                                        Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                       Text="3. 正常启动游戏即可联机；想恢复只需删掉该参数"/>
+                                       Text="{l:Loc Online_Step3}"/>
                             <TextBox Text="-onlinefix" IsReadOnly="True" FontSize="14" FontFamily="Consolas, Consolas, Microsoft YaHei"
                                      Padding="10,8" Margin="0,0,0,8" MaxWidth="280" HorizontalAlignment="Left"
-                                     ToolTip="鼠标拖选复制">
+                                     ToolTip="{l:Loc Online_CopyParamTip}">
                                 <TextBox.Background>
                                     <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                                 </TextBox.Background>
                             </TextBox>
                             <TextBlock FontSize="12" TextWrapping="Wrap"
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                       Text="限制：同一时间只能运行一个此类游戏；仅支持大厅匹配类游戏，且联机双方需都使用480联机方式进行游戏。"/>
+                                       Text="{l:Loc Online_Limit}"/>
                         </StackPanel>
                     </Border>
                 </StackPanel>
@@ -155,7 +156,7 @@
                             </Grid.ColumnDefinitions>
                             <ui:AutoSuggestBox Grid.Column="0" x:Name="SearchBox"
                                                Text="{Binding SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                               PlaceholderText="输入游戏名搜索补丁，大小写不限..."
+                                               PlaceholderText="{l:Loc Online_SearchPlaceholder}"
                                                QuerySubmitted="SearchBox_QuerySubmitted"
                                                TextChanged="SearchBox_TextChanged"
                                                Height="36"
@@ -174,7 +175,7 @@
                                 </Button.Background>
                                 <StackPanel Orientation="Horizontal">
                                     <ui:FontIcon Glyph="&#xE74D;" FontSize="14" Margin="0,0,6,0"/>
-                                    <TextBlock Text="清除日志" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{l:Loc Common_ClearLog}" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Button>
                         </Grid>
@@ -187,7 +188,7 @@
                             <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
                         </Border.Background>
                         <Grid>
-                            <TextBlock Text="暂无日志" Style="{StaticResource LogEmptyStyle}"
+                            <TextBlock Text="{l:Loc Common_NoLog}" Style="{StaticResource LogEmptyStyle}"
                                        Visibility="{Binding LogLines.Count, Converter={StaticResource ZeroToVisibilityConverter}}"/>
                             <ScrollViewer x:Name="LogScrollViewer" VerticalScrollBarVisibility="Disabled" Margin="16,16,16,16"
                                           PreviewMouseWheel="LogScrollViewer_PreviewMouseWheel">
@@ -199,7 +200,7 @@
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
                             </ScrollViewer>
-                            <Button x:Name="CopyLogButton" Content="复制日志"
+                            <Button x:Name="CopyLogButton" Content="{l:Loc Common_CopyLog}"
                                     HorizontalAlignment="Right" VerticalAlignment="Top"
                                     Margin="0,8,8,0" Padding="8,4" FontSize="12"
                                     Click="CopyLogButton_Click" Visibility="Collapsed"/>
@@ -245,11 +246,11 @@
                                         <Button Grid.Column="1"
                                                 Command="{Binding DataContext.LoadDetailCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                 CommandParameter="{Binding}"
-                                                Padding="16,6" Height="36" FontSize="14" Focusable="False">
+                                                Padding="16,6" Height="36"                                                 FontSize="14" Focusable="False"
+                                                Content="{l:Loc Online_ViewPatch}">
                                             <Button.Background>
                                                 <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                                             </Button.Background>
-                                            查看补丁
                                         </Button>
                                     </Grid>
                                 </Border>
@@ -257,7 +258,7 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                     <!-- 搜过但无结果 -->
-                    <TextBlock Text="未找到匹配的游戏，换个关键词试试（大小写不限）"
+                    <TextBlock Text="{l:Loc Online_SearchEmpty}"
                                FontSize="13" HorizontalAlignment="Center" Margin="0,8,0,16"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                Visibility="{Binding IsSearchEmptyVisible, Converter={StaticResource BoolToVisibilityConverter}}"/>
@@ -279,16 +280,16 @@
                                        Foreground="{DynamicResource TextFillColorPrimaryBrush}" TextWrapping="Wrap"/>
                             <TextBlock FontSize="12" Margin="0,0,0,2"
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}">
-                                <Run Text="版本："/><Run Text="{Binding Detail.VersionText, Mode=OneWay}"/>
+                                <Run Text="{l:Loc Online_DetailVersion}"/><Run Text="{Binding Detail.VersionText, Mode=OneWay}"/>
                             </TextBlock>
                             <TextBlock FontSize="12" Margin="0,0,0,2"
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}">
-                                <Run Text="来源："/><Run Text="{Binding Detail.Tablet, Mode=OneWay}"/>
+                                <Run Text="{l:Loc Online_DetailSource}"/><Run Text="{Binding Detail.Tablet, Mode=OneWay}"/>
                             </TextBlock>
                             <TextBlock FontSize="12" Margin="0,0,0,2"
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                       Text="补丁压缩包解压密码：online-fix.me（已写入下载目录的使用说明里）"/>
-                            <TextBlock Text="使用说明（俄文原文，可选中复制，下载时会存入 使用说明 (必看).txt）："
+                                       Text="{l:Loc Online_PasswordNote}"/>
+                            <TextBlock Text="{l:Loc Online_PasswordUsage}"
                                        FontSize="12" Margin="0,8,0,4"
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                             <Border CornerRadius="6" Padding="0" MaxHeight="220"
@@ -303,7 +304,7 @@
                                     </TextBox.Background>
                                 </TextBox>
                             </Border>
-                            <TextBlock Text="补丁文件（来自 Fix Repair 目录）："
+                            <TextBlock Text="{l:Loc Online_PatchDirNote}"
                                        FontSize="12" Margin="0,8,0,4"
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                        Visibility="{Binding HasFiles, Converter={StaticResource BoolToVisibilityConverter}}"/>
@@ -331,24 +332,24 @@
                                                         Command="{Binding DataContext.DownloadCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                         CommandParameter="{Binding}"
                                                         Padding="20,8" Height="36" FontSize="14" Focusable="False"
-                                                        IsEnabled="{Binding DataContext.IsDownloading, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolInvertConverter}}">
+                                                        IsEnabled="{Binding DataContext.IsDownloading, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolInvertConverter}}"
+                                                        Content="{l:Loc Online_Download}">
                                                 <Button.Background>
                                                     <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                                                 </Button.Background>
-                                                下载
                                             </Button>
                                         </Grid>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
-                            <TextBlock Text="该游戏暂无 Fix Repair 补丁文件"
+                            <TextBlock Text="{l:Loc Online_GameDirNote}"
                                        FontSize="12" Margin="0,4,0,0"
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                        Visibility="{Binding HasFiles, Converter={StaticResource InvertedBoolToVisibilityConverter}}"/>
                             <ProgressBar Minimum="0" Maximum="100" Height="6" Margin="0,8,0,0"
                                          Value="{Binding DownloadProgress}"
                                          Visibility="{Binding IsDownloading, Converter={StaticResource BoolToVisibilityConverter}}"/>
-                            <Button Content="取消下载" Command="{Binding CancelDownloadCommand}"
+                            <Button Content="{l:Loc Online_CancelDownload}" Command="{Binding CancelDownloadCommand}"
                                     Padding="16,6" Height="32" FontSize="13" Margin="0,8,0,0" HorizontalAlignment="Left"
                                     Visibility="{Binding IsDownloading, Converter={StaticResource BoolToVisibilityConverter}}">
                                 <Button.Background>

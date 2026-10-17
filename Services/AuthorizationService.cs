@@ -37,15 +37,15 @@ public sealed class AuthorizationService : IAuthorizationService
     public TicketParseResult ParseTicketsFile(string path)
     {
         if (string.IsNullOrWhiteSpace(path))
-            return Fail("未提供 tickets.txt 文件路径");
+            return Fail(L.Get("Auth_NoTicketsPath"));
         if (!File.Exists(path))
-            return Fail($"文件不存在：{path}");
+            return Fail(L.Get("Auth_FileNotFound", path));
 
         var file = new FileInfo(path);
         if (file.Length == 0)
-            return Fail($"文件为空：{path}");
+            return Fail(L.Get("Auth_FileEmpty", path));
         if (file.Length > MaxTicketsFileSize)
-            return Fail("文件超过 2 MB 上限，请确认为有效的 tickets.txt");
+            return Fail(L.Get("Auth_FileTooBig"));
 
         string[] lines;
         try
@@ -54,7 +54,7 @@ public sealed class AuthorizationService : IAuthorizationService
         }
         catch (Exception ex)
         {
-            return Fail($"读取文件失败：{ex.Message}");
+            return Fail(L.Get("Auth_ReadFileFailed", ex.Message));
         }
 
         uint appId = 0;
@@ -71,11 +71,11 @@ public sealed class AuthorizationService : IAuthorizationService
             if (appIdMatch.Success)
             {
                 if (appIdSeen)
-                    return Fail("tickets.txt 中 appid 字段只能出现一次");
+                    return Fail(L.Get("Auth_AppIdDup"));
                 appIdSeen = true;
                 if (!uint.TryParse(appIdMatch.Groups[1].Value, NumberStyles.None,
                         CultureInfo.InvariantCulture, out appId) || appId == 0)
-                    return Fail($"appid 无效：{appIdMatch.Groups[1].Value}");
+                    return Fail(L.Get("Auth_AppIdInvalid", appIdMatch.Groups[1].Value));
                 continue;
             }
 
@@ -85,19 +85,19 @@ public sealed class AuthorizationService : IAuthorizationService
                 var name = ticketMatch.Groups[1].Value.ToLowerInvariant();
                 if (!uint.TryParse(ticketMatch.Groups[2].Value, NumberStyles.None,
                         CultureInfo.InvariantCulture, out var declared))
-                    return Fail($"{name} 声明字节数无效：{ticketMatch.Groups[2].Value}");
+                    return Fail(L.Get("Auth_BytesInvalid", name, ticketMatch.Groups[2].Value));
                 var hex = ticketMatch.Groups[3].Value;
                 if (hex.Length % 2 != 0)
-                    return Fail($"{name} 十六进制长度必须为偶数");
+                    return Fail(L.Get("Auth_HexMustEven", name));
 
                 if (name == "appticket")
                 {
-                    if (appTicket != null) return Fail("tickets.txt 中 appticket 字段只能出现一次");
+                    if (appTicket != null) return Fail(L.Get("Auth_AppTicketDup"));
                     appTicket = (name, declared, hex);
                 }
                 else
                 {
-                    if (eticket != null) return Fail("tickets.txt 中 eticket 字段只能出现一次");
+                    if (eticket != null) return Fail(L.Get("Auth_EticketDup"));
                     eticket = (name, declared, hex);
                 }
                 continue;
@@ -107,36 +107,36 @@ public sealed class AuthorizationService : IAuthorizationService
             if (nullMatch.Success)
             {
                 var name = nullMatch.Groups[1].Value.ToLowerInvariant();
-                return Fail($"tickets.txt 中 {name} 数据为 null（该授权不完整，无法导入）");
+                return Fail(L.Get("Auth_TicketNull", name));
             }
 
             // 无法识别的行：畸形票据行可能含大段 hex，只报行特征不贴原文，票据材料不落日志
             var squashed = string.Concat(line.Where(c => Uri.IsHexDigit(c)));
             if (squashed.Length >= 64)
-                return Fail("无法识别的行（含疑似票据数据，已隐去）：请检查 tickets.txt 格式");
-            return Fail($"无法识别的行：{Truncate(line)}");
+                return Fail(L.Get("Auth_LineSuspicious"));
+            return Fail(L.Get("Auth_LineUnknown", Truncate(line)));
         }
 
         if (!appIdSeen)
-            return Fail("tickets.txt 缺少 appid 字段");
+            return Fail(L.Get("Auth_MissingAppId"));
         if (appTicket == null)
-            return Fail("tickets.txt 缺少 appticket 字段");
+            return Fail(L.Get("Auth_MissingAppTicket"));
         if (eticket == null)
-            return Fail("tickets.txt 缺少 eticket 字段");
+            return Fail(L.Get("Auth_MissingEticket"));
 
         var appTicketBytes = DecodeHex(appTicket.Value.Hex);
         if (appTicketBytes == null)
-            return Fail("appticket 十六进制数据无效");
+            return Fail(L.Get("Auth_AppTicketHexInvalid"));
         if (appTicketBytes.Length != appTicket.Value.DeclaredBytes)
-            return Fail($"appticket 声明 {appTicket.Value.DeclaredBytes} 字节，实际解码 {appTicketBytes.Length} 字节，长度不一致");
+            return Fail(L.Get("Auth_AppTicketLenMismatch", appTicket.Value.DeclaredBytes, appTicketBytes.Length));
         if (appTicketBytes.Length < 20)
-            return Fail("appticket 过短（少于 20 字节），不是有效的所有权票据");
+            return Fail(L.Get("Auth_AppTicketTooShort"));
 
         var eticketBytes = DecodeHex(eticket.Value.Hex);
         if (eticketBytes == null)
-            return Fail("eticket 十六进制数据无效");
+            return Fail(L.Get("Auth_EticketHexInvalid"));
         if (eticketBytes.Length != eticket.Value.DeclaredBytes)
-            return Fail($"eticket 声明 {eticket.Value.DeclaredBytes} 字节，实际解码 {eticketBytes.Length} 字节，长度不一致");
+            return Fail(L.Get("Auth_EticketLenMismatch", eticket.Value.DeclaredBytes, eticketBytes.Length));
 
         // 内嵌 AppID 定位：Steam 只保证经 GetAppOwnershipTicketData 返回的偏移，
         // 票据布局随类型变化（常规票据 AppID 在偏移 16；部分 D 加密标题不在 16，
@@ -146,20 +146,17 @@ public sealed class AuthorizationService : IAuthorizationService
         if (appIdOffset < 0)
         {
             LogMismatchForensics(appId, appTicketBytes);
-            return Fail($"appticket 内未找到声明 AppID {appId}（常规偏移 16 处不是该 AppID），" +
-                "该票据与当前游戏不对应，已停止导入。" +
-                "请用内置提取重新提取该游戏的票据；第三方加壳工具的票据布局不同，不支持导入。" +
-                "详情见 app.log（授权分类）。");
+            return Fail(L.Get("Auth_AppIdNotEmbedded", appId));
         }
         if (appIdOffset != 16)
-            Log("授权", $"appticket 内嵌 AppID 在非常规偏移 {appIdOffset} 处命中，已接受导入");
+            Log(L.Get("LogCat_Auth"), L.Get("Auth_EmbeddedOffsetHit", appIdOffset));
 
         // AppTicket 内嵌 SteamID：偏移 8 处小端 uint64，必须非零
         var steamId = BitConverter.ToUInt64(appTicketBytes, 8);
         if (steamId == 0)
-            return Fail("无法从 appticket 中读取有效的 SteamID");
+            return Fail(L.Get("Auth_NoSteamId"));
 
-        Log("授权", $"解析 tickets.txt 成功：AppID {appId}，AppTicket {appTicketBytes.Length}B，ETicket {eticketBytes.Length}B");
+        Log(L.Get("LogCat_Auth"), L.Get("Auth_ParseOkLog", appId, appTicketBytes.Length, eticketBytes.Length));
         return new TicketParseResult(
             Ok: true, Error: null,
             AppId: appId, SteamId: steamId,
@@ -210,8 +207,7 @@ public sealed class AuthorizationService : IAuthorizationService
     {
         try
         {
-            Log("授权", $"内嵌校验失败：声明 {appId}，票据 {appTicketBytes.Length}B，" +
-                "全票据 4 字节对齐扫描未命中声明 AppID");
+            Log(L.Get("LogCat_Auth"), L.Get("Auth_MismatchForensics", appId, appTicketBytes.Length));
         }
         catch { }
     }
@@ -230,7 +226,7 @@ public sealed class AuthorizationService : IAuthorizationService
         {
             return new LuaManifestCheckResult(
                 LuaManifestCheckStatus.NotConfigured, null, false,
-                "未检测到当前生效的 Lua 清单目录，请先安装并配置 OpenSteamTool。");
+                L.Get("Auth_NoLuaDir"));
         }
 
         var activePath = Path.Combine(luaFolder, $"{appId}.lua");
@@ -241,12 +237,12 @@ public sealed class AuthorizationService : IAuthorizationService
             {
                 return new LuaManifestCheckResult(
                     LuaManifestCheckStatus.DisabledOnly, disabledPath, false,
-                    $"AppID {appId} 的清单存在但已被禁用（位于 Disable 目录），请先启用该游戏后再使用授权。");
+                    L.Get("Auth_ManifestDisabledPath", appId));
             }
 
             return new LuaManifestCheckResult(
                 LuaManifestCheckStatus.NotFound, null, false,
-                $"当前未检测到 AppID {appId} 的生效游戏清单。该授权只适用于通过 Lua 清单入库的游戏，请先入库并启用游戏后，再使用授权信息。");
+                L.Get("Auth_ManifestNotFound", appId));
         }
 
         string content;
@@ -258,7 +254,7 @@ public sealed class AuthorizationService : IAuthorizationService
         {
             return new LuaManifestCheckResult(
                 LuaManifestCheckStatus.NoAddAppId, activePath, false,
-                $"读取 {activePath} 失败：{ex.Message}，已停止写入授权。");
+                L.Get("Auth_ReadManifestFailed", activePath, ex.Message));
         }
 
         var hasAddAppId = AddAppIdRegex(appId).IsMatch(content);
@@ -266,15 +262,15 @@ public sealed class AuthorizationService : IAuthorizationService
         {
             return new LuaManifestCheckResult(
                 LuaManifestCheckStatus.NoAddAppId, activePath, false,
-                $"找到了同名 Lua 文件，但其中未检测到 AppID {appId} 的 addappid 入库配置，已停止写入授权。");
+                L.Get("Auth_NoAddAppIdFound", appId));
         }
 
         var hasLegacy = HasLegacyTicketLines(content, appId);
         return new LuaManifestCheckResult(
             LuaManifestCheckStatus.Ready, activePath, hasLegacy,
             hasLegacy
-                ? "已检测到生效 Lua 清单，但其中仍包含旧授权语句（setAppTicket/setETicket），需移除后继续。"
-                : "已检测到生效 Lua 清单与 addappid 入库配置。");
+                ? L.Get("Auth_HasLegacy")
+                : L.Get("Auth_ReadyManifest"));
     }
 
     private static Regex AddAppIdRegex(uint appId)
@@ -291,7 +287,7 @@ public sealed class AuthorizationService : IAuthorizationService
     public string? RemoveLegacyTicketLines(string luaFilePath, uint appId)
     {
         if (string.IsNullOrEmpty(luaFilePath) || !File.Exists(luaFilePath))
-            return $"Lua 文件不存在：{luaFilePath}";
+            return L.Get("Auth_LuaFileMissing", luaFilePath);
 
         try
         {
@@ -314,12 +310,12 @@ public sealed class AuthorizationService : IAuthorizationService
                 return null; // 无需清理
 
             WriteAllTextAtomic(luaFilePath, string.Join("\r\n", kept));
-            Log("授权", $"已从 {luaFilePath} 移除 {removed} 行旧授权语句（AppID {appId}）");
+            Log(L.Get("LogCat_Auth"), L.Get("Auth_RemovedLegacyLog", luaFilePath, removed, appId));
             return null;
         }
         catch (Exception ex)
         {
-            return $"移除旧授权语句失败：{ex.Message}";
+            return L.Get("Auth_RemoveLegacyFailed", ex.Message);
         }
     }
 

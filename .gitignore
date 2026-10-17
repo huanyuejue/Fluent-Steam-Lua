@@ -49,5 +49,6 @@ Desktop.ini
 
 screenshots/
 # ��������
-Resources/
+Resources/*
+!Resources/Lang/
 publish/

@@ -10,6 +10,7 @@ using System.Text;
 using iNKORE.UI.WPF.Modern.Controls;
 using iNKORE.UI.WPF.Modern;
 using SteamLuaManager.Models;
+using SteamLuaManager.Services;
 using SteamLuaManager.ViewModels;
 
 namespace SteamLuaManager.Views;
@@ -68,7 +69,7 @@ public partial class HomeView : UserControl
     }
 
     // 视图切回/切换淡入：每次可见都播 250ms；Loaded 会反复触发，先摘后挂防 handler 越积越多；
-    // 注意绝不能动 Tag（三个视图的 Tag 是"卡片/列表/表格"模式串，供追加门闩识别）
+    // 注意绝不能动 Tag（三个视图的 Tag 是 Card/List/Table 模式码，供追加门闩识别）
     private void ViewModeContainer_Loaded(object sender, RoutedEventArgs e)
     {
         if (sender is not FrameworkElement fe) return;
@@ -121,7 +122,7 @@ public partial class HomeView : UserControl
     private bool _fillRecheckQueued;
 
     private static bool IsKnownViewMode(string? mode) =>
-        mode is "卡片" or "列表" or "表格";
+        mode is "Card" or "List" or "Table";
 
     private void TryAppendGames(object sender)
     {
@@ -171,17 +172,17 @@ public partial class HomeView : UserControl
             CardSubmenuPanel.Visibility = Visibility.Collapsed;
             CardMenuList.ItemsSource = new[]
             {
-                new CardMenuItem(game.IsDisabled ? "enable" : "disable", game.IsDisabled ? "启用入库" : "禁用入库"),
+                new CardMenuItem(game.IsDisabled ? "enable" : "disable", game.IsDisabled ? L.Get("Home_CardEnable") : L.Get("Home_CardDisable")),
                 CardMenuItem.Separator(),
-                new CardMenuItem("edit", "编辑 Lua"),
+                new CardMenuItem("edit", L.Get("Home_CardEditLua")),
                 CardMenuItem.Separator(),
-                new CardMenuItem("delete", "删除 Lua"),
+                new CardMenuItem("delete", L.Get("Home_CardDeleteLua")),
                 CardMenuItem.Separator(),
-                new CardMenuItem("batchmanage", "批量管理"),
+                new CardMenuItem("batchmanage", L.Get("Home_CardBatch")),
                 CardMenuItem.Separator(),
-                new CardMenuItem("pin", "版本固定", HasSubmenu: true),
+                new CardMenuItem("pin", L.Get("Home_CardPin"), HasSubmenu: true),
                 CardMenuItem.Separator(),
-                new CardMenuItem("info", "游戏信息", HasSubmenu: true)
+                new CardMenuItem("info", L.Get("Home_CardInfo"), HasSubmenu: true)
             };
 
             UpdateCardMenuBackground();
@@ -449,11 +450,11 @@ public partial class HomeView : UserControl
     }
 
     private CardMenuItem[] BuildPinSubmenu(GameInfo game) => game.IsManifestPinned
-        ? [new CardMenuItem("unpin", "取消版本固定")]
-        : [new CardMenuItem("pin-latest", "固定到游戏最新版本"), CardMenuItem.Separator(), new CardMenuItem("pin-current", "固定到当前已安装版本")];
+        ? [new CardMenuItem("unpin", L.Get("Home_CardUnpin"))]
+        : [new CardMenuItem("pin-latest", L.Get("Home_CardPinLatest")), CardMenuItem.Separator(), new CardMenuItem("pin-current", L.Get("Home_CardPinCurrent"))];
 
     private static CardMenuItem[] BuildInfoSubmenu() =>
-        [new CardMenuItem("steamdb", "SteamDB页面"), CardMenuItem.Separator(), new CardMenuItem("store", "Steam商店页面"), CardMenuItem.Separator(), new CardMenuItem("dlc-query", "清单DLC入库查询"), CardMenuItem.Separator(), new CardMenuItem("fetch-manifest", "获取Manifest清单")];
+        [new CardMenuItem("steamdb", L.Get("Home_CardSteamDb")), CardMenuItem.Separator(), new CardMenuItem("store", L.Get("Home_CardStore")), CardMenuItem.Separator(), new CardMenuItem("dlc-query", L.Get("Home_CardDlcQuery")), CardMenuItem.Separator(), new CardMenuItem("fetch-manifest", L.Get("Home_CardFetchManifest"))];
 
     private void UpdateCardMenuBackground()
     {
@@ -499,7 +500,7 @@ public partial class HomeView : UserControl
         {
             var ok = await CopyToClipboardAsync(game.AppId.ToString());
             if (DataContext is MainViewModel vm)
-                vm.StatusMessage = ok ? $"已复制 AppID: {game.AppId}" : "复制失败，剪贴板被占用，请重试";
+                vm.StatusMessage = ok ? L.Get("Home_CopiedAppId", game.AppId) : L.Get("Home_CopyFailed");
         }
         e.Handled = true;
     }
@@ -510,7 +511,7 @@ public partial class HomeView : UserControl
         {
             var ok = await CopyToClipboardAsync(game.GameName);
             if (DataContext is MainViewModel vm)
-                vm.StatusMessage = ok ? $"已复制游戏名: {game.GameName}" : "复制失败，剪贴板被占用，请重试";
+                vm.StatusMessage = ok ? L.Get("Home_CopiedName", game.GameName) : L.Get("Home_CopyFailed");
         }
         e.Handled = true;
     }

@@ -15,6 +15,8 @@ public class AppSettings
     public string SelectedViewMode { get; set; } = "卡片";
     public string AchievementViewMode { get; set; } = "卡片";
     public string SelectedBackdrop { get; set; } = "Acrylic10";
+    // 界面语言：zh 中文 / en English，加新语言只改词库和下拉选项，不动其他代码
+    public string Language { get; set; } = "zh";
     public string DownloadMode { get; set; } = "DepotKey";
     public string KeyFolderPath { get; set; } = string.Empty;
     public bool IsFabVisible { get; set; } = true;
@@ -99,7 +101,7 @@ public class SettingsService : ISettingsService
         }
         catch (Exception ex)
         {
-            LogService.Warn("设置", $"读取配置失败，已使用默认配置: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Settings"), L.Get("Svc_SetLoadFailed", ex.Message));
         }
         return new AppSettings();
     }
@@ -117,7 +119,7 @@ public class SettingsService : ISettingsService
             }
             catch (Exception ex)
             {
-                LogService.Error("设置", $"保存配置失败: {ex.Message}");
+                LogService.Error(L.Get("LogCat_Settings"), L.Get("Svc_SetSaveFailed", ex.Message));
                 return;
             }
         }

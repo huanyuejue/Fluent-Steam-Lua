@@ -68,9 +68,9 @@ public class BoolInvertConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
-        if (value is bool b)
-            return !b;
-        return false;
+        if (value is bool b && b)
+            return SteamLuaManager.L.Get("Common_Stop");
+        return SteamLuaManager.L.Get("Auth_ExtractBtn");
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
@@ -146,9 +146,9 @@ public class BoolToRunStopConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
-        if (value is bool b)
-            return b ? "停止" : "提取";
-        return "提取";
+        if (value is bool b && b)
+            return SteamLuaManager.L.Get("Auth_Stop");
+        return SteamLuaManager.L.Get("Auth_ExtractBtn");
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
@@ -162,8 +162,8 @@ public class BoolToDownloadTextConverter : IValueConverter
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
         if (value is bool downloaded && downloaded)
-            return "打开";
-        return "下载";
+            return SteamLuaManager.L.Get("Trainer_Open");
+        return SteamLuaManager.L.Get("Trainer_Download");
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)

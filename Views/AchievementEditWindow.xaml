@@ -1,8 +1,9 @@
 <Window xmlns:controls="clr-namespace:SteamLuaManager.Controls" x:Class="SteamLuaManager.Views.AchievementEditWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:l="clr-namespace:SteamLuaManager.Markup"
         xmlns:ui="http://schemas.inkore.net/lib/ui/wpf/modern"
-        Title="成就编辑"
+        Title="{l:Loc AchEdit_Title}"
         Height="720" Width="840"
         MinHeight="480" MinWidth="640"
         MaxHeight="1600" MaxWidth="1600"
@@ -38,11 +39,11 @@
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                <Button Content="重新加载" Command="{Binding ReloadCommand}" Margin="0,0,6,0" Height="36" Padding="16,6"/>
-                <Button Content="全部解锁" Command="{Binding UnlockAllCommand}" Margin="0,0,6,0" Height="36" Padding="16,6"/>
-                <Button Content="全部锁定" Command="{Binding LockAllCommand}" Margin="0,0,6,0" Height="36" Padding="16,6"/>
-                <Button Content="反选" Command="{Binding InvertAllCommand}" Margin="0,0,6,0" Height="36" Padding="16,6"/>
-                <Button Content="保存到 Steam" Command="{Binding SaveCommand}" Height="36" Padding="16,6"
+                <Button Content="{l:Loc AchEdit_Reload}" Command="{Binding ReloadCommand}" Margin="0,0,6,0" Height="36" Padding="16,6"/>
+                <Button Content="{l:Loc AchEdit_UnlockAll}" Command="{Binding UnlockAllCommand}" Margin="0,0,6,0" Height="36" Padding="16,6"/>
+                <Button Content="{l:Loc AchEdit_LockAll}" Command="{Binding LockAllCommand}" Margin="0,0,6,0" Height="36" Padding="16,6"/>
+                <Button Content="{l:Loc AchEdit_Invert}" Command="{Binding InvertAllCommand}" Margin="0,0,6,0" Height="36" Padding="16,6"/>
+                <Button Content="{l:Loc AchEdit_Save}" Command="{Binding SaveCommand}" Height="36" Padding="16,6"
                         Style="{StaticResource AccentButtonStyle}"/>
             </StackPanel>
         </Grid>
@@ -59,7 +60,7 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
-                    <TextBlock Text="成就" FontSize="14" FontWeight="SemiBold" Margin="2,0,0,6"
+                    <TextBlock Text="{l:Loc AchEdit_ListHeader}" FontSize="14" FontWeight="SemiBold" Margin="2,0,0,6"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                     <controls:SmoothScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled">
@@ -130,7 +131,7 @@
                                                                FontSize="12" Margin="6,0,0,0"
                                                                Visibility="{Binding IsProtected, Converter={StaticResource BoolToVisibilityConverter}}"
                                                                Foreground="{DynamicResource SystemFillColorCriticalBrush}"
-                                                               ToolTip="受保护，不可修改"/>
+                                                               ToolTip="{l:Loc AchEdit_ProtectedTip}"/>
                                                 </StackPanel>
                                                 <TextBlock Text="{Binding Description}" FontSize="12"
                                                            TextWrapping="Wrap" Margin="0,2,0,0"

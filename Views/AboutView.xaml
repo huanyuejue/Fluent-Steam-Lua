@@ -1,6 +1,7 @@
 <UserControl xmlns:controls="clr-namespace:SteamLuaManager.Controls" x:Class="SteamLuaManager.Views.AboutView"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:l="clr-namespace:SteamLuaManager.Markup"
         Background="Transparent"
         TextOptions.TextFormattingMode="Display"
         TextOptions.TextRenderingMode="Grayscale"
@@ -30,11 +31,11 @@
                         <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
                     </Border.Background>
                     <StackPanel>
-                        <TextBlock Text="该项目是基于 WPF + Fluent 开发的现代化入库管理工具"
+                        <TextBlock Text="{l:Loc About_Desc1}"
                                    FontSize="14" TextWrapping="Wrap" TextAlignment="Center"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                    LineHeight="22"/>
-                        <TextBlock Text="目前仅适配 OpenSteamTool"
+                        <TextBlock Text="{l:Loc About_Desc2}"
                                    FontSize="14" TextWrapping="Wrap" TextAlignment="Center"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                    LineHeight="22"/>
@@ -47,7 +48,7 @@
                            Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
 
                 <StackPanel HorizontalAlignment="Center" Margin="0,12,0,0">
-                    <Button Content="检查更新"
+                    <Button Content="{l:Loc About_CheckUpdate}"
                             Click="CheckUpdate_Click"
                             Padding="16,6"
                             Margin="0,0,0,8"
@@ -57,7 +58,7 @@
                         </Button.Background>
                     </Button>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                        <Button Content="问题反馈"
+                        <Button Content="{l:Loc About_Feedback}"
                                 Click="Feedback_Click"
                                 Padding="16,6"
                                 Margin="0,0,8,0">
@@ -65,7 +66,7 @@
                                 <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                             </Button.Background>
                         </Button>
-                        <Button Content="常见问题"
+                        <Button Content="{l:Loc About_Faq}"
                                 Click="Faq_Click"
                                 Padding="16,6">
                             <Button.Background>
@@ -81,7 +82,7 @@
         <!-- 底部图标：QQ 群 + GitHub + 爱发电，统一样式 -->
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Bottom"
                     Margin="0,0,0,24">
-            <Button Click="QqGroup_Click" ToolTip="加入QQ聊天反馈群"
+            <Button Click="QqGroup_Click" ToolTip="{l:Loc About_QqTip}"
                     Background="Transparent" BorderThickness="0" Padding="0"
                     Margin="0,0,0,0" Cursor="Hand"
                     Width="40" Height="40">
@@ -91,7 +92,7 @@
                           Stretch="Fill"/>
                 </Grid>
             </Button>
-            <Button Click="GitHub_Click" ToolTip="GitHub 仓库"
+            <Button Click="GitHub_Click" ToolTip="{l:Loc About_GitHubTip}"
                     Background="Transparent" BorderThickness="0"
                     Margin="8,0,0,0" Cursor="Hand"
                     Width="40" Height="40">
@@ -99,7 +100,7 @@
                   Fill="{DynamicResource TextFillColorSecondaryBrush}"
                   Stretch="Uniform"/>
         </Button>
-            <Button Click="Afdian_Click" ToolTip="爱发电支持，无任何优待区别，全凭自愿，感谢支持"
+            <Button Click="Afdian_Click" ToolTip="{l:Loc About_AfdianTip}"
                     Background="Transparent" BorderThickness="0"
                     Margin="8,0,0,0" Cursor="Hand"
                     Width="40" Height="40">

@@ -23,15 +23,17 @@ public partial class ManifestViewModel : ObservableObject
     private bool _isHubMonitoring;
 
     [ObservableProperty]
-    private string _keyStatusText = "未填写 API Key";
+    private string _keyStatusText = L.Get("Manifest_KeyEmpty");
 
     [ObservableProperty]
     private string _keyStatusForeground = "#888888";
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HubFoundSummary))]
     private int _hubFoundCount;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HubFoundSummary))]
     private int _hubSuccessCount;
 
     [ObservableProperty]
@@ -42,13 +44,18 @@ public partial class ManifestViewModel : ObservableObject
     private bool _isCodeMonitoring;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CodeFoundSummary))]
     private int _codeFoundCount;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CodeFoundSummary))]
     private int _codeSuccessCount;
 
     [ObservableProperty]
     private string _codeStatusMessage = string.Empty;
+
+    public string HubFoundSummary => L.Get("Manifest_FoundSummary", HubFoundCount, HubSuccessCount);
+    public string CodeFoundSummary => L.Get("Manifest_FoundSummary", CodeFoundCount, CodeSuccessCount);
 
     public bool HasSavedKey => _keyService.HasSavedKey;
 
@@ -75,6 +82,12 @@ public partial class ManifestViewModel : ObservableObject
             CodeFoundCount++;
             if (ok) CodeSuccessCount++;
         });
+        LocalizationService.Instance.PropertyChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(HubFoundSummary));
+            OnPropertyChanged(nameof(CodeFoundSummary));
+            RefreshKeyStatus();
+        };
         RefreshKeyStatus();
     }
 
@@ -116,7 +129,7 @@ public partial class ManifestViewModel : ObservableObject
         HubStatusMessage = message;
         if (!ok) return;
         RefreshKeyStatus();
-        AppendHubLog("API Key 已保存");
+        AppendHubLog(L.Get("Manifest_KeySaved"));
     }
 
     // 双监听互斥：启动一个先停另一个
@@ -126,18 +139,18 @@ public partial class ManifestViewModel : ObservableObject
         var key = _keyService.LoadKey();
         if (string.IsNullOrEmpty(key))
         {
-            HubStatusMessage = "请先填写并保存 API Key";
+            HubStatusMessage = L.Get("Manifest_NoKey");
             return;
         }
         if (_keyService.IsKeyExpired())
         {
-            HubStatusMessage = "API Key 已过期，请重新获取填入后使用";
+            HubStatusMessage = L.Get("Manifest_KeyExpired");
             return;
         }
         StopCodeSilently();
         var (ok, error) = await _hubMonitor.StartAsync();
         IsHubMonitoring = ok;
-        HubStatusMessage = ok ? "清单监听已启动（ManifestHub）" : error ?? "启动失败";
+        HubStatusMessage = ok ? L.Get("Manifest_HubStarted") : error ?? L.Get("Manifest_StartFailed");
         AppendHubLog(HubStatusMessage);
     }
 
@@ -147,7 +160,7 @@ public partial class ManifestViewModel : ObservableObject
         StopHubSilently();
         var (ok, error) = await _codeMonitor.StartAsync();
         IsCodeMonitoring = ok;
-        CodeStatusMessage = ok ? "清单监听已启动（Code直下）" : error ?? "启动失败";
+        CodeStatusMessage = ok ? L.Get("Manifest_CodeStarted") : error ?? L.Get("Manifest_StartFailed");
         AppendCodeLog(CodeStatusMessage);
     }
 
@@ -156,7 +169,7 @@ public partial class ManifestViewModel : ObservableObject
     {
         _hubMonitor.Stop();
         IsHubMonitoring = false;
-        HubStatusMessage = "清单监听已停止";
+        HubStatusMessage = L.Get("Manifest_MonitorStopped");
         AppendHubLog(HubStatusMessage);
     }
 
@@ -165,7 +178,7 @@ public partial class ManifestViewModel : ObservableObject
     {
         _codeMonitor.Stop();
         IsCodeMonitoring = false;
-        CodeStatusMessage = "清单监听已停止";
+        CodeStatusMessage = L.Get("Manifest_MonitorStopped");
         AppendCodeLog(CodeStatusMessage);
     }
 
@@ -174,7 +187,7 @@ public partial class ManifestViewModel : ObservableObject
         if (!_hubMonitor.IsRunning) return;
         _hubMonitor.Stop();
         IsHubMonitoring = false;
-        AppendHubLog("已自动停止 ManifestHub 监听（双监听互斥）");
+        AppendHubLog(L.Get("Manifest_AutoStopHub"));
     }
 
     private void StopCodeSilently()
@@ -182,7 +195,7 @@ public partial class ManifestViewModel : ObservableObject
         if (!_codeMonitor.IsRunning) return;
         _codeMonitor.Stop();
         IsCodeMonitoring = false;
-        AppendCodeLog("已自动停止 Code 监听（双监听互斥）");
+        AppendCodeLog(L.Get("Manifest_AutoStopCode"));
     }
 
     [RelayCommand]

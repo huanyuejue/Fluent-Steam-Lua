@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text.Json.Serialization;
 using CommunityToolkit.Mvvm.ComponentModel;
+using SteamLuaManager.Services;
 
 namespace SteamLuaManager.Models;
 
@@ -30,9 +31,12 @@ public partial class TrainerBinding : ObservableObject
                 var idx = k.LastIndexOf(" - ", StringComparison.Ordinal);
                 return idx > 0 ? k[(idx + 3)..] : k;
             });
-            return "已自动激活的功能：" + string.Join("、", descs);
+            return L.Get("Trainer_AutoKeysSummary", string.Join(L.Get("Common_ListSep"), descs));
         }
     }
+
+    // 语言切换后由视图模型调用，让界面上的本地化文案重新取值
+    public void RefreshLocalizedTexts() => OnPropertyChanged(nameof(AutoKeysSummary));
 
     public List<string> AutoKeys { get; set; } = new();
 }

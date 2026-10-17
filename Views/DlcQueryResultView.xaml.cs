@@ -22,7 +22,7 @@ public class DlcQueryResultView : Window
     private TextBlock? _footer;
     private Button? _fetchAllButton;
     private readonly System.Windows.Threading.DispatcherTimer _statusBarTimer;
-    private string _filter = "全部";
+    private int _filterIndex;
 
     public DlcQueryResultView(string gameName, ObservableCollection<DlcInfo> dlcList, string luaPath, ISteamDepotService depotService, string backdropType = "Acrylic10")
     {
@@ -40,7 +40,7 @@ public class DlcQueryResultView : Window
         };
         Closed += (_, _) => _statusBarTimer.Stop();
 
-        Title = "DLC 查询结果";
+        Title = L.Get("Dlc_ResultTitle");
         Width = 560;
         Height = 480;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
@@ -89,7 +89,7 @@ public class DlcQueryResultView : Window
 
         var header = new TextBlock
         {
-            Text = $"{gameName} 的 DLC 列表（共 {dlcList.Count} 个）",
+            Text = L.Get("Dlc_Header", gameName, dlcList.Count),
             FontSize = 16,
             FontWeight = FontWeights.SemiBold,
             TextWrapping = TextWrapping.Wrap,
@@ -100,19 +100,19 @@ public class DlcQueryResultView : Window
         headerPanel.Children.Add(header);
 
         var filterPanel = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
-        var filterLabel = new TextBlock { Text = "筛选:", FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
+        var filterLabel = new TextBlock { Text = L.Get("Home_FilterLabel"), FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
         filterLabel.SetResourceReference(TextBlock.ForegroundProperty, "TextFillColorSecondaryBrush");
         filterPanel.Children.Add(filterLabel);
         var filterCombo = new ComboBox { SelectedIndex = 0, MinWidth = 60, FontSize = 12 };
         filterCombo.SetResourceReference(Control.BackgroundProperty, "ControlFillColorDefaultBrush");
         filterCombo.SetResourceReference(Control.ForegroundProperty, "TextFillColorPrimaryBrush");
         filterCombo.SetResourceReference(Control.BorderBrushProperty, "ControlElevationBorderBrush");
-        filterCombo.Items.Add("全部");
-        filterCombo.Items.Add("已入库");
-        filterCombo.Items.Add("未入库");
+        filterCombo.Items.Add(L.Get("Dlc_FilterAll"));
+        filterCombo.Items.Add(L.Get("Dlc_FilterImported"));
+        filterCombo.Items.Add(L.Get("Dlc_FilterNotImported"));
         filterCombo.SelectionChanged += (_, _) =>
         {
-            _filter = filterCombo.SelectedItem as string ?? "全部";
+            _filterIndex = filterCombo.SelectedIndex;
             RebuildList();
         };
         filterPanel.Children.Add(filterCombo);
@@ -121,7 +121,7 @@ public class DlcQueryResultView : Window
 
         var fetchAllButton = new Button
         {
-            Content = "一键补全DLC",
+            Content = L.Get("Dlc_FetchAll"),
             FontSize = 12,
             Padding = new Thickness(12, 5, 12, 5),
             Margin = new Thickness(8, 0, 0, 0),
@@ -149,7 +149,7 @@ public class DlcQueryResultView : Window
         // Footer / status bar (share the same row, toggled by visibility)
         _footer = new TextBlock
         {
-            Text = $"已入库 {imported} 个，未入库 {dlcList.Count - imported} 个",
+            Text = L.Get("Dlc_Footer", imported, dlcList.Count - imported),
             FontSize = 12,
             Opacity = 0.6,
             HorizontalAlignment = HorizontalAlignment.Center,
@@ -197,7 +197,7 @@ public class DlcQueryResultView : Window
     {
         if (_footer == null) return;
         var imported = _allDlcs.Count(d => d.IsImported);
-        _footer.Text = $"已入库 {imported} 个，未入库 {_allDlcs.Count - imported} 个";
+        _footer.Text = L.Get("Dlc_Footer", imported, _allDlcs.Count - imported);
     }
 
     private void UpdateFetchAllButtonVisibility()
@@ -212,10 +212,10 @@ public class DlcQueryResultView : Window
     {
         _itemsStack.Children.Clear();
 
-        var filtered = _allDlcs.Where(d => _filter switch
+        var filtered = _allDlcs.Where(d => _filterIndex switch
         {
-            "已入库" => d.IsImported,
-            "未入库" => !d.IsImported,
+            1 => d.IsImported,
+            2 => !d.IsImported,
             _ => true
         }).OrderByDescending(d => d.IsImported).ToList();
 
@@ -232,12 +232,12 @@ public class DlcQueryResultView : Window
         if (pending.Count == 0)
         {
             button.IsEnabled = true;
-            ShowStatusMessage("没有需要补全的 DLC", false);
+            ShowStatusMessage(L.Get("Dlc_NothingToFetch"), false);
             return;
         }
 
         var originalText = button.Content.ToString();
-        button.Content = "补全中...";
+        button.Content = L.Get("Dlc_FetchingAll");
         var failedIds = new List<int>();
 
         try
@@ -251,7 +251,7 @@ public class DlcQueryResultView : Window
                     if (result.Success)
                     {
                         dlc.IsImported = true;
-                        dlc.FetchMessage = "已入库";
+                        dlc.FetchMessage = L.Get("Dlc_FilterImported");
                     }
                     else
                     {
@@ -277,9 +277,9 @@ public class DlcQueryResultView : Window
         }
 
         if (failedIds.Count == 0)
-            ShowStatusMessage($"一键补全完成，已入库 {pending.Count} 个 DLC", false);
+            ShowStatusMessage(L.Get("Dlc_FetchAllDone", pending.Count), false);
         else
-            ShowStatusMessage($"部分 DLC 入库失败：{string.Join(", ", failedIds)}", true);
+            ShowStatusMessage(L.Get("Dlc_FetchAllPartialFail", string.Join(", ", failedIds)), true);
     }
 
     private async void OnFetchDlcClicked(DlcInfo dlc)
@@ -293,8 +293,8 @@ public class DlcQueryResultView : Window
             if (result.Success)
             {
                 dlc.IsImported = true;
-                dlc.FetchMessage = "已入库";
-                ShowStatusMessage("获取DLC成功，已写入清单并入库", false);
+                dlc.FetchMessage = L.Get("Dlc_FilterImported");
+                ShowStatusMessage(L.Get("Dlc_FetchOk"), false);
             }
             else
             {
@@ -305,7 +305,7 @@ public class DlcQueryResultView : Window
         catch (Exception ex)
         {
             dlc.FetchMessage = ex.Message;
-            ShowStatusMessage($"查询 DLC 信息时出错：{ex.Message}", true);
+            ShowStatusMessage(L.Get("Dlc_FetchError", ex.Message), true);
         }
         finally
         {
@@ -343,7 +343,7 @@ public class DlcQueryResultView : Window
         };
         nameText.SetResourceReference(TextBlock.ForegroundProperty, "TextFillColorPrimaryBrush");
         infoStack.Children.Add(nameText);
-        var appIdText = new TextBlock { Text = dlc.HasDepot ? $"AppID: {dlc.AppId} · 需Depots密钥" : $"AppID: {dlc.AppId}", FontSize = 11, Opacity = 0.6 };
+        var appIdText = new TextBlock { Text = dlc.HasDepot ? $"AppID: {dlc.AppId}" + L.Get("Dlc_NeedDepotKey") : $"AppID: {dlc.AppId}", FontSize = 11, Opacity = 0.6 };
         appIdText.SetResourceReference(TextBlock.ForegroundProperty, "TextFillColorSecondaryBrush");
         infoStack.Children.Add(appIdText);
         Grid.SetColumn(infoStack, 0);
@@ -359,7 +359,7 @@ public class DlcQueryResultView : Window
                 VerticalAlignment = VerticalAlignment.Center,
                 Background = new SolidColorBrush(Color.FromArgb(0x33, 0x4C, 0xAF, 0x50))
             };
-            var badgeText = new TextBlock { Text = "已入库", FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0x4C, 0xAF, 0x50)) };
+            var badgeText = new TextBlock { Text = L.Get("Dlc_FilterImported"), FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0x4C, 0xAF, 0x50)) };
             statusBadge.Child = badgeText;
         }
         else
@@ -371,7 +371,7 @@ public class DlcQueryResultView : Window
                 VerticalAlignment = VerticalAlignment.Center,
                 Background = new SolidColorBrush(Color.FromArgb(0x1F, 0x00, 0x00, 0x00))
             };
-            var badgeText = new TextBlock { Text = "未入库", FontSize = 12, FontWeight = FontWeights.SemiBold, Opacity = 0.5 };
+            var badgeText = new TextBlock { Text = L.Get("Dlc_FilterNotImported"), FontSize = 12, FontWeight = FontWeights.SemiBold, Opacity = 0.5 };
             badgeText.SetResourceReference(TextBlock.ForegroundProperty, "TextFillColorPrimaryBrush");
             statusBadge.Child = badgeText;
         }
@@ -382,7 +382,7 @@ public class DlcQueryResultView : Window
         {
             var fetchButton = new Button
             {
-                Content = dlc.IsFetching ? "获取中..." : "获取DLC",
+                Content = dlc.IsFetching ? L.Get("Dlc_Fetching") : L.Get("Dlc_Fetch"),
                 FontSize = 12,
                 Padding = new Thickness(12, 5, 12, 5),
                 Margin = new Thickness(8, 0, 8, 0),

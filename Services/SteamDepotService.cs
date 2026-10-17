@@ -73,7 +73,7 @@ public class SteamDepotService : ISteamDepotService
                     System.Globalization.DateTimeStyles.RoundtripKind, out var t))
                 return t.ToLocalTime();
         }
-        catch (Exception ex) { LogService.Warn("入库", $"读取更新时间戳失败 ({source}): {ex.Message}"); }
+        catch (Exception ex) { LogService.Warn(L.Get("LogCat_Home"), L.Get("Depot_ReadStampFailed", source, ex.Message)); }
         return null;
     }
 
@@ -86,7 +86,7 @@ public class SteamDepotService : ISteamDepotService
             File.WriteAllText(LastUpdateStampPathOf(cacheFolder),
                 DateTime.UtcNow.ToString("O", System.Globalization.CultureInfo.InvariantCulture));
         }
-        catch (Exception ex) { LogService.Warn("入库", $"写入更新时间戳失败: {ex.Message}"); }
+        catch (Exception ex) { LogService.Warn(L.Get("LogCat_Home"), L.Get("Depot_WriteStampFailed", ex.Message)); }
     }
 
     // 轻量计数 JSON 顶层属性数，避免反序列化整个大字典
@@ -98,7 +98,7 @@ public class SteamDepotService : ISteamDepotService
             return doc.RootElement.ValueKind == JsonValueKind.Object
                 ? doc.RootElement.EnumerateObject().Count() : 0;
         }
-        catch (Exception ex) { LogService.Warn("入库", $"解析{label}文件失败: {ex.Message}"); return 0; }
+        catch (Exception ex) { LogService.Warn(L.Get("LogCat_Home"), L.Get("Depot_ParseKeysFailed", label, ex.Message)); return 0; }
     }
 
     private static async Task<int> CountFileJsonPropsAsync(string path, string label, CancellationToken ct)
@@ -111,7 +111,7 @@ public class SteamDepotService : ISteamDepotService
             return doc.RootElement.ValueKind == JsonValueKind.Object
                 ? doc.RootElement.EnumerateObject().Count() : 0;
         }
-        catch (Exception ex) { LogService.Warn("入库", $"解析{label}文件失败: {ex.Message}"); return 0; }
+        catch (Exception ex) { LogService.Warn(L.Get("LogCat_Home"), L.Get("Depot_ParseKeysFailed", label, ex.Message)); return 0; }
     }
 
     private string GetDepotKeysPath() =>
@@ -150,7 +150,7 @@ public class SteamDepotService : ISteamDepotService
                 var result = await UpdateKeyFilesAsync(ct);
                 if (result.Success) return true;
             }
-            catch (Exception ex) { LogService.Warn("入库", $"更新密钥文件失败 (第{attempt}次): {ex.Message}"); }
+            catch (Exception ex) { LogService.Warn(L.Get("LogCat_Home"), L.Get("Depot_UpdateKeysFailed", attempt, ex.Message)); }
 
             if (attempt < 3)
                 await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, attempt)), ct);
@@ -179,8 +179,8 @@ public class SteamDepotService : ISteamDepotService
             var tokenPath = GetTokenKeysPath();
 
             // 读取旧文件条目数（流式计数，避免全量字典）
-            result.DepotKeysOldCount = await CountFileJsonPropsAsync(depotPath, "旧 depot 密钥", ct);
-            result.TokenKeysOldCount = await CountFileJsonPropsAsync(tokenPath, "旧 token 密钥", ct);
+            result.DepotKeysOldCount = await CountFileJsonPropsAsync(depotPath, L.Get("Depot_OldKeys"), ct);
+            result.TokenKeysOldCount = await CountFileJsonPropsAsync(tokenPath, L.Get("Depot_OldTokens"), ct);
 
             // 下载新文件
             var clientName = $"steam-depot-{_currentSource}";
@@ -206,8 +206,8 @@ public class SteamDepotService : ISteamDepotService
             result.TokenKeysSizeBytes = tokenData.Length;
 
             // 解析新文件条目数（轻量计数，避免再建大字典）
-            result.DepotKeysNewCount = CountJsonProps(depotData, "新 depot 密钥");
-            result.TokenKeysNewCount = CountJsonProps(tokenData, "新 token 密钥");
+            result.DepotKeysNewCount = CountJsonProps(depotData, L.Get("Depot_NewKeys"));
+            result.TokenKeysNewCount = CountJsonProps(tokenData, L.Get("Depot_NewTokens"));
 
             // 释放大对象引用，使旧缓存与下载缓冲尽快可回收
             depotData = null!;
@@ -223,7 +223,7 @@ public class SteamDepotService : ISteamDepotService
         }
         catch (Exception ex)
         {
-            LogService.Error("入库", $"更新密钥文件失败: {ex.Message}");
+            LogService.Error(L.Get("LogCat_Home"), L.Get("Depot_UpdateKeysError", ex.Message));
             result.Success = false;
             return result;
         }
@@ -254,7 +254,7 @@ public class SteamDepotService : ISteamDepotService
                         await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, attempt)), ct);
                 }
             }
-            catch (Exception ex) { LogService.Warn("入库", $"后台更新密钥文件失败 ({source}): {ex.Message}"); }
+            catch (Exception ex) { LogService.Warn(L.Get("LogCat_Home"), L.Get("Depot_BackgroundUpdateFailed", source, ex.Message)); }
         }
         AllSourcesUpdated?.Invoke();
     }
@@ -327,7 +327,7 @@ public class SteamDepotService : ISteamDepotService
             // 用本地 appaccesstokens.json 里的 token 向 Steam 服务器查询完整 depots 与 DLC。
             if (result.GameDepots.Count == 0)
             {
-                LogService.Info("入库", $"AppID {appId} 主仓库为空，尝试 SteamKit2 兜底...");
+                LogService.Info(L.Get("LogCat_Home"), L.Get("Depot_EmptyFallback", appId));
                 var token = await LoadLocalAppTokenAsync(appId, ct);
                 if (token != 0)
                 {
@@ -344,16 +344,16 @@ public class SteamDepotService : ISteamDepotService
                         foreach (var dlcId in full.DlcAppIds)
                             if (!result.DlcAppIds.Contains(dlcId))
                                 result.DlcAppIds.Add(dlcId);
-                        LogService.Info("入库", $"AppID {appId} SteamKit2 兜底: depots={full.DepotIds.Count}（带 gid {full.DepotManifests.Count} 个）, dlc={full.DlcAppIds.Count}");
+                        LogService.Info(L.Get("LogCat_Home"), L.Get("Depot_FallbackResult", appId, full.DepotIds.Count, full.DepotManifests.Count, full.DlcAppIds.Count));
                     }
                     else
                     {
-                        LogService.Warn("入库", $"AppID {appId} SteamKit2 兜底查询返回 null");
+                        LogService.Warn(L.Get("LogCat_Home"), L.Get("Depot_FallbackNull", appId));
                     }
                 }
                 else
                 {
-                    LogService.Warn("入库", $"AppID {appId} 本地无 token，跳过兜底");
+                    LogService.Warn(L.Get("LogCat_Home"), L.Get("Depot_NoLocalToken", appId));
                 }
             }
 
@@ -363,11 +363,11 @@ public class SteamDepotService : ISteamDepotService
         {
             // HttpClient 超时和用户取消是同一异常家族：调用方没取消就是超时，给出明确接口指向
             throw new TimeoutException(
-                $"请求仓库接口超时（{timeoutSeconds} 秒无响应）：api.steamcmd.net 连接超时，请检查网络或开启代理后重试");
+                L.Get("Depot_QueryTimeout", timeoutSeconds));
         }
         catch (Exception ex)
         {
-            throw new InvalidOperationException($"查询 AppID {appId} 失败：{ex.Message}", ex);
+            throw new InvalidOperationException(L.Get("Depot_QueryFailed", appId, ex.Message), ex);
         }
     }
 
@@ -389,7 +389,7 @@ public class SteamDepotService : ISteamDepotService
         }
         catch (Exception ex)
         {
-            LogService.Warn("入库", $"读取本地 token 文件失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Home"), L.Get("Depot_ReadTokenFailed", ex.Message));
         }
         return 0;
     }
@@ -485,7 +485,7 @@ public class SteamDepotService : ISteamDepotService
                 }
             }
             if (skippedDlcDepots > 0)
-                LogService.Info("入库", $"未勾选 DLC入库，已跳过 {skippedDlcDepots} 个 DLC 关联仓库");
+                LogService.Info(L.Get("LogCat_Home"), L.Get("Depot_SkippedDlc", skippedDlcDepots));
 
             // App token
             if (appTokens.TryGetValue(appId.ToString(), out var token))
@@ -559,16 +559,16 @@ public class SteamDepotService : ISteamDepotService
             }
 
             if (skippedKeyless.Count > 0)
-                LogService.Warn("入库", $"以下 DLC 有仓库但密钥仓库未收录，已跳过（更新密钥缓存后重新入库）：{string.Join(", ", skippedKeyless.Select(s => string.IsNullOrEmpty(s.Name) ? s.AppId.ToString() : $"{s.AppId} {s.Name}"))}");
+                LogService.Warn(L.Get("LogCat_Home"), L.Get("Depot_SkippedKeyless", string.Join(", ", skippedKeyless.Select(s => string.IsNullOrEmpty(s.Name) ? s.AppId.ToString() : $"{s.AppId} {s.Name}"))));
 
             if (pinManifest)
-                LogService.Info("入库", pinnedManifests > 0
-                    ? $"已固定 {pinnedManifests} 个仓库版本"
-                    : "勾选了固定游戏版本，但未获取到任何仓库 Manifest 数据");
+                LogService.Info(L.Get("LogCat_Home"), pinnedManifests > 0
+                    ? L.Get("Depot_Pinned", pinnedManifests)
+                    : L.Get("Depot_PinNoManifest"));
 
             if (matchedItems == 0)
                 throw new InvalidOperationException(
-                    $"密钥仓库暂未收录该游戏（AppID {appId}），请尝试更新密钥缓存；新上架游戏清单同步需时间，可稍后再试");
+                    L.Get("Depot_KeyStoreEmpty", appId));
 
             var luaFolder = _steamPathService.GetLuaFolder();
             if (string.IsNullOrEmpty(luaFolder)) return null;
@@ -584,7 +584,7 @@ public class SteamDepotService : ISteamDepotService
         catch (InvalidOperationException) { throw; }
         catch (Exception ex)
         {
-            LogService.Error("入库", $"生成入库文件失败 (AppID {appId}{(withDlc ? ", DLC" : "")}): {ex.Message}");
+            LogService.Error(L.Get("LogCat_Home"), L.Get("Depot_GenFailed", appId, withDlc ? L.Get("Depot_GenWithDlc") : "", ex.Message));
             return null;
         }
     }
@@ -627,7 +627,7 @@ public class SteamDepotService : ISteamDepotService
                 }
                 catch (Exception ex)
                 {
-                    LogService.Warn("入库", $"获取 DLC {appId} 信息失败: {ex.Message}");
+                    LogService.Warn(L.Get("LogCat_Home"), L.Get("Depot_FetchDlcInfoFailed", appId, ex.Message));
                     infos[index] = new DlcBuildInfo(appId, null, "");
                 }
                 progress?.Report((Interlocked.Increment(ref done), dlcAppIds.Count));
@@ -657,7 +657,7 @@ public class SteamDepotService : ISteamDepotService
                 catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
                 catch (Exception ex)
                 {
-                    LogService.Warn("入库", $"查询 DLC {id} 仓库失败: {ex.Message}");
+                    LogService.Warn(L.Get("LogCat_Home"), L.Get("Depot_QueryDlcFailed", id, ex.Message));
                 }
                 lock (map) { map[id] = status; }
                 progress?.Report((Interlocked.Increment(ref done), ids.Count));
@@ -711,7 +711,7 @@ public class SteamDepotService : ISteamDepotService
         }
         catch (Exception ex)
         {
-            LogService.Warn("入库", $"读取密钥文件失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Home"), L.Get("Depot_ReadKeysFailed", ex.Message));
             return (null, null);
         }
         finally
@@ -747,7 +747,7 @@ public class SteamDepotService : ISteamDepotService
                 await AppendLinesToLuaAsync(luaPath,
                     new List<string> { $"addappid({dlcAppId}, 1, \"{cachedKey}\"){commentSuffix}" }, ct);
                 result.Success = true;
-                result.Message = $"DLC {dlcAppId} 密钥获取成功，已写入";
+                result.Message = L.Get("Depot_DlcKeyOk", dlcAppId);
                 return result;
             }
 
@@ -757,7 +757,7 @@ public class SteamDepotService : ISteamDepotService
                 result.NeedKey = false;
                 await AppendLinesToLuaAsync(luaPath, new List<string> { $"addappid({dlcAppId}){commentSuffix}" }, ct);
                 result.Success = true;
-                result.Message = $"DLC {dlcAppId} 无独立 depot，无需密钥，已写入";
+                result.Message = L.Get("Depot_DlcNoDepot", dlcAppId);
                 return result;
             }
 
@@ -770,7 +770,7 @@ public class SteamDepotService : ISteamDepotService
             {
                 if (!await EnsureKeyFilesAsync(ct))
                 {
-                    result.Message = "无法获取密钥仓库文件";
+                    result.Message = L.Get("Depot_NoKeyStore");
                     return result;
                 }
 
@@ -779,8 +779,8 @@ public class SteamDepotService : ISteamDepotService
                 var (refreshedKeys, _) = await LoadKeyDictionariesAsync(ct);
                 if (refreshedKeys == null)
                 {
-                    LogService.Warn("获取DLC", "读取密钥仓库文件失败");
-                    result.Message = "读取密钥仓库文件失败";
+                    LogService.Warn(L.Get("LogCat_FetchDlc"), L.Get("Depot_ReadKeyStoreFailed"));
+                    result.Message = L.Get("Depot_ReadKeyStoreFailed");
                     return result;
                 }
                 refreshedKeys.TryGetValue(dlcAppId.ToString(), out dlcMainKey);
@@ -791,11 +791,11 @@ public class SteamDepotService : ISteamDepotService
                     var lines = new List<string> { $"addappid({dlcAppId}, 1, \"{dlcMainKey}\"){commentSuffix}" };
                     await AppendLinesToLuaAsync(luaPath, lines, ct);
                     result.Success = true;
-                    result.Message = $"DLC {dlcAppId} 密钥获取成功，已写入";
+                    result.Message = L.Get("Depot_DlcKeyOk", dlcAppId);
                 }
                 else
                 {
-                    result.Message = $"无法获取 DLC {dlcAppId} 的密钥信息（本地密钥仓库中未找到），获取失败";
+                    result.Message = L.Get("Depot_DlcKeyMissing", dlcAppId);
                 }
             }
             finally
@@ -807,8 +807,8 @@ public class SteamDepotService : ISteamDepotService
         }
         catch (Exception ex)
         {
-            LogService.Error("获取DLC", $"获取 DLC {dlcAppId} 失败: {ex.Message}");
-            result.Message = $"获取失败：{ex.Message}";
+            LogService.Error(L.Get("LogCat_FetchDlc"), L.Get("Depot_FetchDlcFailed", dlcAppId, ex.Message));
+            result.Message = L.Get("Depot_FetchFailed", ex.Message);
             return result;
         }
     }
@@ -834,7 +834,7 @@ public class SteamDepotService : ISteamDepotService
 
         if (newLines.Count == 0)
         {
-            LogService.Info("获取DLC", "所有行已存在于 Lua 文件中，跳过写入");
+            LogService.Info(L.Get("LogCat_FetchDlc"), L.Get("Depot_LinesSkipped"));
             return;
         }
 
@@ -844,7 +844,7 @@ public class SteamDepotService : ISteamDepotService
         sb.AppendLine(string.Join(Environment.NewLine, newLines));
 
         await File.WriteAllTextAsync(luaPath, sb.ToString(), ct);
-        LogService.Info("获取DLC", $"已写入 {newLines.Count} 行到 {luaPath}");
+        LogService.Info(L.Get("LogCat_FetchDlc"), L.Get("Depot_LinesWritten", newLines.Count, luaPath));
     }
 
     private static string SanitizeLuaComment(string? text)

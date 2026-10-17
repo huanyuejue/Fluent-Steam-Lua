@@ -42,25 +42,25 @@ public class FeedbackService : IFeedbackService
         title = title?.Trim() ?? string.Empty;
         body = body?.Trim() ?? string.Empty;
         if (string.IsNullOrEmpty(title) || string.IsNullOrEmpty(body))
-            throw new InvalidOperationException("请填写标题和问题描述");
+            throw new InvalidOperationException(L.Get("Svc_FbNoTitleBody"));
         if (title.Length > 100 || body.Length > 20000)
-            throw new InvalidOperationException("标题或正文过长，请精简后重试");
+            throw new InvalidOperationException(L.Get("Svc_FbTooLong"));
 
         if (string.IsNullOrEmpty(ResendApiKey) || ResendApiKey == "MISSING")
-            throw new InvalidOperationException("反馈通道未配置，请前往 GitHub 提交 Issue");
+            throw new InvalidOperationException(L.Get("Svc_FbNotConfigured"));
 
         lock (_rateLock)
         {
             if (DateTime.UtcNow - _lastSubmitUtc < MinSubmitInterval)
-                throw new InvalidOperationException("提交过于频繁，请稍后再试");
+                throw new InvalidOperationException(L.Get("Svc_FbRateLimit"));
             _lastSubmitUtc = DateTime.UtcNow;
         }
 
         var version = Assembly.GetExecutingAssembly().GetName().Version;
-        var versionText = version is not null ? $"{version.Major}.{version.Minor}.{version.Build}" : "未知";
-        var contactLine = string.IsNullOrWhiteSpace(contact) ? "未填写" : contact.Trim();
+        var versionText = version is not null ? $"{version.Major}.{version.Minor}.{version.Build}" : L.Get("Svc_FbUnknown");
+        var contactLine = string.IsNullOrWhiteSpace(contact) ? L.Get("Svc_FbNotFilled") : contact.Trim();
         // 内核版本读本地 DLL 解析，超时直接记未知，不拖提交
-        var kernelText = "未知";
+        var kernelText = L.Get("Svc_FbUnknown");
         try
         {
             var kernelTask = _openSteamToolService.GetLocalVersionAsync();
@@ -69,14 +69,14 @@ public class FeedbackService : IFeedbackService
             {
                 var v = await kernelTask;
                 // 版本读不到不代表没装：老内核既不在 SHA 表里也没打标记位，单独区分
-                kernelText = v ?? (_openSteamToolService.IsInstalled ? "已安装（版本未知）" : "未安装");
+                kernelText = v ?? (_openSteamToolService.IsInstalled ? L.Get("Svc_FbInstalledUnknown") : L.Get("Svc_FbNotInstalled"));
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            kernelText = "未知";
+            kernelText = L.Get("Svc_FbUnknown");
         }
-        var text = $"{body}\n\n---\n版本：{versionText}\n内核：{kernelText}\n系统：{Environment.OSVersion.VersionString}\n联系方式：{contactLine}";
+        var text = L.Get("Svc_FbMailBody", body, versionText, kernelText, Environment.OSVersion.VersionString, contactLine);
 
         var attachments = new List<Dictionary<string, string>>();
         if (attachLog)
@@ -86,7 +86,7 @@ public class FeedbackService : IFeedbackService
         foreach (var file in files)
         {
             if (!File.Exists(file))
-                throw new InvalidOperationException($"附件不存在：{Path.GetFileName(file)}");
+                throw new InvalidOperationException(L.Get("Svc_FbAttachMissing", Path.GetFileName(file)));
             // 同日志：被其他进程写入中的文件，读时带 ReadWrite 共享
             byte[] bytes;
             try
@@ -98,7 +98,7 @@ public class FeedbackService : IFeedbackService
             }
             catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
             {
-                throw new InvalidOperationException($"附件读取失败（{Path.GetFileName(file)}）：{ex.Message}", ex);
+                throw new InvalidOperationException(L.Get("Svc_FbAttachReadFailed", Path.GetFileName(file), ex.Message), ex);
             }
             attachments.Add(new Dictionary<string, string>
             {
@@ -107,13 +107,13 @@ public class FeedbackService : IFeedbackService
             });
         }
         if (attachments.Sum(a => (long)a["content"].Length) > MaxAttachmentsBytes)
-            throw new InvalidOperationException("附件总大小超过 40MB 上限，请移除部分文件后重试");
+            throw new InvalidOperationException(L.Get("Svc_FbAttachTooBig"));
 
         var payload = new Dictionary<string, object>
         {
             ["from"] = FromAddress,
             ["to"] = new[] { ToAddress },
-            ["subject"] = $"[Fluent Steam Lua 反馈] {title}",
+            ["subject"] = L.Get("Svc_FbSubject", title),
             ["text"] = text,
         };
         if (attachments.Count > 0)
@@ -143,19 +143,19 @@ public class FeedbackService : IFeedbackService
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            throw new InvalidOperationException($"反馈发送失败（网络异常）：{ex.Message}", ex);
+            throw new InvalidOperationException(L.Get("Svc_FbNetworkFail", ex.Message), ex);
         }
 
         if (statusCode is 200 or 201) return;
         var serverMsg = TryExtractMessage(respBody);
         throw statusCode switch
         {
-            401 => new InvalidOperationException("反馈通道凭证失效，请前往 GitHub 提交 Issue"),
-            429 => new InvalidOperationException("提交过于频繁，请稍后再试"),
+            401 => new InvalidOperationException(L.Get("Svc_FbAuthFailed")),
+            429 => new InvalidOperationException(L.Get("Svc_FbRateLimit")),
             _ => new InvalidOperationException(
                 string.IsNullOrEmpty(serverMsg)
-                    ? $"反馈发送失败（{statusCode}），请前往 GitHub 提交 Issue"
-                    : $"反馈发送失败（{statusCode}）：{serverMsg}"),
+                    ? L.Get("Svc_FbSendFailed", statusCode)
+                    : L.Get("Svc_FbSendFailedDetail", statusCode, serverMsg)),
         };
     }
 
@@ -164,7 +164,7 @@ public class FeedbackService : IFeedbackService
     {
         var logPath = LogService.LogFilePath;
         if (!LogService.IsEnabled || !File.Exists(logPath))
-            throw new InvalidOperationException("运行日志文件不存在，请先在设置中打开“日志记录”开关，复现问题后再提交");
+            throw new InvalidOperationException(L.Get("Svc_FbLogMissing"));
         // 日志正被本程序追加写入，读时必须带上 ReadWrite 共享，否则撞独占锁
         byte[] bytes;
         try
@@ -176,12 +176,12 @@ public class FeedbackService : IFeedbackService
         }
         catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
         {
-            throw new InvalidOperationException($"运行日志读取失败（{ex.Message}），请稍后重试", ex);
+            throw new InvalidOperationException(L.Get("Svc_FbLogReadFailed", ex.Message), ex);
         }
         if (bytes.Length == 0)
-            throw new InvalidOperationException("运行日志为空，请复现问题后再提交");
+            throw new InvalidOperationException(L.Get("Svc_FbLogEmpty"));
         if (bytes.Length > MaxAttachmentsBytes)
-            throw new InvalidOperationException("运行日志文件超过 40MB 上限，请清理后复现问题再提交");
+            throw new InvalidOperationException(L.Get("Svc_FbLogTooBig"));
         return new Dictionary<string, string>
         {
             ["filename"] = "app.log",

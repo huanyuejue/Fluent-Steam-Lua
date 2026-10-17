@@ -49,7 +49,7 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
     private bool _isSearching;
 
     [ObservableProperty]
-    private string _statusMessage = "就绪";
+    private string _statusMessage = L.Get("Ruku_Ready");
 
     [ObservableProperty]
     private bool _includeDlc = true;
@@ -63,8 +63,8 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
     public bool IsLocalCacheMode => _currentDownloadMode == "DepotKey";
     public string CurrentDataSourceLabel => _currentDownloadMode switch
     {
-        "DepotKey" => "本地缓存仓库",
-        _ => "远程清单仓库"
+        "DepotKey" => L.Get("Ruku_LocalCache"),
+        _ => L.Get("Ruku_RemoteManifest")
     };
 
     /// <summary>上次更新本地缓存的时间；仅本地缓存仓库模式显示，远程仓库为空。</summary>
@@ -74,7 +74,7 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
         {
             if (!IsLocalCacheMode) return "";
             var time = _depotService.GetLastUpdateTime(_currentDownloadMode);
-            return time == null ? " · 缓存尚未更新" : $" · 上次更新 {time.Value:MM-dd HH:mm}";
+            return time == null ? L.Get("Ruku_CacheNotUpdated") : L.Get("Ruku_LastUpdated", time.Value.ToString("MM-dd HH:mm"));
         }
     }
 
@@ -110,6 +110,7 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
         ShowRanking = bootSettings.ShowRanking;
         _settingsService.SettingsChanged += OnSettingsChanged;
         _depotService.AllSourcesUpdated += OnAllSourcesUpdated;
+        LocalizationService.Instance.PropertyChanged += OnLanguageChanged;
         SearchResults.CollectionChanged += (_, _) => RefreshSearchEmptyVisible();
         LogLines.CollectionChanged += (_, _) => OnPropertyChanged(nameof(IsRankingVisible));
         PopularRanking.CollectionChanged += (_, _) => OnPropertyChanged(nameof(IsRankingVisible));
@@ -172,9 +173,9 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
             foreach (var g in rest.Take(10))
                 RecommendRanking.Add(g);
             // 只进 app.log 不进 LogLines：写 UI 日志会触发榜单隐藏规则
-            LogService.Info("入库", $"热门榜单已加载 {PopularRanking.Count} 款，为你推荐已加载 {RecommendRanking.Count} 款");
+            LogService.Info(L.Get("LogCat_Home"), L.Get("Ruku_RankLoadedLog", PopularRanking.Count, RecommendRanking.Count));
             if (PopularRanking.Count == 0 && RecommendRanking.Count == 0)
-                StatusMessage = "榜单暂无数据，稍后切页回来重试";
+                StatusMessage = L.Get("Ruku_RankEmpty");
         }
         catch (OperationCanceledException)
         {
@@ -182,8 +183,8 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            StatusMessage = $"热门榜单加载失败：{ex.Message}";
-            LogService.Warn("入库", $"热门榜单加载失败：{ex.Message}");
+            StatusMessage = L.Get("Ruku_RankLoadFailed", ex.Message);
+            LogService.Warn(L.Get("LogCat_Home"), L.Get("Ruku_RankLoadFailed", ex.Message));
         }
         finally
         {
@@ -213,12 +214,27 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
         Application.Current.Dispatcher.Invoke(() => OnPropertyChanged(nameof(LastUpdateTimeText)));
     }
 
+    private void OnLanguageChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        OnPropertyChanged(nameof(CurrentDataSourceLabel));
+        OnPropertyChanged(nameof(LastUpdateTimeText));
+        RefreshRankingTexts();
+    }
+
+    // 榜单项是不可变 record，原位重赋触发集合 Replace 通知让关注数文案重新取值
+    private void RefreshRankingTexts()
+    {
+        for (var i = 0; i < PopularRanking.Count; i++) PopularRanking[i] = PopularRanking[i];
+        for (var i = 0; i < RecommendRanking.Count; i++) RecommendRanking[i] = RecommendRanking[i];
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
         _settingsService.SettingsChanged -= OnSettingsChanged;
         _depotService.AllSourcesUpdated -= OnAllSourcesUpdated;
+        LocalizationService.Instance.PropertyChanged -= OnLanguageChanged;
         try { _downloadCts?.Cancel(); } catch { }
         _downloadCts?.Dispose();
         _downloadCts = null;
@@ -238,7 +254,7 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
         // 副标题：有发售日期拼后面，无则只显示 AppID
         public string DisplaySubtitle => string.IsNullOrEmpty(ReleaseDate)
             ? $"AppID: {AppId}"
-            : $"AppID: {AppId} · 发售：{ReleaseDate}";
+            : L.Get("Ruku_SubtitleWithDate", AppId, ReleaseDate);
     }
 
     // 封面候选去重：首选失败时 UI 按序切换；老模板垫底（新游戏已 404，失败即停）
@@ -271,14 +287,14 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
         var query = GameId?.Trim();
         if (string.IsNullOrEmpty(query))
         {
-            StatusMessage = "请输入游戏ID或名称";
+            StatusMessage = L.Get("Ruku_EnterQuery");
             return;
         }
 
         IsSearching = true;
         SearchResults.Clear();
         LogLines.Clear();
-        AddLog($"搜索：{query}");
+        AddLog(L.Get("Ruku_Searching", query));
 
         // 回退链（中→英→Spy→社区）走完要几秒，总限时从 7 秒放宽到 15 秒
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
@@ -288,14 +304,14 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
             // 全链 AppId 都是 int，超 int.MaxValue 的输入无法入库，直接明示而非当游戏名搜
             if (uint.TryParse(query, out var bigId) && bigId > int.MaxValue)
             {
-                AddLog($"AppID {query} 超出支持范围（最大 {int.MaxValue}）");
-                StatusMessage = $"AppID 超出支持范围（最大 {int.MaxValue}）";
+                AddLog(L.Get("Ruku_AppIdOutOfRange", query, int.MaxValue));
+                StatusMessage = L.Get("Ruku_AppIdOutOfRangeShort", int.MaxValue);
                 return;
             }
             if (int.TryParse(query, out var appId) && appId <= 0)
             {
-                AddLog($"AppID 无效：{query}（必须为正整数）");
-                StatusMessage = "AppID 必须为正整数";
+                AddLog(L.Get("Ruku_AppIdInvalidLog", query));
+                StatusMessage = L.Get("Ruku_AppIdMustBePositive");
                 return;
             }
             if (appId > 0)
@@ -309,7 +325,7 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
                 {
                     name = await _steamApiService.GetFallbackGameNameAsync(appId, cts.Token);
                     if (name != null)
-                        AddLog($"商店无数据，备用源解析到名称：{name}");
+                        AddLog(L.Get("Ruku_FallbackName", name));
                 }
                 if (name != null)
                 {
@@ -319,20 +335,20 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
                         : $"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/header.jpg";
                     SearchResults.Add(new FoundGame(appId, name, coverUrl,
                         CoverCandidates(appId, coverUrl), releaseDate));
-                    AddLog($"找到：{name} (ID: {appId})");
-                    StatusMessage = $"找到：{name}";
+                    AddLog(L.Get("Ruku_FoundLog", name, appId));
+                    StatusMessage = L.Get("Ruku_FoundStatus", name);
                 }
                 else
                 {
                     // 所有名源都查不到（如已下架且社区页也被清）：名字只是展示用，
                     // 仓库密钥走独立接口，用 AppID 占位放行，不挡入库
-                    AddLog($"未查到 AppID {appId} 的名称（可能已下架），以 AppID 占位继续，入库不受影响");
+                    AddLog(L.Get("Ruku_NoNameLog", appId));
                     SearchResults.Add(new FoundGame(
                         appId,
                         $"AppID: {appId}",
                         $"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/header.jpg",
                         CoverCandidates(appId)));
-                    StatusMessage = "未查到名称，已用 AppID 占位";
+                    StatusMessage = L.Get("Ruku_NoNameStatus");
                 }
             }
             else
@@ -342,14 +358,14 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
         }
         catch (OperationCanceledException)
         {
-            AddLog("搜索超时（15秒），请检查网络连接");
-            AddLog("建议：尝试开启VPN或代理后重试");
-            StatusMessage = "搜索超时，请检查网络";
+            AddLog(L.Get("Ruku_SearchTimeoutLog"));
+            AddLog(L.Get("Ruku_SearchTimeoutTip"));
+            StatusMessage = L.Get("Ruku_SearchTimeoutStatus");
         }
         catch (Exception ex)
         {
-            AddLog($"搜索异常：{ex.Message}");
-            StatusMessage = $"搜索异常：{ex.Message}";
+            AddLog(L.Get("Ruku_SearchError", ex.Message));
+            StatusMessage = L.Get("Ruku_SearchError", ex.Message);
         }
         finally
         {
@@ -417,7 +433,7 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
             }
             catch (Exception ex)
             {
-                LogService.Warn("入库", $"GetAppNameAsync 失败 AppID {appId} ({lang}): {ex.Message}");
+                LogService.Warn(L.Get("LogCat_Home"), L.Get("Ruku_StoreApiFailed", appId, lang, ex.Message));
             }
         }
         return (null, null, "");
@@ -432,8 +448,8 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
             var heiCount = Math.Min(heiHe.Count, 10);
             for (var i = 0; i < heiCount; i++)
                 SearchResults.Add(new FoundGame(heiHe[i].AppId, heiHe[i].Name, heiHe[i].CoverUrl, heiHe[i].CoverCandidates, heiHe[i].ReleaseDate));
-            AddLog($"找到 {heiCount} 个匹配结果");
-            StatusMessage = $"找到 {heiCount} 个匹配结果";
+            AddLog(L.Get("Ruku_MatchCount", heiCount));
+            StatusMessage = L.Get("Ruku_MatchCount", heiCount);
             return;
         }
 
@@ -497,13 +513,13 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
                     CoverCandidates(appId, coverUrl)));
             }
 
-            AddLog($"找到 {count} 个匹配结果");
-            StatusMessage = $"找到 {count} 个匹配结果";
+            AddLog(L.Get("Ruku_MatchCount", count));
+            StatusMessage = L.Get("Ruku_MatchCount", count);
             return;
         }
 
-        AddLog("未找到匹配的游戏");
-        StatusMessage = "未找到匹配的游戏";
+        AddLog(L.Get("Ruku_NoMatch"));
+        StatusMessage = L.Get("Ruku_NoMatch");
     }
 
     [RelayCommand]
@@ -513,8 +529,8 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
         await ExecuteDownloadAsync(game.AppId.ToString());
     }
 
-    private Task<bool> ShowModernConfirmAsync(string title, string message, string primaryText = "确定", string closeText = "取消")
-        => _dialogService.ShowConfirmAsync(title, message, primaryText, closeText);
+    private Task<bool> ShowModernConfirmAsync(string title, string message, string? primaryText = null, string? closeText = null)
+        => _dialogService.ShowConfirmAsync(title, message, primaryText ?? L.Get("Common_Confirm"), closeText ?? L.Get("Common_Cancel"));
 
     private async Task ExecuteDownloadAsync(string gameId)
     {
@@ -525,41 +541,41 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
         var ct = cts.Token;
         IsDownloading = true;
         LogLines.Clear();
-        AddLog($"开始处理 ID：{gameId}");
-        AddLog($"当前入库接口：{CurrentDataSourceLabel}");
+        AddLog(L.Get("Ruku_ProcessStart", gameId));
+        AddLog(L.Get("Ruku_CurrentSource", CurrentDataSourceLabel));
         AddLog("=".PadRight(50, '='));
 
         try
         {
             if (uint.TryParse(gameId, out var bigId) && bigId > int.MaxValue)
             {
-                AddLog($"游戏 ID {gameId} 超出支持范围（最大 {int.MaxValue}）");
-                StatusMessage = $"游戏 ID 超出支持范围（最大 {int.MaxValue}）";
+                AddLog(L.Get("Ruku_GameIdOutOfRange", gameId, int.MaxValue));
+                StatusMessage = L.Get("Ruku_GameIdOutOfRangeShort", int.MaxValue);
                 return;
             }
             if (!int.TryParse(gameId, out int appId) || appId <= 0)
             {
-                AddLog("无效的游戏 ID（必须为正整数）");
-                StatusMessage = "无效的游戏 ID（必须为正整数）";
+                AddLog(L.Get("Ruku_InvalidGameId"));
+                StatusMessage = L.Get("Ruku_InvalidGameId");
                 return;
             }
 
             var luaFolder = _steamPathService.GetLuaFolder();
             if (string.IsNullOrEmpty(luaFolder))
             {
-                AddLog("未配置 Steam 路径，请先在基本设置中设置路径");
-                StatusMessage = "未配置 Steam 路径";
+                AddLog(L.Get("Ruku_NoSteamPathLog"));
+                StatusMessage = L.Get("Ruku_NoSteamPathStatus");
                 return;
             }
 
             if (!Directory.Exists(luaFolder))
             {
                 Directory.CreateDirectory(luaFolder);
-                AddLog($"已创建目录：{luaFolder}");
+                AddLog(L.Get("Ruku_DirCreated", luaFolder));
             }
             else
             {
-                AddLog($"目标目录：{luaFolder}");
+                AddLog(L.Get("Ruku_TargetDir", luaFolder));
             }
 
             if (IsLocalCacheMode)
@@ -569,13 +585,13 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
                 if (File.Exists(targetLua))
                 {
                     var overwrite = await ShowModernConfirmAsync(
-                        "覆盖确认",
-                        $"已存在 {appId}.lua，继续会覆盖旧文件，确定重新入库吗？",
-                        "覆盖");
+                        L.Get("Ruku_OverwriteTitle"),
+                        L.Get("Ruku_OverwriteBody", appId),
+                        L.Get("Ruku_Overwrite"));
                     if (!overwrite)
                     {
-                        AddLog("已取消入库（保留现有 Lua 文件）");
-                        StatusMessage = "已取消入库";
+                        AddLog(L.Get("Ruku_CancelledKeep"));
+                        StatusMessage = L.Get("Ruku_CancelledStatus");
                         return;
                     }
                 }
@@ -588,13 +604,13 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
         }
         catch (OperationCanceledException)
         {
-            AddLog("入库已取消");
-            StatusMessage = "已取消入库";
+            AddLog(L.Get("Ruku_CancelledStatus"));
+            StatusMessage = L.Get("Ruku_CancelledStatus");
         }
         catch (Exception ex)
         {
-            AddLog($"任务异常：{ex.Message}");
-            StatusMessage = $"异常：{ex.Message}";
+            AddLog(L.Get("Ruku_TaskError", ex.Message));
+            StatusMessage = L.Get("Ruku_ErrorStatus", ex.Message);
         }
         finally
         {
@@ -616,9 +632,9 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
     {
         return await _steamApiService.IsComingSoonAsync(appId) switch
         {
-            true => "该游戏尚未发售，暂无法生成入库文件",
-            false => "未能获取该游戏的仓库信息（可能为新上架游戏），请稍后重试",
-            _ => "该游戏仓库信息查询失败，请检查网络后重试"
+            true => L.Get("Ruku_NotReleased"),
+            false => L.Get("Ruku_NoDepotData"),
+            _ => L.Get("Ruku_QueryDepotFailed")
         };
     }
 
@@ -626,7 +642,7 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
     {
         _depotService.UseDataSource(_currentDownloadMode);
 
-        AddLog("查询游戏仓库信息...");
+        AddLog(L.Get("Ruku_QueryingDepots"));
         DepotQueryResult? queryResult = null;
         try
         {
@@ -635,15 +651,15 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
         catch (TimeoutException ex)
         {
             // 只有超时才补一次：用户取消走下面的 OCE 分支直接停，不再浪费一次查询
-            AddLog($"首次查询超时，正在重试（最后 1 次）：{ex.Message}");
+            AddLog(L.Get("Ruku_QueryRetry", ex.Message));
             try
             {
                 queryResult = await _depotService.QueryAppAsync(appId, ct);
             }
             catch (TimeoutException ex2)
             {
-                AddLog($"查询失败：{ex2.Message}");
-                StatusMessage = "查询失败，接口超时";
+                AddLog(L.Get("Ruku_QueryFailedLog", ex2.Message));
+                StatusMessage = L.Get("Ruku_QueryTimeoutStatus");
                 return;
             }
             catch (OperationCanceledException)
@@ -653,56 +669,56 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
             }
             catch (Exception ex2)
             {
-                AddLog($"查询失败：{ex2.InnerException?.Message ?? ex2.Message}");
-                StatusMessage = "查询失败";
+                AddLog(L.Get("Ruku_QueryFailedLog", ex2.InnerException?.Message ?? ex2.Message));
+                StatusMessage = L.Get("Ruku_QueryFailedStatus");
                 return;
             }
         }
         catch (OperationCanceledException)
         {
-            AddLog("查询已取消");
-            StatusMessage = "已取消查询";
+            AddLog(L.Get("Ruku_QueryCancelled"));
+            StatusMessage = L.Get("Ruku_QueryCancelled");
             return;
         }
         catch (Exception ex)
         {
-            AddLog($"查询异常：{ex.InnerException?.Message ?? ex.Message}");
-            StatusMessage = "查询失败";
+            AddLog(L.Get("Ruku_QueryErrorLog", ex.InnerException?.Message ?? ex.Message));
+            StatusMessage = L.Get("Ruku_QueryFailedStatus");
             return;
         }
 
         if (queryResult == null)
         {
             var reason = await GetEmptyDepotsReasonAsync(appId);
-            AddLog($"查询失败：{reason}");
-            StatusMessage = "查询失败";
+            AddLog(L.Get("Ruku_QueryFailedLog", reason));
+            StatusMessage = L.Get("Ruku_QueryFailedStatus");
             return;
         }
-        AddLog($"查询完成：{queryResult.AppName}");
-        AddLog($"主游戏仓库: {queryResult.GameDepots.Count} 个");
-        AddLog($"总DLC数量: {queryResult.DlcAppIds.Count} 个");
+        AddLog(L.Get("Ruku_QueryDoneLog", queryResult.AppName));
+        AddLog(L.Get("Ruku_MainDepots", queryResult.GameDepots.Count));
+        AddLog(L.Get("Ruku_TotalDlc", queryResult.DlcAppIds.Count));
 
         // SteamKit2 兜底后主仓库仍为空：token 保护已在兜底中处理，
         // 剩余成因为未发售或数据暂缺，继续生成只会得到无密钥的空清单，直接终止
         if (queryResult.GameDepots.Count == 0)
         {
             var reason = await GetEmptyDepotsReasonAsync(appId);
-            AddLog($"生成终止：{reason}");
-            StatusMessage = "生成失败";
+            AddLog(L.Get("Ruku_GenAborted", reason));
+            StatusMessage = L.Get("Ruku_GenFailed");
             return;
         }
 
-        AddLog("下载密钥文件...");
+        AddLog(L.Get("Ruku_DownloadingKeys"));
         var keyReady = await _depotService.EnsureKeyFilesAsync(ct);
         if (!keyReady)
         {
-            AddLog("下载密钥文件失败");
-            StatusMessage = "下载密钥文件失败";
+            AddLog(L.Get("Ruku_KeyDownloadFailed"));
+            StatusMessage = L.Get("Ruku_KeyDownloadFailed");
             return;
         }
-        AddLog("密钥文件已就绪");
+        AddLog(L.Get("Ruku_KeysReady"));
 
-        AddLog("正在生成 Lua 配置文件...");
+        AddLog(L.Get("Ruku_GeneratingLua"));
         string? luaPath;
         int includedDlc = -1;
         try
@@ -713,7 +729,7 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
                 var dlcProgress = new Progress<(int Done, int Total)>(p =>
                 {
                     if (p.Done == p.Total || p.Done % 5 == 0)
-                        AddLog($"正在获取 DLC 信息 ({p.Done}/{p.Total})...");
+                        AddLog(L.Get("Ruku_DlcProgress", p.Done, p.Total));
                 });
                 luaPath = await _depotService.GenerateLuaWithDlcAsync(appId, ct, pinManifest: PinManifest, dlcProgress: dlcProgress, fetchNames: FetchNameComments);
                 if (!string.IsNullOrEmpty(luaPath) && File.Exists(luaPath))
@@ -722,56 +738,56 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
                     var included = queryResult.DlcAppIds.Count(id =>
                         Regex.IsMatch(content, $@"\badd(?:app|token)id\(\s*{id}\s*[,\)]", RegexOptions.IgnoreCase));
                     includedDlc = included;
-                    AddLog($"包含 DLC 共 {included}/{queryResult.DlcAppIds.Count} 个");
+                    AddLog(L.Get("Ruku_DlcIncluded", included, queryResult.DlcAppIds.Count));
                     if (included < queryResult.DlcAppIds.Count)
-                        AddLog($"其中 {queryResult.DlcAppIds.Count - included} 个 DLC 因本地密钥仓库无对应 depots 密钥暂未收录");
+                        AddLog(L.Get("Ruku_DlcMissingKeys", queryResult.DlcAppIds.Count - included));
                 }
                 else
                 {
-                    AddLog($"包含 DLC 共 {queryResult.DlcAppIds.Count} 个");
+                    AddLog(L.Get("Ruku_DlcIncluded", queryResult.DlcAppIds.Count, queryResult.DlcAppIds.Count));
                 }
             }
             else
             {
                 if (!IncludeDlc && queryResult.DlcAppIds.Count > 0)
-                    AddLog($"已跳过 {queryResult.DlcAppIds.Count} 个 DLC（未勾选 DLC入库）");
+                    AddLog(L.Get("Ruku_DlcSkipped", queryResult.DlcAppIds.Count));
                 luaPath = await _depotService.GenerateLuaAsync(appId, ct, pinManifest: PinManifest, fetchNames: FetchNameComments);
             }
         }
         catch (InvalidOperationException ex)
         {
             AddLog(ex.Message);
-            StatusMessage = "入库失败：密钥未收录，请更新缓存或更换接口";
+            StatusMessage = L.Get("Ruku_KeyNotRecorded");
             return;
         }
 
         if (string.IsNullOrEmpty(luaPath))
         {
-            AddLog("生成 Lua 文件失败");
-            StatusMessage = "生成失败";
+            AddLog(L.Get("Ruku_GenLuaFailed"));
+            StatusMessage = L.Get("Ruku_GenFailed");
             return;
         }
 
-        AddLog($"Lua 配置文件已保存：{luaPath}");
-        AddLog($"入库成功！Lua 文件：{Path.GetFileName(luaPath)}");
+        AddLog(L.Get("Ruku_LuaSaved", luaPath));
+        AddLog(L.Get("Ruku_ImportSuccessLog", Path.GetFileName(luaPath)));
         StatusMessage = includedDlc >= 0 && includedDlc < queryResult.DlcAppIds.Count
-            ? $"入库成功：{queryResult.AppName}（DLC {includedDlc}/{queryResult.DlcAppIds.Count}，部分缺密钥）"
-            : $"入库成功：{queryResult.AppName}";
+            ? L.Get("Ruku_ImportSuccessPartial", queryResult.AppName, includedDlc, queryResult.DlcAppIds.Count)
+            : L.Get("Ruku_ImportSuccess", queryResult.AppName);
     }
 
     private async Task ExecuteRemoteDownloadAsync(string gameId, string luaFolder, CancellationToken ct)
     {
-        AddLog("获取下载地址...");
+        AddLog(L.Get("Ruku_FetchingUrl"));
         var shortCode = await GetShortCodeAsync(gameId, ct);
         if (string.IsNullOrEmpty(shortCode))
         {
-            AddLog("获取短码失败");
-            StatusMessage = "获取短码失败";
+            AddLog(L.Get("Ruku_ShortCodeFailed"));
+            StatusMessage = L.Get("Ruku_ShortCodeFailed");
             return;
         }
-        AddLog($"获取短码：{shortCode}");
+        AddLog(L.Get("Ruku_GotShortCode", shortCode));
 
-        AddLog("开始下载文件...");
+        AddLog(L.Get("Ruku_StartDownload"));
         // 固定名 zip 会被并发/残留互覆盖，Guid 隔离；finally 必删
         var zipPath = Path.Combine(Path.GetTempPath(), $"steam_lua_{gameId}_{Guid.NewGuid():N}.zip");
         var luaCount = 0;
@@ -780,15 +796,15 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
             var success = await DownloadFileAsync(shortCode, zipPath, ct);
             if (!success)
             {
-                AddLog("下载失败");
-                StatusMessage = "下载失败";
+                AddLog(L.Get("Ruku_DownloadFailed"));
+                StatusMessage = L.Get("Ruku_DownloadFailed");
                 return;
             }
-            AddLog("文件下载完成");
+            AddLog(L.Get("Ruku_DownloadDone"));
 
-            AddLog("正在解压...");
+            AddLog(L.Get("Ruku_Extracting"));
             luaCount = ExtractLuaFiles(zipPath, luaFolder);
-            AddLog("清理临时压缩包");
+            AddLog(L.Get("Ruku_CleanTemp"));
         }
         finally
         {
@@ -797,13 +813,13 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
 
         if (luaCount > 0)
         {
-            AddLog($"入库完成！共导入 {luaCount} 个 Lua 脚本");
-            StatusMessage = $"成功入库 {luaCount} 个 Lua 脚本";
+            AddLog(L.Get("Ruku_ImportDoneLog", luaCount));
+            StatusMessage = L.Get("Ruku_ImportDoneStatus", luaCount);
         }
         else
         {
-            AddLog("未找到任何 Lua 文件");
-            StatusMessage = "未找到 Lua 文件";
+            AddLog(L.Get("Ruku_NoLuaFoundLog"));
+            StatusMessage = L.Get("Ruku_NoLuaFoundStatus");
         }
     }
 
@@ -840,11 +856,11 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
             }
             catch (Exception ex)
             {
-                AddLog($"短码 API 响应解析失败：{ex.GetType().Name}: {ex.Message}");
-                AddLog($"响应内容前 500 字符：{json[..Math.Min(json.Length, 500)]}");
+                AddLog(L.Get("Ruku_ShortCodeParseFailed", ex.GetType().Name, ex.Message));
+                AddLog(L.Get("Ruku_ResponsePreview", json[..Math.Min(json.Length, 500)]));
                 return null;
             }
-        }, "获取短码", ct);
+        }, L.Get("Ruku_StepShortCode"), ct);
     }
 
     private async Task<bool> DownloadFileAsync(string shortCode, string savePath, CancellationToken ct)
@@ -878,7 +894,7 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
             await contentStream.CopyToAsync(fileStream);
             fileStream.Flush(true);
             return true;
-        }, "下载文件", ct);
+        }, L.Get("Ruku_StepDownload"), ct);
     }
 
     // 只管退避等待与 attempt 间检查：在飞请求仍靠原有 60s/15s 超时，不动代理 helper；
@@ -905,12 +921,12 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
                     break;
 
                 var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt));
-                AddLog($"{stepName}失败（第{attempt}次）：{ex.GetType().Name}: {ex.Message}，{delay.TotalSeconds}s后重试...");
+                AddLog(L.Get("Ruku_RetryLog", stepName, attempt, ex.GetType().Name, ex.Message, delay.TotalSeconds));
                 await Task.Delay(delay, ct);
             }
         }
-        AddLog($"{stepName}失败，已重试{maxRetries}次");
-        throw new HttpRequestException($"{stepName}失败，请检查网络后重试", lastException);
+        AddLog(L.Get("Ruku_RetryGaveUp", stepName, maxRetries));
+        throw new HttpRequestException(L.Get("Ruku_RetryThrow", stepName), lastException);
     }
 
     private int ExtractLuaFiles(string zipPath, string targetDir)
@@ -925,7 +941,7 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
                     var destPath = Path.Combine(targetDir, Path.GetFileName(entry.FullName));
                     entry.ExtractToFile(destPath, overwrite: true);
                     count++;
-                    AddLog($"导入：{Path.GetFileName(entry.FullName)}");
+                    AddLog(L.Get("Ruku_ImportedEntry", Path.GetFileName(entry.FullName)));
                 }
             }
         }
@@ -937,7 +953,7 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
 
     private void AddLog(string message)
     {
-        LogService.Info("入库", message);
+        LogService.Info(L.Get("LogCat_Home"), message);
         var line = $"[{DateTime.Now:HH:mm:ss}] {message}";
         // 异步投递不阻塞工作线程；顺序与调用序一致
         _ = Application.Current.Dispatcher.InvokeAsync(() =>
@@ -956,7 +972,7 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
         {
             IsDownloading = true;
             _depotService.UseDataSource(_currentDownloadMode);
-            AddLog($"正在更新密钥缓存（{CurrentDataSourceLabel}）...");
+            AddLog(L.Get("Ruku_UpdatingKeys", CurrentDataSourceLabel));
             var updateResult = await _depotService.UpdateKeyFilesAsync();
 
             if (updateResult.Success)
@@ -964,22 +980,22 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
                 var depotDelta = updateResult.DepotKeysNewCount - updateResult.DepotKeysOldCount;
                 var tokenDelta = updateResult.TokenKeysNewCount - updateResult.TokenKeysOldCount;
 
-                AddLog($"{CurrentDataSourceLabel}状态：");
-                AddLog($"depotkeys.json 已更新：{updateResult.DepotKeysOldCount} → {updateResult.DepotKeysNewCount} 条 ({(depotDelta >= 0 ? "+" : "")}{depotDelta})");
-                AddLog($"appaccesstokens.json 已更新：{updateResult.TokenKeysOldCount} → {updateResult.TokenKeysNewCount} 条 ({(tokenDelta >= 0 ? "+" : "")}{tokenDelta})");
-                StatusMessage = $"{CurrentDataSourceLabel}密钥缓存已更新";
+                AddLog(L.Get("Ruku_SourceStatusTitle", CurrentDataSourceLabel));
+                AddLog(L.Get("Ruku_DepotKeysUpdated", updateResult.DepotKeysOldCount, updateResult.DepotKeysNewCount, depotDelta >= 0 ? "+" : "", depotDelta));
+                AddLog(L.Get("Ruku_TokenKeysUpdated", updateResult.TokenKeysOldCount, updateResult.TokenKeysNewCount, tokenDelta >= 0 ? "+" : "", tokenDelta));
+                StatusMessage = L.Get("Ruku_KeysUpdatedStatus", CurrentDataSourceLabel);
                 OnPropertyChanged(nameof(LastUpdateTimeText));
             }
             else
             {
-                AddLog("更新失败，请检查网络");
-                StatusMessage = "更新失败";
+                AddLog(L.Get("Ruku_UpdateFailedLog"));
+                StatusMessage = L.Get("Ruku_UpdateFailedStatus");
             }
         }
         catch (Exception ex)
         {
-            AddLog($"更新失败：{ex.Message}");
-            StatusMessage = "更新失败";
+            AddLog(L.Get("Ruku_UpdateErrorLog", ex.Message));
+            StatusMessage = L.Get("Ruku_UpdateFailedStatus");
         }
         finally
         {
@@ -994,6 +1010,6 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
         SearchResults.Clear();
         // 搜过标记也要复位，否则“未找到匹配”空提示会赖着不走
         ResetSearchState();
-        StatusMessage = "日志已清除";
+        StatusMessage = L.Get("Ruku_LogCleared");
     }
 }

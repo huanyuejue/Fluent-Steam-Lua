@@ -91,7 +91,7 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
         {
             if (!TrainerBindings.Any(b => b.IsEnabled))
             {
-                MonitorStatusText = " -  未有激活绑定项，SvcMonitor后台服务已结束进程";
+                MonitorStatusText = L.Get("Trainer_MonitorIdle");
                 _monitorPollTimer?.Stop();
                 return;
             }
@@ -110,12 +110,12 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
                 return false;
             });
             MonitorStatusText = running
-                ? " -  SvcMonitor后台服务正在运行"
-                : " -  SvcMonitor后台服务未运行";
+                ? L.Get("Trainer_MonitorRunning")
+                : L.Get("Trainer_MonitorStopped");
         }
         catch (Exception ex)
         {
-            LogService.Warn("修改器", $"轮询监控状态失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Trainer"), L.Get("Trainer_LogPollFailed", ex.Message));
         }
         finally
         {
@@ -190,6 +190,7 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
         _dialogService = dialogService;
         _isShowTrainerSections = _settingsService.Load().ShowTrainerSections;
         _autoLaunchService.StatusChanged += OnAutoLaunchStatusChanged;
+        LocalizationService.Instance.PropertyChanged += OnLanguageChanged;
         _settingsService.SettingsChanged += OnSettingsChanged;
         LoadBindings();
         EnsureBindingsHooked();
@@ -205,13 +206,19 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
         IsShowTrainerSections = settings.ShowTrainerSections;
     }
 
-    private void OnAutoLaunchStatusChanged(string msg)
+    private void OnAutoLaunchStatusChanged(string msg, bool isWarning)
     {
         StatusMessage = msg;
-        if (msg.Contains("失败") || msg.Contains("超时"))
-            LogService.Warn("修改器", $"自动启动: {msg}");
+        if (isWarning)
+            LogService.Warn(L.Get("LogCat_Trainer"), L.Get("Trainer_LogAutoLaunch", msg));
         else
-            LogService.Info("修改器", $"自动启动: {msg}");
+            LogService.Info(L.Get("LogCat_Trainer"), L.Get("Trainer_LogAutoLaunch", msg));
+    }
+
+    // 绑定卡片的自动激活摘要含本地化文案，切语言后逐项刷新
+    private void OnLanguageChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        foreach (var b in TrainerBindings) b.RefreshLocalizedTexts();
     }
 
     public void Dispose()
@@ -222,6 +229,7 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
         foreach (var b in TrainerBindings)
             b.PropertyChanged -= OnBindingPropertyChanged;
         _autoLaunchService.StatusChanged -= OnAutoLaunchStatusChanged;
+        LocalizationService.Instance.PropertyChanged -= OnLanguageChanged;
         _settingsService.SettingsChanged -= OnSettingsChanged;
         if (_statusTimer != null)
         {
@@ -261,7 +269,7 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
         _hotLoaded = true;
         try
         {
-            StatusMessage = "正在加载热门推荐...";
+            StatusMessage = L.Get("Trainer_LoadingHot");
             var trainers = await _trainerService.GetHotTrainersAsync(10);
             HotTrainers.Clear();
             foreach (var t in trainers)
@@ -270,8 +278,8 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            StatusMessage = $"加载热门推荐失败：{ex.Message}";
-            LogService.Error("修改器", $"加载热门推荐失败: {ex}");
+            StatusMessage = L.Get("Trainer_HotLoadFailed", ex.Message);
+            LogService.Error(L.Get("LogCat_Trainer"), L.Get("Trainer_LogHotLoadFailed", ex));
         }
     }
 
@@ -285,7 +293,7 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
             foreach (var t in trainers)
                 NewReleases.Add(t);
         }
-        catch (Exception ex) { LogService.Warn("修改器", $"加载最新发布失败: {ex.Message}"); }
+        catch (Exception ex) { LogService.Warn(L.Get("LogCat_Trainer"), L.Get("Trainer_LogNewReleaseFailed", ex.Message)); }
     }
 
     private Task LoadDownloadedTrainersAsync()
@@ -325,7 +333,7 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
             SyncDownloadedStates(items);
 
         }
-        catch (Exception ex) { LogService.Warn("修改器", $"加载已下载修改器列表失败: {ex.Message}"); }
+        catch (Exception ex) { LogService.Warn(L.Get("LogCat_Trainer"), L.Get("Trainer_LogDownloadedListFailed", ex.Message)); }
 
         return Task.CompletedTask;
     }
@@ -366,11 +374,11 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
         try
         {
             if (string.IsNullOrWhiteSpace(trainer.DownloadUrl) || !File.Exists(trainer.DownloadUrl))
-                return $"{trainer.GameName}：下载文件不存在";
+                return L.Get("Trainer_NoFile", trainer.GameName);
 
             var (gameName, options) = TrainerExeParser.Parse(trainer.DownloadUrl);
             if (options.Count == 0)
-                return $"{trainer.GameName}：解析未提取到功能项（修改器可能不含中文字符串）";
+                return L.Get("Trainer_NoOptions", trainer.GameName);
 
             Directory.CreateDirectory(CheatOptionsCacheDir);
             var key = SanitizeFileName(Path.GetFileNameWithoutExtension(trainer.DownloadUrl));
@@ -391,12 +399,12 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
                     item.DisplayName = gameName;
             }
 
-            return $"{trainer.GameName}：提取到 {options.Count} 项功能" +
-                   (string.IsNullOrWhiteSpace(gameName) ? "" : $"，中文名「{gameName}」");
+            return L.Get("Trainer_Extracted", trainer.GameName, options.Count) +
+                   (string.IsNullOrWhiteSpace(gameName) ? "" : L.Get("Trainer_ExtractedNamed", gameName));
         }
         catch (Exception ex)
         {
-            return $"解析 {trainer.GameName} 失败：{ex.Message}";
+            return L.Get("Trainer_ParseFailed", trainer.GameName, ex.Message);
         }
     }
 
@@ -410,7 +418,7 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
             var json = File.ReadAllText(file);
             return JsonSerializer.Deserialize<List<CheatOption>>(json);
         }
-        catch (Exception ex) { LogService.Warn("修改器", $"读取功能项缓存失败: {ex.Message}"); return null; }
+        catch (Exception ex) { LogService.Warn(L.Get("LogCat_Trainer"), L.Get("Trainer_LogOptionsCacheFailed", ex.Message)); return null; }
     }
 
     private static void DeleteCachedOptions(string trainerFilePath)
@@ -424,7 +432,7 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
                 if (File.Exists(file)) File.Delete(file);
             }
         }
-        catch (Exception ex) { LogService.Warn("修改器", $"删除功能项缓存失败: {ex.Message}"); }
+        catch (Exception ex) { LogService.Warn(L.Get("LogCat_Trainer"), L.Get("Trainer_LogDeleteOptionsFailed", ex.Message)); }
     }
 
     public static string? LoadCachedGameName(string trainerFilePath)
@@ -435,7 +443,7 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
             var file = Path.Combine(CheatOptionsCacheDir, $"{key}.name.txt");
             return File.Exists(file) ? File.ReadAllText(file).Trim() : null;
         }
-        catch (Exception ex) { LogService.Warn("修改器", $"读取中文名缓存失败: {ex.Message}"); return null; }
+        catch (Exception ex) { LogService.Warn(L.Get("LogCat_Trainer"), L.Get("Trainer_LogNameCacheFailed", ex.Message)); return null; }
     }
 
     private void LoadBindings()
@@ -524,7 +532,7 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
             var val = key?.GetValue(RegistryRunName) as string;
             return !string.IsNullOrEmpty(val);
         }
-        catch (Exception ex) { LogService.Warn("修改器", $"检查后台服务注册失败: {ex.Message}"); return false; }
+        catch (Exception ex) { LogService.Warn(L.Get("LogCat_Trainer"), L.Get("Trainer_LogRegCheckFailed", ex.Message)); return false; }
     }
 
     private static void KillMonitorProcess()
@@ -560,11 +568,11 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
         }
         var anyEnabled = TrainerBindings.Any(b => b.IsEnabled);
         if (running)
-            MonitorStatusText = " -  SvcMonitor后台服务正在运行";
+            MonitorStatusText = L.Get("Trainer_MonitorRunning");
         else if (!anyEnabled)
-            MonitorStatusText = " -  未有激活绑定项，SvcMonitor后台服务已结束进程";
+            MonitorStatusText = L.Get("Trainer_MonitorIdle");
         else
-            MonitorStatusText = " -  SvcMonitor后台服务未运行";
+            MonitorStatusText = L.Get("Trainer_MonitorStopped");
     }
 
     private void TryStartMonitorIfNeeded()
@@ -605,7 +613,7 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
 
             RefreshMonitorStatus();
         }
-        catch (Exception ex) { LogService.Warn("修改器", $"启动后台监控进程失败: {ex.Message}"); }
+        catch (Exception ex) { LogService.Warn(L.Get("LogCat_Trainer"), L.Get("Trainer_LogMonitorStartFailed", ex.Message)); }
     }
 
     private static bool ExtractEmbeddedMonitor(string targetDir)
@@ -628,16 +636,16 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
             }
             return true;
         }
-        catch (Exception ex) { LogService.Warn("修改器", $"释放 SvcMonitor 失败: {ex.Message}"); return false; }
+        catch (Exception ex) { LogService.Warn(L.Get("LogCat_Trainer"), L.Get("Trainer_LogMonitorExtractFailed", ex.Message)); return false; }
     }
 
     [RelayCommand]
     private async Task InstallServiceAsync()
     {
         var confirmed = await _dialogService.ShowConfirmAsync(
-            "安装后台服务",
-            "安装该服务后可在不启动该软件的情况下实现打开游戏自启动修改器，是否安装？\n\n（本服务仅作为游戏进程监控，无其他作用，后台内存占用不到10MB）",
-            "安装", "取消");
+            L.Get("Trainer_InstallSvcTitle"),
+            L.Get("Trainer_InstallSvcBody"),
+            L.Get("Trainer_Install"), L.Get("Common_Cancel"));
         if (!confirmed)
             return;
 
@@ -649,8 +657,8 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
                 var dir = Path.GetDirectoryName(exePath)!;
                 if (!ExtractEmbeddedMonitor(dir))
                 {
-                    StatusMessage = "释放 SvcMonitor 失败";
-                    LogService.Error("修改器", "释放 SvcMonitor 失败");
+                    StatusMessage = L.Get("Trainer_ExtractSvcFailed");
+                    LogService.Error(L.Get("LogCat_Trainer"), L.Get("Trainer_ExtractSvcFailed"));
                     return;
                 }
             }
@@ -669,13 +677,13 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
             })?.Dispose();
 
             IsServiceInstalled = true;
-            StatusMessage = "后台服务已安装并启动，开机自动运行";
-            LogService.Info("修改器", "后台服务已安装并启动，开机自动运行");
+            StatusMessage = L.Get("Trainer_SvcInstalled");
+            LogService.Info(L.Get("LogCat_Trainer"), L.Get("Trainer_SvcInstalled"));
         }
         catch (Exception ex)
         {
-            StatusMessage = $"安装异常: {ex.Message}";
-            LogService.Error("修改器", $"后台服务安装异常: {ex}");
+            StatusMessage = L.Get("Trainer_InstallError", ex.Message);
+            LogService.Error(L.Get("LogCat_Trainer"), L.Get("Trainer_LogInstallError", ex));
         }
         RefreshMonitorStatus();
     }
@@ -684,9 +692,9 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
     private async Task UninstallServiceAsync()
     {
         var confirmed = await _dialogService.ShowConfirmAsync(
-            "卸载后台服务",
-            "确定卸载该服务？卸载后需要开启该软件才能实现打开游戏自启动修改器",
-            "卸载", "取消");
+            L.Get("Trainer_UninstallSvcTitle"),
+            L.Get("Trainer_UninstallSvcBody"),
+            L.Get("Trainer_Uninstall"), L.Get("Common_Cancel"));
         if (!confirmed)
             return;
 
@@ -703,16 +711,16 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
 
             await Task.Delay(500);
             IsServiceInstalled = IsMonitorInstalled();
-            StatusMessage = IsServiceInstalled ? "卸载失败，请手动删除注册表项" : "后台服务已卸载";
+            StatusMessage = IsServiceInstalled ? L.Get("Trainer_UninstallFailedManual") : L.Get("Trainer_SvcUninstalled");
             if (IsServiceInstalled)
-                LogService.Error("修改器", "后台服务卸载失败，注册表项仍存在");
+                LogService.Error(L.Get("LogCat_Trainer"), L.Get("Trainer_LogUninstallFailed"));
             else
-                LogService.Info("修改器", "后台服务已卸载");
+                LogService.Info(L.Get("LogCat_Trainer"), L.Get("Trainer_SvcUninstalled"));
         }
         catch (Exception ex)
         {
-            StatusMessage = $"卸载异常: {ex.Message}";
-            LogService.Error("修改器", $"后台服务卸载异常: {ex}");
+            StatusMessage = L.Get("Trainer_UninstallError", ex.Message);
+            LogService.Error(L.Get("LogCat_Trainer"), L.Get("Trainer_LogUninstallError", ex));
         }
         RefreshMonitorStatus();
     }
@@ -729,8 +737,8 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
         {
             TrainerBindings.Add(dialog.Result);
             SaveBindings();
-            StatusMessage = $"已添加绑定: {dialog.Result.GameName} → {System.IO.Path.GetFileName(dialog.Result.TrainerFilePath)}";
-            LogService.Info("修改器", $"已添加绑定: {dialog.Result.GameName} → {dialog.Result.TrainerFilePath}");
+            StatusMessage = L.Get("Trainer_BindingAdded", dialog.Result.GameName, System.IO.Path.GetFileName(dialog.Result.TrainerFilePath));
+            LogService.Info(L.Get("LogCat_Trainer"), L.Get("Trainer_BindingAdded", dialog.Result.GameName, dialog.Result.TrainerFilePath));
         }
     }
 
@@ -751,8 +759,8 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
             {
                 TrainerBindings[idx] = dialog.Result;
                 SaveBindings();
-                StatusMessage = $"已更新绑定: {dialog.Result.GameName} → {System.IO.Path.GetFileName(dialog.Result.TrainerFilePath)}";
-                LogService.Info("修改器", $"已更新绑定: {dialog.Result.GameName} → {dialog.Result.TrainerFilePath}");
+                StatusMessage = L.Get("Trainer_BindingUpdated", dialog.Result.GameName, System.IO.Path.GetFileName(dialog.Result.TrainerFilePath));
+                LogService.Info(L.Get("LogCat_Trainer"), L.Get("Trainer_BindingUpdated", dialog.Result.GameName, dialog.Result.TrainerFilePath));
             }
         }
     }
@@ -763,14 +771,14 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
         if (binding == null) return;
         // 删绑定不可恢复，照删文件确认框同样前置确认
         var confirmed = await _dialogService.ShowConfirmAsync(
-            "确认删除",
-            $"确定要删除绑定 \"{binding.GameName}\" 吗？",
-            "删除", "取消");
+            L.Get("Trainer_ConfirmDeleteTitle"),
+            L.Get("Trainer_ConfirmDeleteBinding", binding.GameName),
+            L.Get("Trainer_Delete"), L.Get("Common_Cancel"));
         if (!confirmed) return;
         TrainerBindings.Remove(binding);
         SaveBindings();
-        StatusMessage = $"已删除绑定: {binding.GameName}";
-        LogService.Info("修改器", $"已删除绑定: {binding.GameName}");
+        StatusMessage = L.Get("Trainer_BindingDeleted", binding.GameName);
+        LogService.Info(L.Get("LogCat_Trainer"), L.Get("Trainer_BindingDeleted", binding.GameName));
     }
 
     [RelayCommand]
@@ -779,7 +787,7 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
         var query = SearchQuery?.Trim();
         if (string.IsNullOrWhiteSpace(query))
         {
-            StatusMessage = "请输入游戏名称";
+            StatusMessage = L.Get("Trainer_EnterGameName");
             return;
         }
 
@@ -805,14 +813,14 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
             IsShowingHot = results.Count == 0;
             if (results.Count == 0)
             {
-                StatusMessage = "未找到匹配的修改器";
-                LogService.Warn("修改器", $"搜索未找到匹配的修改器: {query}");
+                StatusMessage = L.Get("Trainer_NoMatch");
+                LogService.Warn(L.Get("LogCat_Trainer"), L.Get("Trainer_LogSearchEmpty", query));
             }
         }
         catch (Exception ex)
         {
-            StatusMessage = $"搜索失败：{ex.Message}";
-            LogService.Error("修改器", $"搜索修改器失败: {ex}");
+            StatusMessage = L.Get("Trainer_SearchFailed", ex.Message);
+            LogService.Error(L.Get("LogCat_Trainer"), L.Get("Trainer_LogSearchFailed", ex));
         }
         finally
         {
@@ -854,8 +862,8 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
             downloadUrl = await _trainerService.GetDownloadUrlAsync(trainer.PageUrl);
             if (string.IsNullOrWhiteSpace(downloadUrl))
             {
-                StatusMessage = $"获取 {trainer.GameName} 下载链接失败";
-                LogService.Warn("修改器", $"获取 {trainer.GameName} 下载链接失败 (URL: {trainer.PageUrl})");
+                StatusMessage = L.Get("Trainer_DownloadUrlFailed", trainer.GameName);
+                LogService.Warn(L.Get("LogCat_Trainer"), L.Get("Trainer_LogDownloadUrlFailed", trainer.GameName, trainer.PageUrl));
                 return;
             }
 
@@ -899,20 +907,20 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
             trainer.IsDownloaded = true;
             await LoadDownloadedTrainersAsync();
 
-            StatusMessage = $"{trainer.GameName} 下载完成，正在解析修改器功能...";
+            StatusMessage = L.Get("Trainer_Downloading", trainer.GameName);
             var parseResult = await CacheCheatOptionsAsync(trainer);
-            StatusMessage = parseResult ?? $"{trainer.GameName} 下载完成";
-            LogService.Info("修改器", $"{trainer.GameName} 下载完成: {savePath} ({bytesReadTotal} bytes)");
+            StatusMessage = parseResult ?? L.Get("Trainer_Downloaded", trainer.GameName);
+            LogService.Info(L.Get("LogCat_Trainer"), L.Get("Trainer_LogDownloaded", trainer.GameName, savePath, bytesReadTotal));
         }
         catch (OperationCanceledException)
         {
-            StatusMessage = $"{trainer.GameName} 下载超时";
-            LogService.Warn("修改器", $"{trainer.GameName} 下载超时 (URL: {downloadUrl})");
+            StatusMessage = L.Get("Trainer_DownloadTimeout", trainer.GameName);
+            LogService.Warn(L.Get("LogCat_Trainer"), L.Get("Trainer_LogDownloadTimeout", trainer.GameName, downloadUrl));
         }
         catch (Exception ex)
         {
-            StatusMessage = $"下载 {trainer.GameName} 失败：{ex.Message}";
-            LogService.Error("修改器", $"下载 {trainer.GameName} 失败: {ex}");
+            StatusMessage = L.Get("Trainer_DownloadFailed", trainer.GameName, ex.Message);
+            LogService.Error(L.Get("LogCat_Trainer"), L.Get("Trainer_LogDownloadFailed", trainer.GameName, ex));
         }
         finally
         {
@@ -977,7 +985,7 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
         if (item == null || string.IsNullOrWhiteSpace(item.FilePath)) return;
         if (!File.Exists(item.FilePath))
         {
-            StatusMessage = "文件不存在，无法创建快捷方式";
+            StatusMessage = L.Get("Trainer_FileMissing");
             return;
         }
         try
@@ -987,23 +995,23 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
             if (string.IsNullOrWhiteSpace(stem))
                 stem = Path.GetFileNameWithoutExtension(item.FileName);
             if (string.IsNullOrWhiteSpace(stem))
-                stem = "修改器快捷方式";
+                stem = L.Get("Trainer_ShortcutNameFallback");
             var lnkPath = Path.Combine(desktop, stem + ".lnk");
             if (File.Exists(lnkPath))
             {
-                StatusMessage = $"桌面已存在“{stem}.lnk”，未重复创建";
+                StatusMessage = L.Get("Trainer_ShortcutExists", stem);
                 return;
             }
             var shellType = Type.GetTypeFromProgID("WScript.Shell");
             if (shellType == null)
             {
-                StatusMessage = "系统缺少 WSH 组件，无法创建快捷方式";
+                StatusMessage = L.Get("Trainer_NoWsh");
                 return;
             }
             var shell = Activator.CreateInstance(shellType);
             if (shell == null)
             {
-                StatusMessage = "系统缺少 WSH 组件，无法创建快捷方式";
+                StatusMessage = L.Get("Trainer_NoWsh");
                 return;
             }
             // 晚绑定调用，不引入 COM 引用（dotnet build 不支持 ResolveComReference）
@@ -1011,7 +1019,7 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
                 null, shell, [lnkPath]);
             if (shortcut == null)
             {
-                StatusMessage = "创建快捷方式失败：系统组件无响应";
+                StatusMessage = L.Get("Trainer_ShortcutNoResponse");
                 return;
             }
             var shortcutType = shortcut.GetType();
@@ -1021,11 +1029,11 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
             shortcutType.InvokeMember("IconLocation", BindingFlags.SetProperty, null, shortcut, [item.FilePath + ",0"]);
             shortcutType.InvokeMember("Description", BindingFlags.SetProperty, null, shortcut, [item.DisplayName]);
             shortcutType.InvokeMember("Save", BindingFlags.InvokeMethod, null, shortcut, null);
-            StatusMessage = $"已创建桌面快捷方式：{stem}.lnk";
+            StatusMessage = L.Get("Trainer_ShortcutCreated", stem);
         }
         catch (Exception ex)
         {
-            StatusMessage = $"创建快捷方式失败：{ex.Message}";
+            StatusMessage = L.Get("Trainer_ShortcutFailed", ex.Message);
         }
     }
 
@@ -1036,9 +1044,9 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
         if (!File.Exists(item.FilePath)) return;
 
         var confirmed = await _dialogService.ShowConfirmAsync(
-            "确认删除",
-            $"确定要删除文件 \"{item.DisplayName}\" 吗？",
-            "删除", "取消");
+            L.Get("Trainer_ConfirmDeleteTitle"),
+            L.Get("Trainer_ConfirmDeleteFile", item.DisplayName),
+            L.Get("Trainer_Delete"), L.Get("Common_Cancel"));
 
         if (confirmed)
         {

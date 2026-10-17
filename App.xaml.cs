@@ -55,11 +55,9 @@ public partial class App : Application
     {
         try
         {
-            LogService.Info("系统", $"屏幕: 虚拟{SystemParameters.VirtualScreenWidth}x{SystemParameters.VirtualScreenHeight} " +
-                $"主屏{SystemParameters.PrimaryScreenWidth}x{SystemParameters.PrimaryScreenHeight}，" +
-                $"软件渲染: {RenderOptions.ProcessRenderMode == RenderMode.SoftwareOnly}");
+            LogService.Info(L.Get("LogCat_System"), L.Get("App_LogScreen", SystemParameters.VirtualScreenWidth, SystemParameters.VirtualScreenHeight, SystemParameters.PrimaryScreenWidth, SystemParameters.PrimaryScreenHeight, RenderOptions.ProcessRenderMode == RenderMode.SoftwareOnly));
         }
-        catch (Exception ex) { LogService.Warn("系统", $"读取屏幕信息失败: {ex.Message}"); }
+        catch (Exception ex) { LogService.Warn(L.Get("LogCat_System"), L.Get("App_LogScreenFailed", ex.Message)); }
     }
 
     protected override void OnStartup(StartupEventArgs e)
@@ -71,6 +69,12 @@ public partial class App : Application
             int code;
             try
             {
+                try
+                {
+                    var workerLang = new SettingsService().Load().Language;
+                    LocalizationService.Instance.SetLanguage(workerLang);
+                }
+                catch { }
                 code = StatsWorker.Run(e.Args);
             }
             catch
@@ -88,20 +92,26 @@ public partial class App : Application
             if (e.Args.Length >= 4 && e.Args[3] == "1")
             {
                 LogService.SetEnabled(true);
-                LogService.Info("提取", $"worker 启动 args=[{string.Join("|", e.Args)}]");
+                LogService.Info(L.Get("LogCat_Extract"), L.Get("App_WorkerArgs", string.Join("|", e.Args)));
             }
             int code;
             try
             {
+                try
+                {
+                    var workerLang = new SettingsService().Load().Language;
+                    LocalizationService.Instance.SetLanguage(workerLang);
+                }
+                catch { }
                 code = TicketWorker.Run(e.Args[1], e.Args[2]);
             }
             catch (Exception ex)
             {
-                LogService.Error("提取", $"worker 未捕获异常: {ex}");
+                LogService.Error(L.Get("LogCat_Extract"), L.Get("App_WorkerUnhandled", ex));
                 code = -1;
             }
             if (LogService.IsEnabled)
-                LogService.Info("提取", $"worker 结束 exit={code}");
+                LogService.Info(L.Get("LogCat_Extract"), L.Get("App_WorkerExit", code));
             Shutdown(code);
             return;
         }
@@ -111,7 +121,7 @@ public partial class App : Application
         if (!createdNew)
         {
             ActivateExistingInstance();
-            System.Windows.MessageBox.Show("程序已在运行，重复启动失败。",
+            System.Windows.MessageBox.Show(L.Get("App_AlreadyRunning"),
                 "Fluent Steam Lua 管理工具",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
@@ -127,6 +137,7 @@ public partial class App : Application
         var settingsService = ServiceProvider.GetRequiredService<ISettingsService>();
         var settings = settingsService.Load();
 
+        LocalizationService.Instance.SetLanguage(settings.Language);
         LogService.SetEnabled(settings.EnableLogging);
         try
         {
@@ -134,10 +145,10 @@ public partial class App : Application
             ServiceProvider.GetRequiredService<IAppUpdateService>().CleanupLeftoverUpdateFiles();
         }
         catch { }
-        LogService.Info("系统", $"程序启动，版本 {System.Reflection.Assembly.GetExecutingAssembly().GetName().Version}");
-        LogService.Info("系统", $"操作系统: {Environment.OSVersion.VersionString}, .NET: {Environment.Version}, 进程: {(Environment.Is64BitProcess ? "x64" : "x86")}");
+        LogService.Info(L.Get("LogCat_System"), L.Get("App_StartupVersion", System.Reflection.Assembly.GetExecutingAssembly().GetName().Version));
+        LogService.Info(L.Get("LogCat_System"), L.Get("App_OsInfo", Environment.OSVersion.VersionString, Environment.Version, Environment.Is64BitProcess ? "x64" : "x86"));
         var steamPathService = ServiceProvider.GetRequiredService<ISteamPathService>();
-        LogService.Info("系统", $"Steam 路径: {steamPathService.DetectSteamPath() ?? "未检测到"}");
+        LogService.Info(L.Get("LogCat_System"), L.Get("App_SteamPathLog", steamPathService.DetectSteamPath() ?? L.Get("App_PathNotFound")));
         RegisterGlobalLogging();
         LogStartupEnvironment();
         var mainWindow = ServiceProvider.GetRequiredService<MainWindow>();
@@ -164,7 +175,7 @@ public partial class App : Application
         }
         catch (Exception ex)
         {
-            LogService.Error("系统", $"主窗口显示失败，尝试兼容模式（软件渲染+纯色背景）: {ex}");
+            LogService.Error(L.Get("LogCat_System"), L.Get("App_MainShowFailed", ex));
             try
             {
                 RenderOptions.ProcessRenderMode = RenderMode.SoftwareOnly;
@@ -173,9 +184,9 @@ public partial class App : Application
             }
             catch (Exception ex2)
             {
-                LogService.Error("系统", $"兼容模式仍无法显示主窗口: {ex2}");
+                LogService.Error(L.Get("LogCat_System"), L.Get("App_CompatFailed", ex2));
                 System.Windows.MessageBox.Show(
-                    $"程序窗口无法显示，请把软件目录的 app.log 发给作者排查。\n\n错误：{ex2.Message}",
+                    L.Get("App_WindowFailedBody", ex2.Message),
                     "Fluent Steam Lua 管理工具",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
@@ -221,7 +232,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
-        LogService.Info("系统", "程序退出");
+        LogService.Info(L.Get("LogCat_System"), L.Get("App_Exit"));
         LogService.Shutdown();
         if (_singleInstanceMutex != null)
         {
@@ -235,18 +246,18 @@ public partial class App : Application
     private void RegisterGlobalLogging()
     {
         DispatcherUnhandledException += (_, args) =>
-            LogService.Exception("UI未处理异常", args.Exception);
+            LogService.Exception(L.Get("App_UiUnhandled"), args.Exception);
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
-            LogService.Exception("AppDomain异常",
-                args.ExceptionObject as Exception ?? new Exception(args.ExceptionObject?.ToString() ?? "未知异常"));
+            LogService.Exception(L.Get("App_AppDomain"),
+                args.ExceptionObject as Exception ?? new Exception(args.ExceptionObject?.ToString() ?? L.Get("App_UnknownError")));
         TaskScheduler.UnobservedTaskException += (_, args) =>
         {
             // SteamKit 内部服务器发现任务在无梯子时被 RST 是预期网络噪声，降为一行 Warn，
             // 其他未观察异常保持原样上报
             if (IsSteamNetworkNoise(args.Exception))
-                LogService.Warn("网络", "Steam 服务器列表不可达（无梯子时常见），已忽略");
+                LogService.Warn(L.Get("LogCat_Net"), L.Get("App_SteamNoise"));
             else
-                LogService.Exception("后台任务异常", args.Exception);
+                LogService.Exception(L.Get("App_BackgroundError"), args.Exception);
             args.SetObserved();
         };
         EventManager.RegisterClassHandler(typeof(ButtonBase), ButtonBase.ClickEvent,
@@ -274,7 +285,7 @@ public partial class App : Application
         var desc = DescribeButtonContent(button.Content);
         if (string.IsNullOrEmpty(desc))
             desc = string.IsNullOrEmpty(button.Name) ? button.GetType().Name : button.Name;
-        LogService.Info("操作", $"[{Views.MainWindow.CurrentPage ?? "?"}] 点击按钮: {desc}");
+        LogService.Info(L.Get("LogCat_Op"), L.Get("App_ClickLog", Views.MainWindow.CurrentPage ?? "?", desc));
     }
 
     private static string? DescribeButtonContent(object? content)
@@ -304,7 +315,7 @@ public partial class App : Application
             await Task.Delay(1200);
             var updateService = ServiceProvider.GetRequiredService<IUpdateService>();
             var result = await updateService.CheckForUpdateAsync();
-            LogService.Info("更新", $"检查更新完成: 当前版本 {result.CurrentVersion}, 最新版本 {result.TagName}, 有更新={result.HasUpdate}");
+            LogService.Info(L.Get("LogCat_Update"), L.Get("App_UpdateCheckDone", result.CurrentVersion, result.TagName, result.HasUpdate));
             if (!result.HasUpdate) return;
 
             await owner.Dispatcher.InvokeAsync(() => ShowUpdateLogDialogAsync(result));
@@ -329,7 +340,7 @@ public partial class App : Application
             var localVer = Version.TryParse(localVersion.Trim().TrimStart('v', 'V'), out var lv) ? lv : null;
             var remoteVer = Version.TryParse(remoteVersion.Trim().TrimStart('v', 'V'), out var rv) ? rv : null;
             if (localVer == null || remoteVer == null || remoteVer <= localVer) return;
-            LogService.Info("更新", $"检测到内核更新: 本地 {localVersion}, 远程 {remoteVersion}");
+            LogService.Info(L.Get("LogCat_Update"), L.Get("App_KernelUpdateFound", localVersion, remoteVersion));
             WeakReferenceMessenger.Default.Send(new KernelUpdateAvailableMessage(localVersion, remoteVersion));
         }
         catch { }
@@ -370,15 +381,15 @@ public partial class App : Application
         versionCard.SetResourceReference(Border.BorderBrushProperty, "SurfaceStrokeColorDefaultBrush");
         versionCard.BorderThickness = new Thickness(1);
         var versionStack = new StackPanel();
-        versionStack.Children.Add(BuildVersionRow("当前版本", result.CurrentVersion.ToString()));
-        versionStack.Children.Add(BuildVersionRow("最新版本", result.TagName));
+        versionStack.Children.Add(BuildVersionRow(L.Get("App_CurrentVersion"), result.CurrentVersion.ToString()));
+        versionStack.Children.Add(BuildVersionRow(L.Get("App_LatestVersion"), result.TagName));
         versionCard.Child = versionStack;
         content.Children.Add(versionCard);
 
         // 更新日志标题
         var logTitle = new TextBlock
         {
-            Text = "更新日志",
+            Text = L.Get("App_Changelog"),
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 8)
         };
@@ -417,7 +428,7 @@ public partial class App : Application
         {
             logBorder.Child = new TextBlock
             {
-                Text = "暂无更新日志",
+                Text = L.Get("App_NoChangelog"),
                 Opacity = 0.6
             };
         }
@@ -425,14 +436,14 @@ public partial class App : Application
 
         var dialog = new ContentDialog
         {
-            Title = result.HasUpdate ? "发现新版本" : "版本信息",
+            Title = result.HasUpdate ? L.Get("App_UpdateAvailableTitle") : L.Get("App_VersionInfoTitle"),
             Content = content,
-            PrimaryButtonText = result.HasUpdate ? "立即更新" : "打开下载页",
-            CloseButtonText = "稍后再说",
+            PrimaryButtonText = result.HasUpdate ? L.Get("App_UpdateNow") : L.Get("App_OpenDownloadPage"),
+            CloseButtonText = L.Get("App_Later"),
             DefaultButton = ContentDialogButton.Primary
         };
         if (result.HasUpdate)
-            dialog.SecondaryButtonText = "打开下载页";
+            dialog.SecondaryButtonText = L.Get("App_OpenDownloadPage");
 
         var dialogResult = await dialog.ShowAsync();
         if (dialogResult == ContentDialogResult.Secondary
@@ -455,13 +466,13 @@ public partial class App : Application
 
         var versionText = new TextBlock
         {
-            Text = $"当前版本：{result.CurrentVersion} → 最新版本：{result.TagName}",
+            Text = L.Get("App_VersionRow", result.CurrentVersion, result.TagName),
             Margin = new Thickness(0, 0, 0, 4)
         };
         versionText.SetResourceReference(TextBlock.ForegroundProperty, "TextFillColorPrimaryBrush");
         var statusText = new TextBlock
         {
-            Text = "准备更新...",
+            Text = L.Get("App_PreparingUpdate"),
             TextWrapping = TextWrapping.Wrap
         };
         statusText.SetResourceReference(TextBlock.ForegroundProperty, "TextFillColorPrimaryBrush");
@@ -481,9 +492,9 @@ public partial class App : Application
         // 进度框只留关闭键充当取消；成功时随进程退出而消失，无需编程式关闭
         var dialog = new ContentDialog
         {
-            Title = "正在更新",
+            Title = L.Get("App_UpdatingTitle"),
             Content = stack,
-            CloseButtonText = "取消"
+            CloseButtonText = L.Get("App_Cancel")
         };
         using var cts = new CancellationTokenSource();
         dialog.Closing += (_, _) => { try { cts.Cancel(); } catch { } };
@@ -498,14 +509,14 @@ public partial class App : Application
         try
         {
             var staged = await appUpdate.DownloadAndStageAsync(result, status, progress, cts.Token);
-            statusText.Text = "正在启动更新程序，程序即将退出...";
+            statusText.Text = L.Get("App_StartingUpdater");
             progressBar.IsIndeterminate = true;
             if (!appUpdate.TryStartUpdater(staged))
             {
-                statusText.Text = "启动更新程序失败，请前往 GitHub 手动下载覆盖更新。";
+                statusText.Text = L.Get("App_UpdaterStartFailed");
                 progressBar.IsIndeterminate = false;
                 progressBar.Value = 0;
-                dialog.CloseButtonText = "关闭";
+                dialog.CloseButtonText = L.Get("App_Close");
                 await showTask;
                 return;
             }
@@ -515,16 +526,16 @@ public partial class App : Application
         }
         catch (OperationCanceledException)
         {
-            LogService.Info("更新", "用户取消更新");
+            LogService.Info(L.Get("LogCat_Update"), L.Get("App_UserCancelledUpdate"));
             await showTask;
         }
         catch (Exception ex)
         {
-            LogService.Warn("更新", $"自更新失败: {ex.Message}");
-            statusText.Text = $"更新失败：{ex.Message}\n可前往 GitHub 手动下载覆盖更新。";
+            LogService.Warn(L.Get("LogCat_Update"), L.Get("App_UpdateFailedLog", ex.Message));
+            statusText.Text = L.Get("App_UpdateFailedBody", ex.Message);
             progressBar.IsIndeterminate = false;
             progressBar.Value = 0;
-            dialog.CloseButtonText = "关闭";
+            dialog.CloseButtonText = L.Get("App_Close");
             await showTask;
         }
     }

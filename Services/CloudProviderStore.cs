@@ -63,7 +63,7 @@ public sealed class CloudProviderStore
             "gdrive" => ListDriveAppsAsync(progress, ct),
             "onedrive" => ListOneDriveAppsAsync(progress, ct),
             "r2" or "s3" => ListS3AppsAsync(provider, progress, ct),
-            _ => throw new InvalidOperationException($"未知的云端提供商：{provider}"),
+            _ => throw new InvalidOperationException(L.Get("Cloud_UnknownProvider", provider)),
         };
 
     // 并发限流（4 并发防云端风控）+ 单项异常隔离 + 计数进度；失败项记入内存名单，
@@ -105,7 +105,7 @@ public sealed class CloudProviderStore
             finally
             {
                 throttle.Release();
-                progress?.Report($"正在读取云端名单({Interlocked.Increment(ref completed)} 个)…");
+                progress?.Report(L.Get("Cloud_ReadingList", Interlocked.Increment(ref completed)));
             }
         }));
         ct.ThrowIfCancellationRequested();
@@ -118,7 +118,7 @@ public sealed class CloudProviderStore
             foreach (var (index, item, reason) in failed.ToList())
             {
                 ct.ThrowIfCancellationRequested();
-                progress?.Report($"正在重试读取失败的游戏({++retryDone}/{retryTotal})…");
+                progress?.Report(L.Get("Cloud_RetryingGames", ++retryDone, retryTotal));
                 try
                 {
                     results[index] = await fetch(item, ct);
@@ -126,7 +126,7 @@ public sealed class CloudProviderStore
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    LogService.Warn("云存档", $"游戏 {describe(item)} 读取失败，已跳过：{ex.Message}（首次失败：{reason}）");
+                    LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogGameSkipped", describe(item), ex.Message, reason));
                 }
             }
         }
@@ -173,7 +173,7 @@ public sealed class CloudProviderStore
             finally
             {
                 throttle.Release();
-                progress?.Report($"正在从云端下载备份({Interlocked.Increment(ref done)}/{items.Count})…");
+                progress?.Report(L.Get("Cloud_DownloadingBackup", Interlocked.Increment(ref done), items.Count));
             }
         });
         try
@@ -201,7 +201,7 @@ public sealed class CloudProviderStore
             "gdrive" => GetDriveAppStatsAsync(accountId, appId, ct),
             "onedrive" => GetOneDriveAppStatsAsync(accountId, appId, ct),
             "r2" or "s3" => GetS3AppStatsAsync(provider, accountId, appId, ct),
-            _ => throw new InvalidOperationException($"未知的云端提供商：{provider}"),
+            _ => throw new InvalidOperationException(L.Get("Cloud_UnknownProvider", provider)),
         };
 
     public Task<int> DownloadAppAsync(string provider, string accountId, int appId, string destDir,
@@ -210,7 +210,7 @@ public sealed class CloudProviderStore
             "gdrive" => DownloadDriveAppAsync(accountId, appId, destDir, progress, ct),
             "onedrive" => DownloadOneDriveAppAsync(accountId, appId, destDir, progress, ct),
             "r2" or "s3" => DownloadS3AppAsync(provider, accountId, appId, destDir, progress, ct),
-            _ => throw new InvalidOperationException($"未知的云端提供商：{provider}"),
+            _ => throw new InvalidOperationException(L.Get("Cloud_UnknownProvider", provider)),
         };
 
     public Task<CloudDeleteResult> DeleteAppAsync(string provider, string accountId, int appId,
@@ -219,7 +219,7 @@ public sealed class CloudProviderStore
             "gdrive" => DeleteDriveAppAsync(accountId, appId, progress, ct),
             "onedrive" => DeleteOneDriveAppAsync(accountId, appId, progress, ct),
             "r2" or "s3" => DeleteS3AppAsync(provider, accountId, appId, progress, ct),
-            _ => throw new InvalidOperationException($"未知的云端提供商：{provider}"),
+            _ => throw new InvalidOperationException(L.Get("Cloud_UnknownProvider", provider)),
         };
 
     // ---- OAuth token：未过期复用 access_token，否则 refresh_token 刷新并回盘 ----
@@ -231,7 +231,7 @@ public sealed class CloudProviderStore
         if (!string.IsNullOrEmpty(access) && expiresAt - DateTimeOffset.UtcNow.ToUnixTimeSeconds() > 60)
             return access;
         if (string.IsNullOrEmpty(refresh))
-            throw new InvalidOperationException("Google token 缺失，请先登录");
+            throw new InvalidOperationException(L.Get("Cloud_GoogleTokenMissing"));
         var fields = new Dictionary<string, string>
         {
             ["grant_type"] = "refresh_token",
@@ -242,7 +242,7 @@ public sealed class CloudProviderStore
         using var resp = await _http.PostAsync(CloudOAuthService.GDriveTokenUrl, new FormUrlEncodedContent(fields), ct);
         var body = await resp.Content.ReadAsStringAsync(ct);
         if (!resp.IsSuccessStatusCode)
-            throw new InvalidOperationException($"Google token 刷新失败（HTTP {(int)resp.StatusCode}），请重新登录");
+            throw new InvalidOperationException(L.Get("Cloud_GoogleTokenRefreshFailed", (int)resp.StatusCode));
         return PersistRefreshedToken(path, body, refresh);
     }
 
@@ -253,7 +253,7 @@ public sealed class CloudProviderStore
         if (!string.IsNullOrEmpty(access) && expiresAt - DateTimeOffset.UtcNow.ToUnixTimeSeconds() > 60)
             return access;
         if (string.IsNullOrEmpty(refresh))
-            throw new InvalidOperationException("OneDrive token 缺失，请先登录");
+            throw new InvalidOperationException(L.Get("Cloud_OneDriveTokenMissing"));
         var fields = new Dictionary<string, string>
         {
             ["grant_type"] = "refresh_token",
@@ -265,7 +265,7 @@ public sealed class CloudProviderStore
         using var resp = await _http.PostAsync(CloudOAuthService.OneDriveTokenUrl, new FormUrlEncodedContent(fields), ct);
         var body = await resp.Content.ReadAsStringAsync(ct);
         if (!resp.IsSuccessStatusCode)
-            throw new InvalidOperationException($"OneDrive token 刷新失败（HTTP {(int)resp.StatusCode}），请重新登录");
+            throw new InvalidOperationException(L.Get("Cloud_OneDriveTokenRefreshFailed", (int)resp.StatusCode));
         return PersistRefreshedToken(path, body, refresh);
     }
 
@@ -298,7 +298,7 @@ public sealed class CloudProviderStore
             ? rt.GetString()! : oldRefresh;
         var expiresIn = r.TryGetProperty("expires_in", out var ei) && ei.TryGetInt64(out var s) ? s : 3600;
         if (string.IsNullOrEmpty(access))
-            throw new InvalidOperationException("token 刷新响应缺 access_token，请重新登录");
+            throw new InvalidOperationException(L.Get("Cloud_TokenNoAccess"));
         var payload = JsonSerializer.Serialize(new
         {
             access_token = access,
@@ -306,7 +306,7 @@ public sealed class CloudProviderStore
             expires_at = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + expiresIn,
         }, new JsonSerializerOptions { WriteIndented = true });
         if (!CloudCredentialStore.WriteJson(path, payload))
-            LogService.Warn("云存档", "token 刷新回盘失败，本次会话可用，下次需重新登录");
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_TokenPersistFailed"));
         return access;
     }
 
@@ -370,9 +370,9 @@ public sealed class CloudProviderStore
     private async Task<List<CloudAppEntry>> ListDriveAppsAsync(IProgress<string>? progress, CancellationToken ct)
     {
         lock (_listFailures) _listFailures.Clear();
-        progress?.Report("正在连接 Google Drive…");
+        progress?.Report(L.Get("Cloud_ConnectingSource", "Google Drive"));
         var token = await GetGoogleAccessTokenAsync(ct);
-        progress?.Report("正在读取云端目录…");
+        progress?.Report(L.Get("Cloud_ReadingCloudDir"));
         var rootId = await FindDriveChildFolderAsync("root", RootFolderName, token, ct);
         if (rootId == null) return new List<CloudAppEntry>();
         var accounts = await ListDriveFoldersAsync(rootId, token, ct);
@@ -416,7 +416,7 @@ public sealed class CloudProviderStore
         using var resp = await _http.SendAsync(req, ct);
         var body = await resp.Content.ReadAsStringAsync(ct);
         if (!resp.IsSuccessStatusCode)
-            throw new InvalidOperationException($"读取 Google Drive 失败（HTTP {(int)resp.StatusCode}）");
+            throw new InvalidOperationException(L.Get("Cloud_ReadSourceFailed", "Google Drive", (int)resp.StatusCode));
         using var doc = JsonDocument.Parse(body);
         if (doc.RootElement.TryGetProperty("files", out var files) && files.GetArrayLength() > 0)
             return files[0].TryGetProperty("id", out var id) ? id.GetString() : null;
@@ -437,7 +437,7 @@ public sealed class CloudProviderStore
             using var resp = await _http.SendAsync(req, ct);
             var body = await resp.Content.ReadAsStringAsync(ct);
             if (!resp.IsSuccessStatusCode)
-                throw new InvalidOperationException($"读取 Google Drive 目录失败（HTTP {(int)resp.StatusCode}）");
+                throw new InvalidOperationException(L.Get("Cloud_ReadSourceDirFailed", "Google Drive", (int)resp.StatusCode));
             using var doc = JsonDocument.Parse(body);
             if (doc.RootElement.TryGetProperty("files", out var files))
             {
@@ -518,7 +518,7 @@ public sealed class CloudProviderStore
             using var resp = await _http.SendAsync(req, ct);
             var body = await resp.Content.ReadAsStringAsync(ct);
             if (!resp.IsSuccessStatusCode)
-                throw new InvalidOperationException($"读取 Google Drive 文件失败（HTTP {(int)resp.StatusCode}）");
+                throw new InvalidOperationException(L.Get("Cloud_ReadSourceFileFailed", "Google Drive", (int)resp.StatusCode));
             using var doc = JsonDocument.Parse(body);
             if (doc.RootElement.TryGetProperty("files", out var files))
             {
@@ -552,11 +552,11 @@ public sealed class CloudProviderStore
         var display = DescribeRemote("gdrive", accountId, appId);
         var token = await GetGoogleAccessTokenAsync(ct);
         var rootId = await FindDriveChildFolderAsync("root", RootFolderName, token, ct)
-            ?? throw new InvalidOperationException("云端未找到 CloudRedirect 目录（该源尚未同步过）");
+            ?? throw new InvalidOperationException(L.Get("Cloud_NoRootNoSync"));
         var accountId2 = await GetDriveIdAsync(rootId, accountId, token, ct)
-            ?? throw new InvalidOperationException($"云端未找到账号目录：{accountId}");
+            ?? throw new InvalidOperationException(L.Get("Cloud_NoAccountDir", accountId));
         var appId2 = await GetDriveIdAsync(accountId2, appId.ToString(), token, ct)
-            ?? throw new InvalidOperationException($"云端未找到该游戏目录：{appId}");
+            ?? throw new InvalidOperationException(L.Get("Cloud_NoGameDir", appId));
         var nodes = await CollectDriveNodesAsync(appId2, "", token, ct);
         return new CloudAppStats(nodes.Count(n => !n.IsFolder), nodes.Where(n => !n.IsFolder).Sum(n => n.Size), display);
     }
@@ -566,11 +566,11 @@ public sealed class CloudProviderStore
     {
         var token = await GetGoogleAccessTokenAsync(ct);
         var rootId = await FindDriveChildFolderAsync("root", RootFolderName, token, ct)
-            ?? throw new InvalidOperationException("云端未找到 CloudRedirect 目录");
+            ?? throw new InvalidOperationException(L.Get("Cloud_NoRoot"));
         var accountId2 = await GetDriveIdAsync(rootId, accountId, token, ct)
-            ?? throw new InvalidOperationException($"云端未找到账号目录：{accountId}");
+            ?? throw new InvalidOperationException(L.Get("Cloud_NoAccountDir", accountId));
         var appId2 = await GetDriveIdAsync(accountId2, appId.ToString(), token, ct)
-            ?? throw new InvalidOperationException($"云端未找到该游戏目录：{appId}");
+            ?? throw new InvalidOperationException(L.Get("Cloud_NoGameDir", appId));
         var nodes = (await CollectDriveNodesAsync(appId2, "", token, ct)).Where(n => !n.IsFolder).ToList();
         return await RunParallelDownloadAsync(nodes,
             async (node, ct) =>
@@ -593,15 +593,15 @@ public sealed class CloudProviderStore
     {
         var token = await GetGoogleAccessTokenAsync(ct);
         var rootId = await FindDriveChildFolderAsync("root", RootFolderName, token, ct);
-        if (rootId == null) return new CloudDeleteResult(0, 0, new List<string>(), "云端未找到 CloudRedirect 目录");
+        if (rootId == null) return new CloudDeleteResult(0, 0, new List<string>(), L.Get("Cloud_NoRoot"));
         var accountId2 = await GetDriveIdAsync(rootId, accountId, token, ct);
-        if (accountId2 == null) return new CloudDeleteResult(0, 0, new List<string>(), $"云端未找到账号目录：{accountId}");
+        if (accountId2 == null) return new CloudDeleteResult(0, 0, new List<string>(), L.Get("Cloud_NoAccountDir", accountId));
         var appId2 = await GetDriveIdAsync(accountId2, appId.ToString(), token, ct);
-        if (appId2 == null) return new CloudDeleteResult(0, 0, new List<string>(), $"云端未找到该游戏目录：{appId}");
+        if (appId2 == null) return new CloudDeleteResult(0, 0, new List<string>(), L.Get("Cloud_NoGameDir", appId));
         var fileCount = (await CollectDriveNodesAsync(appId2, "", token, ct)).Count(n => !n.IsFolder);
-        progress?.Report("正在删除云端存档…");
+        progress?.Report(L.Get("Cloud_DeletingCloud"));
         if (!await DeleteDriveFileAsync(appId2, token, ct))
-            return new CloudDeleteResult(0, fileCount, new List<string> { appId.ToString() }, "删除云端目录失败");
+            return new CloudDeleteResult(0, fileCount, new List<string> { appId.ToString() }, L.Get("Cloud_DeleteDirFailed"));
         return new CloudDeleteResult(fileCount, 0, new List<string>(), null);
     }
 
@@ -627,9 +627,9 @@ public sealed class CloudProviderStore
     private async Task<List<CloudAppEntry>> ListOneDriveAppsAsync(IProgress<string>? progress, CancellationToken ct)
     {
         lock (_listFailures) _listFailures.Clear();
-        progress?.Report("正在连接 OneDrive…");
+        progress?.Report(L.Get("Cloud_ConnectingSource", "OneDrive"));
         var token = await GetOneDriveAccessTokenAsync(ct);
-        progress?.Report("正在读取云端目录…");
+        progress?.Report(L.Get("Cloud_ReadingCloudDir"));
         var rootChildren = await GetGraphChildrenByPathAsync(RootFolderName, token, ct);
         var apps = new List<(string Account, int AppId, string FolderId, DateTime? Modified, string? WebUrl)>();
         foreach (var acct in rootChildren.Where(c => c.IsFolder))
@@ -677,7 +677,7 @@ public sealed class CloudProviderStore
             if (resp.StatusCode == HttpStatusCode.NotFound && notFoundAsNull) return null;
             var body = await resp.Content.ReadAsStringAsync(ct);
             if (!resp.IsSuccessStatusCode)
-                throw new InvalidOperationException($"读取 OneDrive 失败（HTTP {(int)resp.StatusCode}）：{GraphError(body)}");
+                throw new InvalidOperationException(L.Get("Cloud_ReadSourceFailed", "OneDrive", (int)resp.StatusCode) + "：" + GraphError(body));
             using var doc = JsonDocument.Parse(body);
             if (doc.RootElement.TryGetProperty("value", out var value))
             {
@@ -759,12 +759,12 @@ public sealed class CloudProviderStore
     private async Task<string> ResolveOneDriveAppIdAsync(string accountId, int appId, string token, CancellationToken ct)
     {
         var rootChildren = await GetGraphChildrenByPathAsync(RootFolderName, token, ct)
-            ?? throw new InvalidOperationException("云端未找到 CloudRedirect 目录（该源尚未同步过）");
+            ?? throw new InvalidOperationException(L.Get("Cloud_NoRootNoSync"));
         var acct = rootChildren.FirstOrDefault(c => c.IsFolder && c.Name == accountId)
-            ?? throw new InvalidOperationException($"云端未找到账号目录：{accountId}");
+            ?? throw new InvalidOperationException(L.Get("Cloud_NoAccountDir", accountId));
         var apps = await GetGraphChildrenByIdAsync(acct.Id, token, ct);
         var app = apps.FirstOrDefault(c => c.IsFolder && c.Name == appId.ToString())
-            ?? throw new InvalidOperationException($"云端未找到该游戏目录：{appId}");
+            ?? throw new InvalidOperationException(L.Get("Cloud_NoGameDir", appId));
         return app.Id;
     }
 
@@ -801,7 +801,7 @@ public sealed class CloudProviderStore
     private async Task<CloudDeleteResult> DeleteOneDriveAppAsync(string accountId, int appId,
         IProgress<string>? progress, CancellationToken ct)
     {
-        progress?.Report("正在删除云端存档…");
+        progress?.Report(L.Get("Cloud_DeletingCloud"));
         try
         {
             var token = await GetOneDriveAccessTokenAsync(ct);
@@ -812,7 +812,7 @@ public sealed class CloudProviderStore
             var body = await resp.Content.ReadAsStringAsync(ct);
             if (!resp.IsSuccessStatusCode)
                 return new CloudDeleteResult(0, 1, new List<string> { appId.ToString() },
-                    $"OneDrive 删除失败（HTTP {(int)resp.StatusCode}）：{GraphError(body)}");
+                    L.Get("Cloud_OneDriveDeleteFailed", (int)resp.StatusCode, GraphError(body)));
             return new CloudDeleteResult(1, 0, new List<string>(), null);
         }
         catch (Exception ex)
@@ -830,7 +830,7 @@ public sealed class CloudProviderStore
     {
         if (provider == "r2")
         {
-            var cred = _loadR2() ?? throw new InvalidOperationException("R2 凭证未配置");
+            var cred = _loadR2() ?? throw new InvalidOperationException(L.Get("Cloud_R2CredMissing"));
             var endpoint = string.IsNullOrWhiteSpace(cred.Endpoint)
                 ? $"https://{cred.AccountId}.r2.cloudflarestorage.com"
                 : cred.Endpoint.Trim().TrimEnd('/');
@@ -839,9 +839,9 @@ public sealed class CloudProviderStore
         }
         else
         {
-            var cred = _loadS3() ?? throw new InvalidOperationException("S3 凭证未配置");
+            var cred = _loadS3() ?? throw new InvalidOperationException(L.Get("Cloud_S3CredMissing"));
             if (string.IsNullOrWhiteSpace(cred.Endpoint))
-                throw new InvalidOperationException("S3 endpoint 未配置");
+                throw new InvalidOperationException(L.Get("Cloud_S3EndpointMissing"));
             return BuildS3Endpoint(cred.Endpoint.Trim().TrimEnd('/'), cred.Bucket.Trim(), cred.Region.Trim(),
                 cred.AccessKeyId, cred.SecretAccessKey, cred.KeyPrefix,
                 cred.AllowInsecureHttp, cred.AllowInsecureTls, cred.CaCertPath, cred.SignPayload);
@@ -869,7 +869,7 @@ public sealed class CloudProviderStore
             scheme = "http";
         }
         if (string.IsNullOrEmpty(accessKey) || string.IsNullOrEmpty(secretKey))
-            throw new InvalidOperationException("对象存储密钥缺失，请检查凭证配置");
+            throw new InvalidOperationException(L.Get("Cloud_ObjectKeyMissing"));
         // DLL 默认无 key 前缀（TopObjectKey = prefix + relPath）；之前默认 CloudRedirect/ 是错的，
         // 会导致桶里有数据也列举为空
         var root = NormalizePrefix(keyPrefix);
@@ -905,7 +905,7 @@ public sealed class CloudProviderStore
                 "gdrive" => await ProbeDriveAsync(ct),
                 "onedrive" => await ProbeOneDriveAsync(ct),
                 "r2" or "s3" => await ProbeS3Async(provider, ct),
-                _ => throw new InvalidOperationException($"未知的云端提供商：{provider}"),
+                _ => throw new InvalidOperationException(L.Get("Cloud_UnknownProvider", provider)),
             };
         }
         catch (OperationCanceledException)
@@ -1103,11 +1103,11 @@ public sealed class CloudProviderStore
         catch { }
         var hint = code switch
         {
-            "NoSuchBucket" => "存储桶不存在，请检查 bucket 配置",
-            "InvalidAccessKeyId" => "密钥 ID 无效，请检查凭证",
-            "SignatureDoesNotMatch" => "签名不匹配，密钥可能错误或时钟偏差过大",
-            "AccessDenied" => "无访问权限，请检查密钥策略",
-            "NoSuchKey" => "远端文件不存在",
+            "NoSuchBucket" => L.Get("Cloud_NoSuchBucket"),
+            "InvalidAccessKeyId" => L.Get("Cloud_InvalidKey"),
+            "SignatureDoesNotMatch" => L.Get("Cloud_SigMismatch"),
+            "AccessDenied" => L.Get("Cloud_AccessDenied"),
+            "NoSuchKey" => L.Get("Cloud_NoSuchKey"),
             _ => string.IsNullOrEmpty(message) ? $"HTTP {(int)status}" : message,
         };
         return string.IsNullOrEmpty(code) ? hint : $"{hint}（{code}）";
@@ -1144,7 +1144,7 @@ public sealed class CloudProviderStore
             using var resp = await SendS3Async(http, "GET", ep, "", query, ct);
             var body = await resp.Content.ReadAsStringAsync(ct);
             if (!resp.IsSuccessStatusCode)
-                throw new InvalidOperationException($"读取对象存储失败：{S3Error(resp.StatusCode, body)}");
+                throw new InvalidOperationException(L.Get("Cloud_S3OpFailed", S3Error(resp.StatusCode, body)));
             var doc = XDocument.Parse(body);
             var root = doc.Root!;
             foreach (var cp in NsElements(root, ns, "CommonPrefixes"))
@@ -1177,7 +1177,7 @@ public sealed class CloudProviderStore
             using var resp = await SendS3Async(http, "GET", ep, "", query, ct);
             var body = await resp.Content.ReadAsStringAsync(ct);
             if (!resp.IsSuccessStatusCode)
-                throw new InvalidOperationException($"读取对象存储失败：{S3Error(resp.StatusCode, body)}");
+                throw new InvalidOperationException(L.Get("Cloud_S3OpFailed", S3Error(resp.StatusCode, body)));
             var doc = XDocument.Parse(body);
             var root = doc.Root!;
             foreach (var c in NsElements(root, ns, "Contents"))
@@ -1199,10 +1199,10 @@ public sealed class CloudProviderStore
     private async Task<List<CloudAppEntry>> ListS3AppsAsync(string provider, IProgress<string>? progress, CancellationToken ct)
     {
         lock (_listFailures) _listFailures.Clear();
-        progress?.Report(provider == "r2" ? "正在连接 R2…" : "正在连接 S3…");
+        progress?.Report(L.Get("Cloud_ConnectingSource", provider == "r2" ? "R2" : "S3"));
         var ep = ResolveS3Endpoint(provider);
         var http = ResolveS3Http(provider, ep);
-        progress?.Report("正在读取云端目录…");
+        progress?.Report(L.Get("Cloud_ReadingCloudDir"));
         // 全量递归列举一次，本地按 <账号>/<游戏>/ 分组；原来每游戏一次前缀列举直接省掉，
         // 共享桶里的无关键按同样规则过滤
         var objects = await ListS3ObjectsAsync(http, ep, ep.RootPrefix, ct);
@@ -1248,7 +1248,7 @@ public sealed class CloudProviderStore
         var appPrefix = $"{ep.RootPrefix}{accountId}/{appId}/";
         var objects = await ListS3ObjectsAsync(http, ep, appPrefix, ct);
         if (objects.Count == 0)
-            throw new InvalidOperationException($"云端未找到该游戏目录：{appId}");
+            throw new InvalidOperationException(L.Get("Cloud_NoGameDir", appId));
         return new CloudAppStats(objects.Count, objects.Sum(o => o.Size),
             DescribeRemote(provider, accountId, appId, ep.Bucket, ep.RootPrefix));
     }
@@ -1261,7 +1261,7 @@ public sealed class CloudProviderStore
         var appPrefix = $"{ep.RootPrefix}{accountId}/{appId}/";
         var objects = await ListS3ObjectsAsync(http, ep, appPrefix, ct);
         if (objects.Count == 0)
-            throw new InvalidOperationException($"云端未找到该游戏目录：{appId}");
+            throw new InvalidOperationException(L.Get("Cloud_NoGameDir", appId));
         var query = new SortedDictionary<string, string>(StringComparer.Ordinal);
         return await RunParallelDownloadAsync(objects,
             async (obj, ct) =>
@@ -1273,7 +1273,7 @@ public sealed class CloudProviderStore
                 if (!resp.IsSuccessStatusCode)
                 {
                     var body = await resp.Content.ReadAsStringAsync(ct);
-                    throw new InvalidOperationException($"下载远端文件失败 {rel}：{S3Error(resp.StatusCode, body)}");
+                    throw new InvalidOperationException(L.Get("Cloud_DownloadRemoteFailed", rel, S3Error(resp.StatusCode, body)));
                 }
                 await using var src = await resp.Content.ReadAsStreamAsync(ct);
                 await using var dst = File.Create(dest);
@@ -1299,7 +1299,7 @@ public sealed class CloudProviderStore
             new Dictionary<string, string> { ["Content-MD5"] = md5 });
         var body = await resp.Content.ReadAsStringAsync(ct);
         if (!resp.IsSuccessStatusCode)
-            throw new InvalidOperationException($"批量删除失败：{S3Error(resp.StatusCode, body)}");
+            throw new InvalidOperationException(L.Get("Cloud_BatchDeleteFailed", S3Error(resp.StatusCode, body)));
         XNamespace ns = "http://s3.amazonaws.com/doc/2006-03-01/";
         XDocument result;
         try
@@ -1308,7 +1308,7 @@ public sealed class CloudProviderStore
         }
         catch (Exception ex)
         {
-            throw new InvalidOperationException($"批量删除响应解析失败：{ex.Message}", ex);
+            throw new InvalidOperationException(L.Get("Cloud_BatchDeleteRespFailed", ex.Message), ex);
         }
         var failed = new List<string>();
         foreach (var e in NsElements(result.Root!, ns, "Error"))
@@ -1327,7 +1327,7 @@ public sealed class CloudProviderStore
         var appPrefix = $"{ep.RootPrefix}{accountId}/{appId}/";
         var objects = await ListS3ObjectsAsync(http, ep, appPrefix, ct);
         if (objects.Count == 0)
-            return new CloudDeleteResult(0, 0, new List<string>(), $"云端未找到该游戏目录：{appId}");
+            return new CloudDeleteResult(0, 0, new List<string>(), L.Get("Cloud_NoGameDir", appId));
         // 批量删除（单次最多 1000 个，响应自带逐 key 明细）；整批传输失败才回退逐个删
         var deleted = 0;
         var failed = new List<string>();
@@ -1342,7 +1342,7 @@ public sealed class CloudProviderStore
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                LogService.Warn("云存档", $"批量删除失败，回退逐个删除：{ex.Message}");
+                LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogDeleteErrors", ex.Message));
             }
             if (chunkFailed == null)
             {
@@ -1350,7 +1350,7 @@ public sealed class CloudProviderStore
                 {
                     ct.ThrowIfCancellationRequested();
                     done++;
-                    progress?.Report($"正在删除云端存档({done}/{objects.Count})…");
+                    progress?.Report(L.Get("Cloud_DeletingBatch", done, objects.Count));
                     try
                     {
                         using var resp = await SendS3Async(http, "DELETE", ep, obj.Key,
@@ -1369,12 +1369,12 @@ public sealed class CloudProviderStore
             else
             {
                 done += chunk.Length;
-                progress?.Report($"正在删除云端存档({done}/{objects.Count})…");
+                progress?.Report(L.Get("Cloud_DeletingBatch", done, objects.Count));
                 deleted += chunk.Length - chunkFailed.Count;
                 failed.AddRange(chunkFailed.Select(k => RelS3Key(k, appPrefix)));
             }
         }
         return new CloudDeleteResult(deleted, failed.Count, failed.Take(10).ToList(),
-            failed.Count > 0 ? $"{failed.Count} 个远端文件删除失败" : null);
+            failed.Count > 0 ? L.Get("Cloud_RemoteFilesDeleteFailed", failed.Count) : null);
     }
 }

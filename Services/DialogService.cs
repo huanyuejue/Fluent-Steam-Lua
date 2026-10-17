@@ -7,7 +7,7 @@ namespace SteamLuaManager.Services;
 
 public sealed class DialogService : IDialogService
 {
-    public Task<bool> ShowConfirmAsync(string title, string message, string primaryText = "确定", string closeText = "取消") =>
+    public Task<bool> ShowConfirmAsync(string title, string message, string? primaryText = null, string? closeText = null) =>
         ShowDialogOnUiAsync(() => new ContentDialog
         {
             Title = title,
@@ -17,10 +17,10 @@ public sealed class DialogService : IDialogService
                 TextWrapping = TextWrapping.Wrap,
                 MaxWidth = 420
             },
-            PrimaryButtonText = primaryText,
-            CloseButtonText = closeText,
+            PrimaryButtonText = primaryText ?? L.Get("Common_Confirm"),
+            CloseButtonText = closeText ?? L.Get("Common_Cancel"),
             DefaultButton = ContentDialogButton.Primary
-        }, "显示确认对话框");
+        }, L.Get("Svc_DlgShowConfirm"));
 
     // 所有弹框走这里串行：InvokeAsync + async lambda 得到 Task<Task>，必须 await 两次才真正等到用户点掉对话框，
     // 否则调用方以为弹完了继续弹下一个，撞上 ContentDialog 互斥直接丢框；内外两层 try 保底返回 false
@@ -36,14 +36,14 @@ public sealed class DialogService : IDialogService
                 }
                 catch (Exception ex)
                 {
-                    LogService.Warn("对话框", $"{opName}失败: {ex.Message}");
+                    LogService.Warn(L.Get("LogCat_Dialog"), L.Get("Svc_DlgOpFailed", opName, ex.Message));
                     return false;
                 }
             });
         }
         catch (Exception ex)
         {
-            LogService.Warn("对话框", $"{opName}失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Dialog"), L.Get("Svc_DlgOpFailed", opName, ex.Message));
             return false;
         }
     }
@@ -66,13 +66,13 @@ public sealed class DialogService : IDialogService
                     var panel = new StackPanel { MaxWidth = 480 };
                     panel.Children.Add(new TextBlock
                     {
-                        Text = $"删除《{displayName}》（{appId}）的全部存档吗？",
+                        Text = L.Get("Cloud_DlgDeleteAll", displayName, appId),
                         TextWrapping = TextWrapping.Wrap,
                         FontSize = 14
                     });
                     panel.Children.Add(new TextBlock
                     {
-                        Text = "将删除：",
+                        Text = L.Get("Cloud_DlgWillDelete"),
                         FontWeight = FontWeights.SemiBold,
                         Margin = new Thickness(0, 12, 0, 2)
                     });
@@ -80,7 +80,7 @@ public sealed class DialogService : IDialogService
                     {
                         panel.Children.Add(new TextBlock
                         {
-                            Text = $"- {DeleteKindLabel(t.Kind)}：{t.FileCount} 个文件（{FormatBytes(t.TotalBytes)}）",
+                            Text = L.Get("Cloud_DlgTargetLine", DeleteKindLabel(t.Kind), t.FileCount, FormatBytes(t.TotalBytes)),
                             TextWrapping = TextWrapping.Wrap,
                             Margin = new Thickness(0, 6, 0, 0)
                         });
@@ -94,7 +94,7 @@ public sealed class DialogService : IDialogService
                     }
                     panel.Children.Add(new TextBlock
                     {
-                        Text = note ?? "注：本地目录模式下同步目录即云副本，没有额外远端。",
+                        Text = note ?? L.Get("Cloud_DlgDefaultNote"),
                         TextWrapping = TextWrapping.Wrap,
                         FontSize = 12,
                         Foreground = secondary,
@@ -102,26 +102,26 @@ public sealed class DialogService : IDialogService
                     });
                     panel.Children.Add(new TextBlock
                     {
-                        Text = "后果",
+                        Text = L.Get("Cloud_DlgConsequence"),
                         FontWeight = FontWeights.SemiBold,
                         Margin = new Thickness(0, 12, 0, 2)
                     });
                     panel.Children.Add(new TextBlock
                     {
-                        Text = "下次启动该游戏时如同从未玩过，从头开始。",
+                        Text = L.Get("Cloud_DlgConsequenceBody"),
                         TextWrapping = TextWrapping.Wrap
                     });
                     panel.Children.Add(new TextBlock
                     {
-                        Text = "备份",
+                        Text = L.Get("Cloud_DlgBackupSection"),
                         FontWeight = FontWeights.SemiBold,
                         Margin = new Thickness(0, 12, 0, 2)
                     });
                     panel.Children.Add(new TextBlock
                     {
                         Text = targets.Any(t => t.Kind == "cloud")
-                            ? "删除前自动备份（云端文件已下载到本地），恢复需手动上传回云端对应目录。删除期间请保持 Steam 关闭。"
-                            : "删除前自动备份，恢复需手动拷回对应目录。删除期间请保持 Steam 关闭。",
+                            ? L.Get("Cloud_DlgBackupCloud")
+                            : L.Get("Cloud_DlgBackupLocal"),
                         TextWrapping = TextWrapping.Wrap
                     });
                     panel.Children.Add(new TextBlock
@@ -134,26 +134,26 @@ public sealed class DialogService : IDialogService
 
                     return new ContentDialog
                     {
-                        Title = "删除存档",
+                        Title = L.Get("Cloud_DlgDeleteTitle"),
                         Content = new ScrollViewer
                         {
                             Content = panel,
                             MaxHeight = 440,
                             VerticalScrollBarVisibility = ScrollBarVisibility.Auto
                         },
-                        PrimaryButtonText = "删除",
+                        PrimaryButtonText = L.Get("Common_Delete"),
                         PrimaryButtonStyle = dangerStyle,
-                        CloseButtonText = "取消",
+                        CloseButtonText = L.Get("Common_Cancel"),
                         DefaultButton = ContentDialogButton.Close
                     };
-        }, "显示删除确认对话框");
+        }, L.Get("Svc_DlgShowDelete"));
 
     private static string DeleteKindLabel(string kind) => kind switch
     {
-        "sync" => "重定向存档",
-        "cache" => "DLL 本地缓存",
-        "userdata" => "Steam 用户数据",
-        "cloud" => "云端存档",
+        "sync" => L.Get("Cloud_KindSync"),
+        "cache" => L.Get("Cloud_KindCache"),
+        "userdata" => L.Get("Cloud_KindUserdata"),
+        "cloud" => L.Get("Cloud_KindCloud"),
         _ => kind
     };
 
@@ -175,34 +175,34 @@ public sealed class DialogService : IDialogService
                 TextWrapping = TextWrapping.Wrap,
                 MaxWidth = 420
             },
-            CloseButtonText = "确定",
+            CloseButtonText = L.Get("Common_Confirm"),
             DefaultButton = ContentDialogButton.Close
-        }, "显示提示对话框");
+        }, L.Get("Svc_DlgShowAlert"));
 
     // 云启用三合一：备份确认 + 启用 + 重启选项一次问完；
     // 主按钮与备份勾选联动，不勾不让点，免得用户没备份就启用
     public async Task<(bool Confirmed, bool RestartNow)> ShowEnableCloudConfirmAsync()
     {
         ContentDialog? dialog = null;
-        var backupBox = new CheckBox { Content = "我已备份重要存档", Margin = new Thickness(0, 12, 0, 0) };
+        var backupBox = new CheckBox { Content = L.Get("Cloud_DlgBackupChecked"), Margin = new Thickness(0, 12, 0, 0) };
         // 默认不勾：重启会杀 Steam，用户可能正挂着游戏，重启选项必须显式选
-        var restartBox = new CheckBox { Content = "启用后立即重启 Steam（使云存档生效）", Margin = new Thickness(0, 6, 0, 0) };
+        var restartBox = new CheckBox { Content = L.Get("Cloud_DlgRestartNow"), Margin = new Thickness(0, 6, 0, 0) };
         backupBox.Checked += (_, _) => { if (dialog != null) dialog.IsPrimaryButtonEnabled = true; };
         backupBox.Unchecked += (_, _) => { if (dialog != null) dialog.IsPrimaryButtonEnabled = false; };
         var panel = new StackPanel { MaxWidth = 440 };
         panel.Children.Add(new TextBlock
         {
-            Text = "云存档会接管 Lua 游戏的存档读写，首次启用前请先备份重要存档。启用后需重启 Steam 才能生效。",
+            Text = L.Get("Cloud_DlgEnableBody"),
             TextWrapping = TextWrapping.Wrap
         });
         panel.Children.Add(backupBox);
         panel.Children.Add(restartBox);
         dialog = new ContentDialog
         {
-            Title = "启用云存档",
+            Title = L.Get("Cloud_DlgEnableTitle"),
             Content = panel,
-            PrimaryButtonText = "启用",
-            CloseButtonText = "取消",
+            PrimaryButtonText = L.Get("Cloud_DlgEnableBtn"),
+            CloseButtonText = L.Get("Common_Cancel"),
             DefaultButton = ContentDialogButton.Primary,
             IsPrimaryButtonEnabled = false
         };
@@ -213,7 +213,7 @@ public sealed class DialogService : IDialogService
         }
         catch (Exception ex)
         {
-            LogService.Warn("对话框", $"显示启用确认对话框失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Dialog"), L.Get("Svc_DlgShowEnableFail", ex.Message));
             return (false, false);
         }
     }

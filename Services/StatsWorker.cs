@@ -21,7 +21,7 @@ public static class StatsWorker
                     File.WriteAllText(GetErrorPath(), JsonSerializer.Serialize(new WorkerSaveResult
                     {
                         Ok = false,
-                        Message = "worker 参数错误"
+                        Message = L.Get("Svc_WorkerArgError")
                     }));
                     return -1;
                 }
@@ -31,7 +31,7 @@ public static class StatsWorker
             File.WriteAllText(GetErrorPath(), JsonSerializer.Serialize(new WorkerSaveResult
             {
                 Ok = false,
-                Message = "worker 参数错误"
+                Message = L.Get("Svc_WorkerArgError")
             }));
             return -1;
         }
@@ -74,7 +74,7 @@ public static class StatsWorker
                 writer.WriteLine(JsonSerializer.Serialize(new WorkerServeResponse
                 {
                     Ok = false,
-                    Error = svc.LastError ?? "连接 Steam 失败"
+                    Error = svc.LastError ?? L.Get("Svc_WorkerConnectFailed")
                 }));
                 writer.Flush();
                 return 1;
@@ -100,14 +100,14 @@ public static class StatsWorker
                         case "load":
                             var load = svc.LoadWorkerData(appId);
                             response = load == null
-                                ? new WorkerServeResponse { Ok = false, Error = svc.LastError ?? "加载失败" }
+                                ? new WorkerServeResponse { Ok = false, Error = svc.LastError ?? L.Get("Svc_WorkerLoadFailed") }
                                 : new WorkerServeResponse { Ok = true, Load = load };
                             break;
 
                         case "save":
                             if (request.Payload == null)
                             {
-                                response = new WorkerServeResponse { Ok = false, Error = "无保存数据" };
+                                response = new WorkerServeResponse { Ok = false, Error = L.Get("Svc_WorkerNoSaveData") };
                                 break;
                             }
                             var save = svc.SaveWorkerData(appId, request.Payload);
@@ -118,7 +118,7 @@ public static class StatsWorker
                             return 0;
 
                         default:
-                            response = new WorkerServeResponse { Ok = false, Error = $"未知命令：{request?.Cmd}" };
+                            response = new WorkerServeResponse { Ok = false, Error = L.Get("Svc_WorkerUnknownCmd", request?.Cmd) };
                             break;
                     }
                 }
@@ -139,7 +139,7 @@ public static class StatsWorker
         }
         catch (Exception ex)
         {
-            LogService.Error("Worker", $"serve 循环异常退出: {ex.Message}");
+            LogService.Error(L.Get("LogCat_Worker"), L.Get("Svc_WorkerServeCrash", ex.Message));
             return -1;
         }
     }

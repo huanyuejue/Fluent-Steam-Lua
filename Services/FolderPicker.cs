@@ -75,7 +75,7 @@ internal static class FolderPicker
             var hr = dialog.SetOptions(FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST);
             if (hr < 0)
             {
-                LogService.Error("选择目录", $"IFileOpenDialog.SetOptions 失败: 0x{hr:X8}");
+                LogService.Error(L.Get("LogCat_PickFolder"), L.Get("Svc_FpSetOptionsFailed", hr));
                 return null;
             }
 
@@ -93,7 +93,7 @@ internal static class FolderPicker
                 }
                 catch (Exception ex)
                 {
-                    LogService.Warn("选择目录", $"设置初始目录失败（忽略）: {ex.Message}");
+                    LogService.Warn(L.Get("LogCat_PickFolder"), L.Get("Svc_FpSetInitialFailed", ex.Message));
                 }
             }
 
@@ -117,7 +117,7 @@ internal static class FolderPicker
         }
         catch (Exception ex)
         {
-            LogService.Error("选择目录", $"打开文件夹选择对话框失败: {ex}");
+            LogService.Error(L.Get("LogCat_PickFolder"), L.Get("Svc_FpOpenFailed", ex));
             return null;
         }
         finally

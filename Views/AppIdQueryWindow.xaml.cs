@@ -23,7 +23,7 @@ public partial class AppIdQueryWindow : Window
         _viewModel = new AppIdQueryViewModel(httpClientProvider!);
         DataContext = _viewModel;
         InitializeComponent();
-        Title = "查询 AppID";
+        Title = L.Get("AppId_Title");
         WindowHelper.SetUseModernWindowStyle(this, true);
         ApplyBackdrop();
         _viewModel.RequestClose += () =>

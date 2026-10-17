@@ -53,13 +53,13 @@ public class ManifestHubKeyService : IManifestHubKeyService
     {
         var settings = _settingsService.Load();
         if (string.IsNullOrEmpty(settings.EncryptedManifestHubKey))
-            return "未填写 API Key";
+            return L.Get("Svc_MhkNotFilled");
         var expiry = GetKeyExpiry();
         if (expiry == null)
-            return "Key 时间无效，请重新填写";
+            return L.Get("Svc_MhkTimeInvalid");
         if (DateTime.UtcNow > expiry)
-            return "api key 已过期，请重新获取填入后使用";
-        return $"有效期至 {expiry.Value.ToLocalTime():yyyy-MM-dd HH:mm}";
+            return L.Get("Svc_MhkExpired");
+        return L.Get("Svc_MhkValidUntil", expiry.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm"));
     }
 
     public string GetKeyStatusColor()
@@ -76,14 +76,14 @@ public class ManifestHubKeyService : IManifestHubKeyService
     public (bool Ok, string Message) SaveKey(string? plainKey)
     {
         if (string.IsNullOrWhiteSpace(plainKey))
-            return (false, HasSavedKey ? "Key 未改动" : "请先输入 API Key");
+            return (false, HasSavedKey ? L.Get("Svc_MhkUnchanged") : L.Get("Svc_MhkInputFirst"));
         var encrypted = SecureTokenStorage.Protect(plainKey.Trim(), KeyEntropy);
         if (encrypted == null)
-            return (false, "Key 保存失败（DPAPI 不可用）");
+            return (false, L.Get("Svc_MhkSaveFailed"));
         var settings = _settingsService.Load();
         settings.EncryptedManifestHubKey = encrypted;
         settings.ManifestHubKeyTime = DateTime.UtcNow.ToString("o");
         _settingsService.Save(settings);
-        return (true, "API Key 已保存，有效期 24 小时");
+        return (true, L.Get("Svc_MhkSaved"));
     }
 }

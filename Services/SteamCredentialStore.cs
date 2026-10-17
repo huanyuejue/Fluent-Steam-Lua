@@ -48,7 +48,7 @@ public sealed class SteamCredentialStore
         uint appId, byte[] appTicket, byte[] eticket, ulong ticketSteamId)
     {
         if (!IsSupported)
-            return (false, "当前进程不是 64 位，无法写入 Steam 凭据注册表", null);
+            return (false, L.Get("Svc_CredNeed64"), null);
 
         // SteamID 一致性仅检查提示，不自动修改注册表 SteamID（与 Lua setAppTicket 行为一致）
         var warning = CheckSteamIdConsistency(appId, ticketSteamId);
@@ -58,7 +58,7 @@ public sealed class SteamCredentialStore
         {
             using var key = OpenAppsKey(appId, writable: true);
             if (key == null)
-                return (false, "无法打开注册表键 Software\\Valve\\Steam\\Apps（请确认权限）", warning);
+                return (false, L.Get("Svc_CredOpenFailed"), warning);
 
             key.SetValue("AppTicket", appTicket, RegistryValueKind.Binary);
             key.SetValue("ETicket", eticket, RegistryValueKind.Binary);
@@ -66,23 +66,24 @@ public sealed class SteamCredentialStore
             var verificationError = VerifyWrite(key, appTicket, eticket);
             if (verificationError == null)
             {
-                Log("reg", $"AppID {appId} 票据已写入注册表并回读一致（AppTicket {appTicket.Length}B / ETicket {eticket.Length}B）");
+                Log("reg", L.Get("Svc_CredWritten", appId, appTicket.Length, eticket.Length));
                 return (true, null, warning);
             }
 
             var rollbackError = Rollback(appId, existing);
             return rollbackError == null
-                ? (false, $"写入校验失败：{verificationError}（原值已恢复）", warning)
-                : (false, $"写入校验失败：{verificationError}；且原值恢复失败（{rollbackError}），注册表可能处于部分更新状态，请手动检查",
+                ? (false, L.Get("Svc_CredVerifyFailedRestored", verificationError), warning)
+                : (false, L.Get("Svc_CredVerifyFailedPartial", verificationError, rollbackError),
                     warning);
         }
         catch (Exception ex)
         {
             var rollbackError = Rollback(appId, existing);
-            Log("reg", $"写注册表失败：{ex.Message}；原值恢复：{(rollbackError == null ? "成功" : "失败(" + rollbackError + ")")}");
+            Log("reg", L.Get("Svc_CredWriteFailedLog", ex.Message,
+                rollbackError == null ? L.Get("Common_Success") : L.Get("Svc_CredRestoreInlineFailed", rollbackError)));
             return rollbackError == null
-                ? (false, $"写入注册表失败：{ex.Message}（原值已恢复）", warning)
-                : (false, $"写入注册表失败：{ex.Message}；且原值恢复失败（{rollbackError}），请手动检查", warning);
+                ? (false, L.Get("Svc_CredWriteFailedRestored", ex.Message), warning)
+                : (false, L.Get("Svc_CredWriteFailedPartial", ex.Message, rollbackError), warning);
         }
     }
 
@@ -92,7 +93,7 @@ public sealed class SteamCredentialStore
         var (exists, stored) = GetStoredSteamId(appId);
         if (!exists || stored == ticketSteamId) return null;
 
-        return "注册表中已有 SteamID 与本次 AppTicket 内嵌 SteamID 不一致。OpenSteamTool 会优先使用注册表 SteamID，授权可能失败。当前仅覆盖 AppTicket/ETicket，未修改注册表 SteamID。";
+        return L.Get("Svc_CredSteamIdMismatch");
     }
 
     private static RegistryKey? OpenAppsKey(uint appId, bool writable)
@@ -142,14 +143,14 @@ public sealed class SteamCredentialStore
     private static string? VerifyWrite(RegistryKey key, byte[] appTicket, byte[] eticket)
     {
         if (key.GetValueKind("AppTicket") != RegistryValueKind.Binary)
-            return "AppTicket 类型不是 REG_BINARY";
+            return L.Get("Svc_CredAppTicketNotBinary");
         if (key.GetValueKind("ETicket") != RegistryValueKind.Binary)
-            return "ETicket 类型不是 REG_BINARY";
+            return L.Get("Svc_CredEticketNotBinary");
 
         if (key.GetValue("AppTicket") is not byte[] readApp || !readApp.AsSpan().SequenceEqual(appTicket))
-            return "回读 AppTicket 与写入内容不一致";
+            return L.Get("Svc_CredAppTicketMismatch");
         if (key.GetValue("ETicket") is not byte[] readE || !readE.AsSpan().SequenceEqual(eticket))
-            return "回读 ETicket 与写入内容不一致";
+            return L.Get("Svc_CredEticketMismatch");
 
         return null;
     }
@@ -159,7 +160,7 @@ public sealed class SteamCredentialStore
         try
         {
             using var key = OpenAppsKey(appId, writable: true);
-            if (key == null) return "无法打开注册表键以恢复原值";
+            if (key == null) return L.Get("Svc_CredOpenForRollback");
 
             RestoreOrDelete(key, "AppTicket", existing.AppTicket);
             RestoreOrDelete(key, "ETicket", existing.ETicket);

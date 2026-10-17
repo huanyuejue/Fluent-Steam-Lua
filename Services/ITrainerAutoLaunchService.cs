@@ -7,5 +7,5 @@ public interface ITrainerAutoLaunchService : IDisposable
     void Start();
     void Stop();
     void ReloadBindings();
-    event Action<string>? StatusChanged;
+    event Action<string, bool>? StatusChanged;
 }

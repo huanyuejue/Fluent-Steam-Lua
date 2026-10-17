@@ -14,7 +14,7 @@ public class TrainerAutoLaunchService : ITrainerAutoLaunchService
     private readonly object _lock = new();
     private bool _pollErrorLogged;
 
-    public event Action<string>? StatusChanged;
+    public event Action<string, bool>? StatusChanged;
 
     public TrainerAutoLaunchService(ISettingsService settingsService)
     {
@@ -83,7 +83,7 @@ public class TrainerAutoLaunchService : ITrainerAutoLaunchService
                 if (!_pollErrorLogged)
                 {
                     _pollErrorLogged = true;
-                    LogService.Warn("自动启动", $"轮询绑定异常: {ex.Message}");
+                    LogService.Warn(L.Get("LogCat_TrainerLaunch"), L.Get("Svc_TlaPollError", ex.Message));
                 }
             }
         }
@@ -170,7 +170,7 @@ public class TrainerAutoLaunchService : ITrainerAutoLaunchService
                 UseShellExecute = true
             });
 
-            StatusChanged?.Invoke($"正在启动修改器: {binding.TrainerDisplayName}");
+            StatusChanged?.Invoke(L.Get("Svc_TlaStarting", binding.TrainerDisplayName), false);
 
             var capturedBinding = binding;
 
@@ -190,7 +190,7 @@ public class TrainerAutoLaunchService : ITrainerAutoLaunchService
 
                     if (realProc == null)
                     {
-                        StatusChanged?.Invoke($"修改器启动超时: {capturedBinding.TrainerDisplayName}");
+                        StatusChanged?.Invoke(L.Get("Svc_TlaStartTimeout", capturedBinding.TrainerDisplayName), true);
                         return;
                     }
 
@@ -199,14 +199,14 @@ public class TrainerAutoLaunchService : ITrainerAutoLaunchService
                 catch (Exception ex)
                 {
                     lock (_lock) _pendingLaunches.Remove(binding.TrainerFilePath);
-                    StatusChanged?.Invoke($"启动修改器失败: {ex.Message}");
+                    StatusChanged?.Invoke(L.Get("Svc_TlaStartFailed", ex.Message), true);
                 }
             });
         }
         catch (Exception ex)
         {
             lock (_lock) _pendingLaunches.Remove(binding.TrainerFilePath);
-            StatusChanged?.Invoke($"启动修改器失败: {ex.Message}");
+            StatusChanged?.Invoke(L.Get("Svc_TlaStartFailed", ex.Message), true);
         }
     }
 
@@ -218,7 +218,7 @@ public class TrainerAutoLaunchService : ITrainerAutoLaunchService
             GameProcess = gameProc
         };
         _activeStates[filePath] = state;
-        StatusChanged?.Invoke($"已启动修改器: {trainerProc.ProcessName}");
+        StatusChanged?.Invoke(L.Get("Svc_TlaStarted", trainerProc.ProcessName), false);
     }
 
     private void StopTrainer(string filePath)

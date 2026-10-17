@@ -1,6 +1,7 @@
 <UserControl xmlns:controls="clr-namespace:SteamLuaManager.Controls" x:Class="SteamLuaManager.Views.SettingsView"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:l="clr-namespace:SteamLuaManager.Markup"
         xmlns:ui="http://schemas.inkore.net/lib/ui/wpf/modern"
         Background="Transparent"
         TextOptions.TextFormattingMode="Display"
@@ -15,7 +16,7 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <TextBlock Text="设置" FontSize="28" FontWeight="SemiBold" Margin="0,0,0,16"
+        <TextBlock Text="{l:Loc Settings_Title}" FontSize="28" FontWeight="SemiBold" Margin="0,0,0,16"
                    Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
 
         <TabControl Grid.Row="1" SelectedIndex="{Binding SelectedTabIndex}"
@@ -79,13 +80,13 @@
             </TabControl.Template>
 
             <!-- 基本设置 -->
-            <TabItem Header="基本设置">
+            <TabItem Header="{l:Loc Settings_TabBasic}">
                 <controls:SmoothScrollViewer VerticalScrollBarVisibility="Auto" BorderThickness="0"
                               Background="Transparent" Padding="0,0,20,0">
                     <StackPanel Margin="0,8,0,16">
 
-                        <ui:SettingsCard Header="Steam 路径" Margin="0,0,0,8"
-                                         Description="选择Steam安装路径，留空则自动检测"
+                        <ui:SettingsCard Header="{l:Loc Settings_SteamPath}" Margin="0,0,0,8"
+                                         Description="{l:Loc Settings_SteamPathDesc}"
 Style="{StaticResource SettingsCardStyle}">
                             <StackPanel Orientation="Horizontal">
                                 <TextBox Text="{Binding SteamPath, Mode=OneWay}"
@@ -94,13 +95,13 @@ Style="{StaticResource SettingsCardStyle}">
                                         <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                                     </TextBox.Background>
                                 </TextBox>
-                                <Button Content="自定义" Command="{Binding BrowseSteamPathCommand}"
+                                <Button Content="{l:Loc Common_Custom}" Command="{Binding BrowseSteamPathCommand}"
                                         Padding="12,6" Margin="4,0">
                                     <Button.Background>
                                         <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                                     </Button.Background>
                                 </Button>
-                                <Button Content="重置" Command="{Binding ResetSteamPathCommand}"
+                                <Button Content="{l:Loc Common_Reset}" Command="{Binding ResetSteamPathCommand}"
                                         Padding="12,6" Margin="4,0">
                                     <Button.Background>
                                         <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
@@ -109,8 +110,8 @@ Style="{StaticResource SettingsCardStyle}">
                             </StackPanel>
                         </ui:SettingsCard>
 
-                        <ui:SettingsCard Header="Lua 清单路径" Margin="0,0,0,8"
-                                         Description="OpenSteamTool 内核所读取的 Lua 清单文件所在路径"
+                        <ui:SettingsCard Header="{l:Loc Settings_LuaPath}" Margin="0,0,0,8"
+                                         Description="{l:Loc Settings_LuaPathDesc}"
 Style="{StaticResource SettingsCardStyle}">
                             <StackPanel Orientation="Horizontal">
                                 <TextBox Text="{Binding LuaFolderPath, Mode=OneWay}"
@@ -119,13 +120,13 @@ Style="{StaticResource SettingsCardStyle}">
                                         <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                                     </TextBox.Background>
                                 </TextBox>
-                                <Button Content="自定义" Command="{Binding ChangeLuaFolderCommand}"
+                                <Button Content="{l:Loc Common_Custom}" Command="{Binding ChangeLuaFolderCommand}"
                                         Padding="12,6" Margin="4,0">
                                     <Button.Background>
                                         <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                                     </Button.Background>
                                 </Button>
-                                <Button Content="重置" Command="{Binding ResetLuaConfigCommand}"
+                                <Button Content="{l:Loc Common_Reset}" Command="{Binding ResetLuaConfigCommand}"
                                         Padding="12,6" Margin="4,0">
                                     <Button.Background>
                                         <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
@@ -134,24 +135,24 @@ Style="{StaticResource SettingsCardStyle}">
                             </StackPanel>
                         </ui:SettingsCard>
 
-                        <ui:SettingsCard Header="自动检查更新" Margin="0,0,0,8"
-                                 Description="启动软件时自动检查是否有新版本"
+                        <ui:SettingsCard Header="{l:Loc Settings_AutoUpdate}" Margin="0,0,0,8"
+                                         Description="{l:Loc Settings_AutoUpdateDesc}"
 Style="{StaticResource SettingsCardStyle}">
                             <ui:ToggleSwitch IsOn="{Binding AutoCheckUpdateEnabled}"
-                                             OnContent="开" OffContent="关"/>
+                                             OnContent="{l:Loc Common_On}" OffContent="{l:Loc Common_Off}"/>
                         </ui:SettingsCard>
 
-                        <ui:SettingsCard Header="关闭时最小化到系统托盘" Margin="0,0,0,8"
-                                         Description="点击关闭按钮时不退出程序，而是隐藏到系统托盘"
+                        <ui:SettingsCard Header="{l:Loc Settings_MinTray}" Margin="0,0,0,8"
+                                         Description="{l:Loc Settings_MinTrayDesc}"
 Style="{StaticResource SettingsCardStyle}">
                             <ui:ToggleSwitch IsOn="{Binding MinimizeToTray}"
-                                             OnContent="开" OffContent="关"/>
+                                             OnContent="{l:Loc Common_On}" OffContent="{l:Loc Common_Off}"/>
                         </ui:SettingsCard>
 
-                        <ui:SettingsCard Header="Bin 成就文件夹" Margin="0,0,0,8"
-                                         Description="打开Steam成就数据目录"
+                        <ui:SettingsCard Header="{l:Loc Settings_BinStats}" Margin="0,0,0,8"
+                                         Description="{l:Loc Settings_BinStatsDesc}"
 Style="{StaticResource SettingsCardStyle}">
-                            <Button Content="打开目录" Command="{Binding OpenBinStatsFolderCommand}"
+                            <Button Content="{l:Loc Common_OpenDir}" Command="{Binding OpenBinStatsFolderCommand}"
                                     Padding="12,6" Margin="4,0">
                                 <Button.Background>
                                     <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
@@ -159,10 +160,10 @@ Style="{StaticResource SettingsCardStyle}">
                             </Button>
                         </ui:SettingsCard>
 
-                        <ui:SettingsCard Header="Manifest 清单文件夹" Margin="0,0,0,8"
-                                         Description="打开Steam Manifest清单文件夹"
+                        <ui:SettingsCard Header="{l:Loc Settings_ManifestFolder}" Margin="0,0,0,8"
+                                         Description="{l:Loc Settings_ManifestFolderDesc}"
 Style="{StaticResource SettingsCardStyle}">
-                            <Button Content="打开目录" Command="{Binding OpenManifestFolderCommand}"
+                            <Button Content="{l:Loc Common_OpenDir}" Command="{Binding OpenManifestFolderCommand}"
                                     Padding="12,6" Margin="4,0">
                                 <Button.Background>
                                     <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
@@ -170,10 +171,10 @@ Style="{StaticResource SettingsCardStyle}">
                             </Button>
                         </ui:SettingsCard>
 
-                        <ui:SettingsCard Header="Steam 文件夹" Margin="0,0,0,8"
-                                         Description="打开Steam安装目录"
+                        <ui:SettingsCard Header="{l:Loc Settings_SteamFolder}" Margin="0,0,0,8"
+                                         Description="{l:Loc Settings_SteamFolderDesc}"
 Style="{StaticResource SettingsCardStyle}">
-                            <Button Content="打开目录" Command="{Binding OpenSteamFolderCommand}"
+                            <Button Content="{l:Loc Common_OpenDir}" Command="{Binding OpenSteamFolderCommand}"
                                     Padding="12,6" Margin="4,0">
                                 <Button.Background>
                                     <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
@@ -181,17 +182,17 @@ Style="{StaticResource SettingsCardStyle}">
                             </Button>
                         </ui:SettingsCard>
 
-                        <ui:SettingsCard Header="缓存管理" Margin="0,0,0,8"
-                                         Description="清理软件运行所产生的本地缓存文件（游戏名称 封面 修改器 本地缓存密钥）"
+                        <ui:SettingsCard Header="{l:Loc Settings_CacheMgmt}" Margin="0,0,0,8"
+                                         Description="{l:Loc Settings_CacheMgmtDesc}"
 Style="{StaticResource SettingsCardStyle}">
                             <StackPanel Orientation="Horizontal">
-                                <Button Content="清理缓存" Command="{Binding ClearCacheCommand}"
+                                <Button Content="{l:Loc Common_ClearCache}" Command="{Binding ClearCacheCommand}"
                                         Padding="12,6" Margin="4,0">
                                     <Button.Background>
                                         <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                                     </Button.Background>
                                 </Button>
-                                <Button Content="打开缓存目录" Command="{Binding OpenCacheFolderCommand}"
+                                <Button Content="{l:Loc Common_OpenCacheDir}" Command="{Binding OpenCacheFolderCommand}"
                                         Padding="12,6" Margin="4,0">
                                     <Button.Background>
                                         <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
@@ -205,17 +206,17 @@ Style="{StaticResource SettingsCardStyle}">
             </TabItem>
 
             <!-- 显示设置 -->
-            <TabItem Header="显示设置">
+            <TabItem Header="{l:Loc Settings_TabDisplay}">
                 <controls:SmoothScrollViewer VerticalScrollBarVisibility="Auto" BorderThickness="0"
                               Background="Transparent" Padding="0,0,20,0">
                     <StackPanel Margin="0,8,0,16">
 
-                        <ui:SettingsCard Header="主题模式" Margin="0,0,0,8"
-                                         Description="选择深色、浅色或跟随系统主题"
+                        <ui:SettingsCard Header="{l:Loc Settings_Theme}" Margin="0,0,0,8"
+                                         Description="{l:Loc Settings_ThemeDesc}"
 Style="{StaticResource SettingsCardStyle}">
                               <ComboBox ItemsSource="{Binding ThemeOptions}"
-                                       SelectedValue="{Binding SelectedTheme}"
-                                       SelectedValuePath="Value" DisplayMemberPath="Display"
+                                       SelectedItem="{Binding SelectedThemeOption}"
+                                       DisplayMemberPath="Display"
                                        HorizontalAlignment="Left" Padding="8,4">
                                 <ComboBox.Background>
                                     <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
@@ -223,12 +224,12 @@ Style="{StaticResource SettingsCardStyle}">
                               </ComboBox>
                         </ui:SettingsCard>
 
-                        <ui:SettingsCard Header="背景效果" Margin="0,0,0,8"
-                                         Description="选择窗口背景效果"
+                        <ui:SettingsCard Header="{l:Loc Settings_Backdrop}" Margin="0,0,0,8"
+                                         Description="{l:Loc Settings_BackdropDesc}"
 Style="{StaticResource SettingsCardStyle}">
                               <ComboBox ItemsSource="{Binding BackdropOptions}"
-                                       SelectedValue="{Binding SelectedBackdrop}"
-                                       SelectedValuePath="Value" DisplayMemberPath="Display"
+                                       SelectedItem="{Binding SelectedBackdropOption}"
+                                       DisplayMemberPath="Display"
                                        HorizontalAlignment="Left" Padding="8,4">
                                 <ComboBox.Background>
                                     <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
@@ -236,46 +237,59 @@ Style="{StaticResource SettingsCardStyle}">
                               </ComboBox>
                         </ui:SettingsCard>
 
-                        <ui:SettingsCard Header="悬浮按钮" Margin="0,0,0,8"
-                                         Description="右下角悬浮功能按钮的显示开关"
+                        <ui:SettingsCard Header="{l:Loc Settings_Language}" Margin="0,0,0,8"
+                                         Description="{l:Loc Settings_LanguageDesc}"
+Style="{StaticResource SettingsCardStyle}">
+                              <ComboBox ItemsSource="{Binding LanguageOptions}"
+                                       SelectedValue="{Binding Language}"
+                                       SelectedValuePath="Code" DisplayMemberPath="Display"
+                                       HorizontalAlignment="Left" Padding="8,4">
+                                <ComboBox.Background>
+                                    <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                                </ComboBox.Background>
+                              </ComboBox>
+                        </ui:SettingsCard>
+
+                        <ui:SettingsCard Header="{l:Loc Settings_Fab}" Margin="0,0,0,8"
+                                         Description="{l:Loc Settings_FabDesc}"
 Style="{StaticResource SettingsCardStyle}">
                             <ui:ToggleSwitch IsOn="{Binding IsFabVisible}"
-                                             OnContent="开" OffContent="关"/>
+                                             OnContent="{l:Loc Common_On}" OffContent="{l:Loc Common_Off}"/>
                         </ui:SettingsCard>
 
-                        <ui:SettingsCard Header="卡片刷新按钮" Margin="0,0,0,8"
-                                         Description="每个游戏卡片上的刷新获取封面名字按钮"
+                        <ui:SettingsCard Header="{l:Loc Settings_CardRefresh}" Margin="0,0,0,8"
+                                         Description="{l:Loc Settings_CardRefreshDesc}"
 Style="{StaticResource SettingsCardStyle}">
                             <ui:ToggleSwitch IsOn="{Binding IsCardRefreshVisible}"
-                                             OnContent="开" OffContent="关"/>
+                                             OnContent="{l:Loc Common_On}" OffContent="{l:Loc Common_Off}"/>
                         </ui:SettingsCard>
 
-                        <ui:SettingsCard Header="主页游戏封面自动获取" Margin="0,0,0,8"
-                                         Description="关闭后启动和刷新时不再自动下载缺失封面（表格模式可关），卡片上的刷新按钮仍可手动获取"
+                        <ui:SettingsCard Header="{l:Loc Settings_AutoCovers}" Margin="0,0,0,8"
+                                         Description="{l:Loc Settings_AutoCoversDesc}"
 Style="{StaticResource SettingsCardStyle}">
                             <ui:ToggleSwitch IsOn="{Binding AutoFetchCovers}"
-                                             OnContent="开" OffContent="关"/>
+                                             OnContent="{l:Loc Common_On}" OffContent="{l:Loc Common_Off}"/>
                         </ui:SettingsCard>
 
-                        <ui:SettingsCard Header="入库热门榜单" Margin="0,0,0,8"
-                                         Description="入库页无日志输出时展示热门榜单与为你推荐"
+                        <ui:SettingsCard Header="{l:Loc Settings_Ranking}" Margin="0,0,0,8"
+                                         Description="{l:Loc Settings_RankingDesc}"
 Style="{StaticResource SettingsCardStyle}">
                             <ui:ToggleSwitch IsOn="{Binding ShowRanking}"
-                                             OnContent="开" OffContent="关"/>
+                                             OnContent="{l:Loc Common_On}" OffContent="{l:Loc Common_Off}"/>
                         </ui:SettingsCard>
 
-                        <ui:SettingsCard Header="修改器推荐栏目" Margin="0,0,0,8"
-                                         Description="修改器界面的热门推荐和最新发布栏目"
+                        <ui:SettingsCard Header="{l:Loc Settings_TrainerSection}" Margin="0,0,0,8"
+                                         Description="{l:Loc Settings_TrainerSectionDesc}"
 Style="{StaticResource SettingsCardStyle}">
                             <ui:ToggleSwitch IsOn="{Binding IsShowTrainerSections}"
-                                             OnContent="开" OffContent="关"/>
+                                             OnContent="{l:Loc Common_On}" OffContent="{l:Loc Common_Off}"/>
                         </ui:SettingsCard>
 
-                        <ui:SettingsCard Header="日志复制按钮" Margin="0,0,0,8"
-                                         Description="在提取和入库页的日志输出框右上角显示复制按钮"
+                        <ui:SettingsCard Header="{l:Loc Settings_CopyLog}" Margin="0,0,0,8"
+                                         Description="{l:Loc Settings_CopyLogDesc}"
 Style="{StaticResource SettingsCardStyle}">
                             <ui:ToggleSwitch IsOn="{Binding IsShowCopyLogButton}"
-                                             OnContent="开" OffContent="关"/>
+                                             OnContent="{l:Loc Common_On}" OffContent="{l:Loc Common_Off}"/>
                         </ui:SettingsCard>
 
                     </StackPanel>
@@ -283,30 +297,30 @@ Style="{StaticResource SettingsCardStyle}">
             </TabItem>
 
             <!-- 接口设置 -->
-            <TabItem Header="接口设置">
+            <TabItem Header="{l:Loc Settings_TabApi}">
                 <controls:SmoothScrollViewer VerticalScrollBarVisibility="Auto" BorderThickness="0"
                               Background="Transparent" Padding="0,0,20,0">
                     <StackPanel Margin="0,8,0,16">
 
-                        <ui:SettingsCard Header="入库接口" Margin="0,0,0,8"
-                                         Description="游戏入库使用的仓库接口选择"
+                        <ui:SettingsCard Header="{l:Loc Settings_DownloadMode}" Margin="0,0,0,8"
+                                         Description="{l:Loc Settings_DownloadModeDesc}"
 Style="{StaticResource SettingsCardStyle}">
                             <ComboBox SelectedValue="{Binding DownloadMode, Mode=TwoWay}"
                                        SelectedValuePath="Tag" HorizontalAlignment="Left" Padding="8,4">
                                 <ComboBox.Background>
                                     <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                                 </ComboBox.Background>
-                                <ComboBoxItem Content="本地缓存仓库" Tag="DepotKey"/>
-                                <ComboBoxItem Content="远程清单仓库" Tag="Remote"/>
+                                <ComboBoxItem Content="{l:Loc Settings_LocalCache}" Tag="DepotKey"/>
+                                <ComboBoxItem Content="{l:Loc Settings_RemoteRepo}" Tag="Remote"/>
                             </ComboBox>
                         </ui:SettingsCard>
 
-                        <ui:SettingsCard Header="镜像加速源" Margin="0,0,0,8"
-                                         Description="软件和内核包更新下载的首选源；选择镜像后直连最后尝试"
+                        <ui:SettingsCard Header="{l:Loc Settings_Mirror}" Margin="0,0,0,8"
+                                         Description="{l:Loc Settings_MirrorDesc}"
 Style="{StaticResource SettingsCardStyle}">
                             <StackPanel>
                                 <StackPanel Orientation="Horizontal">
-                                    <Button Content="测速" Command="{Binding TestMirrorSpeedCommand}"
+                                    <Button Content="{l:Loc Common_SpeedTest}" Command="{Binding TestMirrorSpeedCommand}"
                                             IsEnabled="{Binding IsMirrorSpeedTesting, Converter={StaticResource BoolInvertConverter}}"
                                             Padding="12,6" Margin="0,0,4,0">
                                         <Button.Background>
@@ -328,7 +342,7 @@ Style="{StaticResource SettingsCardStyle}">
                                         <ComboBox.Background>
                                             <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                                         </ComboBox.Background>
-                                        <ComboBoxItem Content="直连（默认）" Tag="direct"/>
+                                        <ComboBoxItem Content="{l:Loc Common_DirectDefault}" Tag="direct"/>
                                         <ComboBoxItem Content="gh-proxy.com" Tag="gh-proxy.com"/>
                                         <ComboBoxItem Content="ghfast.top" Tag="ghfast.top"/>
                                         <ComboBoxItem Content="gh-proxy.org" Tag="gh-proxy.org"/>
@@ -362,12 +376,12 @@ Style="{StaticResource SettingsCardStyle}">
                             </ItemsControl>
                         </Border>
 
-                        <ui:SettingsCard Header="封面CDN节点" Margin="0,0,0,8"
-                                         Description="选择优先使用的封面下载节点"
+                        <ui:SettingsCard Header="{l:Loc Settings_Cdn}" Margin="0,0,0,8"
+                                         Description="{l:Loc Settings_CdnDesc}"
 Style="{StaticResource SettingsCardStyle}">
                             <StackPanel>
                                 <StackPanel Orientation="Horizontal">
-                                    <Button Content="测速" Command="{Binding TestCdnSpeedCommand}"
+                                    <Button Content="{l:Loc Common_SpeedTest}" Command="{Binding TestCdnSpeedCommand}"
                                             IsEnabled="{Binding IsSpeedTesting, Converter={StaticResource BoolInvertConverter}}"
                                             Padding="12,6" Margin="0,0,4,0">
                                         <Button.Background>
@@ -384,9 +398,10 @@ Style="{StaticResource SettingsCardStyle}">
                                                    Margin="6,0,0,0" VerticalAlignment="Center"
                                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                                     </StackPanel>
-                                    <ComboBox ItemsSource="{Binding CdnEndpoints}"
-                                              SelectedIndex="{Binding SelectedCdnIndex}"
-                                                HorizontalAlignment="Left" Padding="8,4">
+                                     <ComboBox ItemsSource="{Binding CdnDisplayOptions}"
+                                                SelectedItem="{Binding SelectedCdnOption}"
+                                                DisplayMemberPath="Display"
+                                                  HorizontalAlignment="Left" Padding="8,4">
                                         <ComboBox.Background>
                                             <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                                         </ComboBox.Background>
@@ -420,25 +435,25 @@ Style="{StaticResource SettingsCardStyle}">
                             </ItemsControl>
                         </Border>
 
-                        <ui:SettingsCard Header="自动更新密钥缓存" Margin="0,0,0,8"
-                                         Description="启动应用时检查本地缓存更新时间，超过24小时自动刷新密钥缓存"
+                        <ui:SettingsCard Header="{l:Loc Settings_KeyCache}" Margin="0,0,0,8"
+                                         Description="{l:Loc Settings_KeyCacheDesc}"
 Style="{StaticResource SettingsCardStyle}">
                             <ui:ToggleSwitch IsOn="{Binding AutoRefreshKeyCache}"
-                                             OnContent="开" OffContent="关"/>
+                                             OnContent="{l:Loc Common_On}" OffContent="{l:Loc Common_Off}"/>
                         </ui:SettingsCard>
 
-                        <ui:SettingsCard Header="日志记录" Margin="0,0,0,8"
-                                         Description="记录用户操作和运行错误，输出到软件目录的 app.log 文件"
+                        <ui:SettingsCard Header="{l:Loc Settings_Logging}" Margin="0,0,0,8"
+                                         Description="{l:Loc Settings_LoggingDesc}"
 Style="{StaticResource SettingsCardStyle}">
                             <ui:ToggleSwitch IsOn="{Binding EnableLogging}"
-                                             OnContent="开" OffContent="关"/>
+                                             OnContent="{l:Loc Common_On}" OffContent="{l:Loc Common_Off}"/>
                         </ui:SettingsCard>
 
-                        <ui:SettingsCard Header="自动监控" 
-                                         Description="文件变更时自动刷新游戏列表"
+                        <ui:SettingsCard Header="{l:Loc Settings_AutoRefresh}" Margin="0,0,0,8"
+                                         Description="{l:Loc Settings_AutoRefreshDesc}"
 Style="{StaticResource SettingsCardStyle}">
                             <ui:ToggleSwitch IsOn="{Binding IsAutoRefreshEnabled}"
-                                             OnContent="开" OffContent="关"/>
+                                             OnContent="{l:Loc Common_On}" OffContent="{l:Loc Common_Off}"/>
                         </ui:SettingsCard>
 
                     </StackPanel>
@@ -446,7 +461,7 @@ Style="{StaticResource SettingsCardStyle}">
             </TabItem>
 
             <!-- 内核设置 -->
-            <TabItem Header="内核设置">
+            <TabItem Header="{l:Loc Settings_TabKernel}">
                 <controls:SmoothScrollViewer VerticalScrollBarVisibility="Auto" BorderThickness="0"
                               Background="Transparent" Padding="0,0,20,0">
                     <StackPanel Margin="0,8,0,16">
@@ -456,13 +471,13 @@ Style="{StaticResource SettingsCardStyle}">
                                     Severity="Warning"
                                     IsClosable="False"
                                     Margin="0,0,0,8"
-                                    Message="该界面的内核设置仅在使用当前软件配套的内核（右下角工具栏里安装的 OST 内核）时才可用，其他内核不可用；需要使用这里的功能时，请在右下角重新安装配套内核（该内核为本软件作者维护的 OST 内核 fork 分支）"/>
+                                                                         Message="{l:Loc Settings_KernelWarn}"/>
 
-                        <ui:SettingsCard Header="上游清单源" Margin="0,0,0,8"
-                                          Description="切换内核请求的Manifest清单的上游数据源，切换前建议做连通性测试，内核热加载即时生效"
+                        <ui:SettingsCard Header="{l:Loc Settings_ManifestSource}" Margin="0,0,0,8"
+                                           Description="{l:Loc Settings_ManifestSourceDesc}"
                                           Style="{StaticResource SettingsCardStyle}">
                             <StackPanel Orientation="Horizontal">
-                                <Button Content="连通测试" Padding="12,6" Margin="0,0,4,0"
+                                <Button Content="{l:Loc Common_ConnTest}" Padding="12,6" Margin="0,0,4,0"
                                         Command="{Binding TestManifestSourceCommand}"
                                         IsEnabled="{Binding IsManifestSourceTesting, Converter={StaticResource BoolInvertConverter}}">
                                     <Button.Background>
@@ -516,27 +531,27 @@ Style="{StaticResource SettingsCardStyle}">
                             </ItemsControl>
                         </Border>
 
-                        <ui:SettingsCard Header="失败时自动切换清单请求源" Margin="0,0,0,8"
-                                         Description="当前指定的上游清单源请求失败时，自动顺位使用别的源继续处理请求"
+                        <ui:SettingsCard Header="{l:Loc Settings_Failover}" Margin="0,0,0,8"
+                                         Description="{l:Loc Settings_FailoverDesc}"
                                          Style="{StaticResource SettingsCardStyle}">
                             <ui:ToggleSwitch IsOn="{Binding ManifestFailoverEnabled}"
                                              IsEnabled="{Binding IsManifestFailoverAvailable}"
-                                             OnContent="开" OffContent="关"/>
+                                             OnContent="{l:Loc Common_On}" OffContent="{l:Loc Common_Off}"/>
                         </ui:SettingsCard>
 
-                        <ui:SettingsCard Header="内核版本自动检测" Margin="0,0,0,8"
-                                          Description="启动软件时自动检测配套内核是否有新版本，有更新时在主页顶部横幅提示"
+                        <ui:SettingsCard Header="{l:Loc Settings_KernelUpdate}" Margin="0,0,0,8"
+                                           Description="{l:Loc Settings_KernelUpdateDesc}"
                                           Style="{StaticResource SettingsCardStyle}">
                             <ui:ToggleSwitch IsOn="{Binding AutoCheckKernelUpdateEnabled}"
-                                             OnContent="开" OffContent="关"/>
+                                             OnContent="{l:Loc Common_On}" OffContent="{l:Loc Common_Off}"/>
                         </ui:SettingsCard>
 
-                        <ui:SettingsCard Header="入库游戏的游玩状态广播" Margin="0,0,0,8"
-                                          Description="开启后好友可见你入库游戏的真实游玩状态，关闭则不进行广播；该实现方法基于480，开启后会记录Spacewar时长，自行抉择是否使用该功能"
+                        <ui:SettingsCard Header="{l:Loc Settings_Broadcast}" Margin="0,0,0,8"
+                                         Description="{l:Loc Settings_BroadcastDesc}"
                                           Style="{StaticResource SettingsCardStyle}">
                             <ui:ToggleSwitch IsOn="{Binding FriendBroadcastEnabled}"
                                              IsEnabled="{Binding IsFriendBroadcastAvailable}"
-                                             OnContent="开" OffContent="关"/>
+                                             OnContent="{l:Loc Common_On}" OffContent="{l:Loc Common_Off}"/>
                         </ui:SettingsCard>
 
                     </StackPanel>

@@ -51,11 +51,11 @@ public static class SteamProcess
         {
             var path = steamPathService.GetCustomPath() ?? steamPathService.DetectSteamPath();
             if (string.IsNullOrEmpty(path))
-                return new SteamLaunchResult(false, "提示", "未检测到 Steam 安装路径，请先在设置页面配置");
+                return new SteamLaunchResult(false, L.Get("Main_Tip"), L.Get("Svc_SpNoPath"));
 
             var exePath = Path.Combine(path, "steam.exe");
             if (!File.Exists(exePath))
-                return new SteamLaunchResult(false, "提示", $"未找到 steam.exe：{exePath}");
+                return new SteamLaunchResult(false, L.Get("Main_Tip"), L.Get("Svc_SpNoExe", exePath));
 
             Process.Start(new ProcessStartInfo
             {
@@ -69,7 +69,7 @@ public static class SteamProcess
         }
         catch (Exception ex)
         {
-            return new SteamLaunchResult(false, "错误", $"启动 Steam 失败：{ex.Message}");
+            return new SteamLaunchResult(false, L.Get("Main_DialogError"), L.Get("Svc_SpStartFailed", ex.Message));
         }
     }
 

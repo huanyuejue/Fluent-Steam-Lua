@@ -223,7 +223,7 @@ public partial class AchievementView : UserControl
     {
         if (sender is FrameworkElement { Tag: AchievementGameInfo game })
         {
-            LogService.Info("操作", $"打开成就编辑: {game.Name} (AppID {game.AppId})");
+            LogService.Info(L.Get("LogCat_Op"), L.Get("Ach_LogOpenEdit", game.Name, game.AppId));
             OpenEditWindow(game);
         }
     }

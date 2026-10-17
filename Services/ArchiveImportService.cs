@@ -43,9 +43,9 @@ public class ArchiveImportService : IArchiveImportService
     public async Task<ArchiveImportResult> ImportAsync(string archivePath, IProgress<string>? status, CancellationToken ct = default)
     {
         if (!File.Exists(archivePath))
-            throw new InvalidOperationException("压缩包不存在");
+            throw new InvalidOperationException(L.Get("Svc_ArchNotFound"));
         if (!IsArchive(archivePath))
-            throw new InvalidOperationException("不支持的压缩包格式，仅支持 zip/tar/7z/rar");
+            throw new InvalidOperationException(L.Get("Svc_ArchBadFormat"));
 
         var workDir = Path.Combine(Path.GetTempPath(), "SteamLuaManager", "archive_" + Guid.NewGuid().ToString("N"));
         var extracted = new List<string>();
@@ -54,7 +54,7 @@ public class ArchiveImportService : IArchiveImportService
         try
         {
             Directory.CreateDirectory(workDir);
-            status?.Report("正在解压...");
+            status?.Report(L.Get("Svc_ArchExtracting"));
             ExtractEntries(archivePath, workDir, seen, skipped, extracted, ct);
 
             var result = new ArchiveImportResult(0, 0, 0, skipped.Count, skipped, new List<string>());
@@ -81,10 +81,10 @@ public class ArchiveImportService : IArchiveImportService
                 }
                 catch (Exception ex)
                 {
-                    result.FailedFiles.Add($"{Path.GetFileName(file)}：{ex.Message}");
+                    result.FailedFiles.Add(L.Get("Svc_ArchFileFailed", Path.GetFileName(file), ex.Message));
                 }
             }
-            LogService.Info("主页", $"压缩包导入：游戏 {result.LuaCount}，成就 {result.BinCount}，清单 {result.ManifestCount}，跳过同名 {result.SkippedCount}，失败 {result.FailedFiles.Count}");
+            LogService.Info(L.Get("LogCat_Home"), L.Get("Svc_ArchImported", result.LuaCount, result.BinCount, result.ManifestCount, result.SkippedCount, result.FailedFiles.Count));
             return result;
         }
         finally
@@ -117,12 +117,12 @@ public class ArchiveImportService : IArchiveImportService
             var fileName = Path.GetFileName(name);
             if (string.IsNullOrEmpty(fileName)) continue;
             if (++count > MaxEntries)
-                throw new InvalidOperationException($"压缩包条目超过 {MaxEntries} 个，已中止");
+                throw new InvalidOperationException(L.Get("Svc_ArchTooManyEntries", MaxEntries));
             if (size > 0)
             {
                 totalBytes += size;
                 if (totalBytes > MaxTotalBytes)
-                    throw new InvalidOperationException("解压后体积超过 1GB，已中止");
+                    throw new InvalidOperationException(L.Get("Svc_ArchTooBig"));
             }
             if (!seen.Add(fileName))
             {
@@ -150,7 +150,7 @@ public class ArchiveImportService : IArchiveImportService
             ".rar" => ListRarEntries(archivePath, streams),
             // 7z 不可流式读取，走 Archive 整包展平后统一扫描
             ".7z" => ExtractSevenZipFlat(archivePath, streams),
-            _ => throw new InvalidOperationException("不支持的压缩包格式，仅支持 zip/tar/7z/rar")
+            _ => throw new InvalidOperationException(L.Get("Svc_ArchBadFormat"))
         };
     }
 
@@ -200,7 +200,7 @@ public class ArchiveImportService : IArchiveImportService
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException($"无法打开压缩包（可能是加密包或已损坏）：{ex.Message}", ex);
+                throw new InvalidOperationException(L.Get("Svc_ArchOpenFailed", ex.Message), ex);
             }
             streams.Add(archive);
             var options = new ExtractionOptions { ExtractFullPath = false };
@@ -212,7 +212,7 @@ public class ArchiveImportService : IArchiveImportService
                 }
                 catch (Exception ex)
                 {
-                    throw new InvalidOperationException($"无法解压（可能是加密包或已损坏）：{ex.Message}", ex);
+                    throw new InvalidOperationException(L.Get("Svc_ArchExtractFailed", ex.Message), ex);
                 }
             }
         }
@@ -241,7 +241,7 @@ public class ArchiveImportService : IArchiveImportService
         }
         catch (Exception ex)
         {
-            throw new InvalidOperationException($"无法打开压缩包（可能是加密包或已损坏）：{ex.Message}", ex);
+            throw new InvalidOperationException(L.Get("Svc_ArchOpenFailed", ex.Message), ex);
         }
         streams.Add(reader);
         while (reader.MoveToNextEntry())
@@ -249,7 +249,7 @@ public class ArchiveImportService : IArchiveImportService
             var e = reader.Entry;
             if (e.IsDirectory) continue;
             if (e.IsEncrypted)
-                throw new InvalidOperationException("不支持加密压缩包");
+                throw new InvalidOperationException(L.Get("Svc_ArchEncrypted"));
             var name = e.Key ?? string.Empty;
             var size = e.Size;
             yield return new Entry(name, size, () => reader.OpenEntryStream());

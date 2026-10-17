@@ -30,7 +30,7 @@ public static class XiaoHeiHeService
                 string.Format(SearchUrl, Uri.EscapeDataString(keyword)), ct);
             if (!resp.IsSuccessStatusCode)
             {
-                LogService.Warn("入库", $"小黑盒搜索失败（HTTP {(int)resp.StatusCode}）");
+                LogService.Warn(L.Get("LogCat_Home"), L.Get("Svc_HhSearchFail", (int)resp.StatusCode));
                 return result;
             }
             using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
@@ -38,7 +38,7 @@ public static class XiaoHeiHeService
                 !r.TryGetProperty("games", out var games) ||
                 games.ValueKind != JsonValueKind.Array)
             {
-                LogService.Info("入库", "小黑盒搜索无有效结果，转备用源");
+                LogService.Info(L.Get("LogCat_Home"), L.Get("Svc_HhNoResult"));
                 return result;
             }
             var scored = new List<(HeiHeGame Game, bool NameHit, bool IsGame, int Follow)>();
@@ -82,11 +82,11 @@ public static class XiaoHeiHeService
             var top = ordered.FirstOrDefault();
             if (!ordered.Any(x => x.NameHit) && (top.Game == null || !top.IsGame || top.Follow < 10000))
             {
-                LogService.Info("入库", $"小黑盒搜索无有效结果，转备用源：{keyword}");
+                LogService.Info(L.Get("LogCat_Home"), L.Get("Svc_HhNoResultKw", keyword));
                 return result;
             }
             result = ordered.Take(10).Select(x => x.Game).ToList();
-            LogService.Info("入库", $"小黑盒搜索命中 {result.Count} 个：{keyword}");
+            LogService.Info(L.Get("LogCat_Home"), L.Get("Svc_HhHit", result.Count, keyword));
         }
         catch (OperationCanceledException)
         {
@@ -94,7 +94,7 @@ public static class XiaoHeiHeService
         }
         catch (Exception ex)
         {
-            LogService.Warn("入库", $"小黑盒搜索异常，转备用源：{ex.Message}");
+            LogService.Warn(L.Get("LogCat_Home"), L.Get("Svc_HhSearchError", ex.Message));
         }
         return result;
     }
@@ -107,7 +107,7 @@ public static class XiaoHeiHeService
             using var resp = await _http.GetAsync(string.Format(DetailUrl, appId), ct);
             if (!resp.IsSuccessStatusCode)
             {
-                LogService.Warn("入库", $"小黑盒详情失败 AppID {appId}（HTTP {(int)resp.StatusCode}）");
+                LogService.Warn(L.Get("LogCat_Home"), L.Get("Svc_HhDetailFail", appId, (int)resp.StatusCode));
                 return (null, null, "");
             }
             using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
@@ -115,19 +115,19 @@ public static class XiaoHeiHeService
                 r.ValueKind != JsonValueKind.Object ||
                 !r.TryGetProperty("name", out var n))
             {
-                LogService.Info("入库", $"小黑盒详情无数据 AppID {appId}，转备用源");
+                LogService.Info(L.Get("LogCat_Home"), L.Get("Svc_HhDetailNoData", appId));
                 return (null, null, "");
             }
             var name = n.GetString();
             if (string.IsNullOrWhiteSpace(name))
             {
-                LogService.Info("入库", $"小黑盒详情无数据 AppID {appId}，转备用源");
+                LogService.Info(L.Get("LogCat_Home"), L.Get("Svc_HhDetailNoData", appId));
                 return (null, null, "");
             }
             var cover = r.TryGetProperty("image", out var img) ? img.GetString() : null;
             var release = r.TryGetProperty("release_date", out var rd) && rd.ValueKind == JsonValueKind.String
                 ? rd.GetString() ?? "" : "";
-            LogService.Info("入库", $"小黑盒详情补到名称 AppID {appId}：{name}");
+            LogService.Info(L.Get("LogCat_Home"), L.Get("Svc_HhDetailHit", appId, name));
             return (name, string.IsNullOrWhiteSpace(cover) ? null : cover, release.Trim());
         }
         catch (OperationCanceledException)
@@ -136,7 +136,7 @@ public static class XiaoHeiHeService
         }
         catch (Exception ex)
         {
-            LogService.Warn("入库", $"小黑盒详情异常 AppID {appId}，转备用源：{ex.Message}");
+            LogService.Warn(L.Get("LogCat_Home"), L.Get("Svc_HhDetailError", appId, ex.Message));
             return (null, null, "");
         }
     }
@@ -168,7 +168,7 @@ public static class XiaoHeiHeService
             using var resp = await _http.GetAsync(string.Format(RankUrl, limit, offset), ct);
             if (!resp.IsSuccessStatusCode)
             {
-                LogService.Warn("入库", $"小黑盒热门榜失败（HTTP {(int)resp.StatusCode}）");
+                LogService.Warn(L.Get("LogCat_Home"), L.Get("Svc_HhRankFail", (int)resp.StatusCode));
                 return result;
             }
             using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
@@ -176,7 +176,7 @@ public static class XiaoHeiHeService
                 !r.TryGetProperty("list", out var list) ||
                 list.ValueKind != JsonValueKind.Array)
             {
-                LogService.Info("入库", "小黑盒热门榜无有效结果");
+                LogService.Info(L.Get("LogCat_Home"), L.Get("Svc_HhRankNoResult"));
                 return result;
             }
             foreach (var g in list.EnumerateArray())
@@ -211,7 +211,7 @@ public static class XiaoHeiHeService
         }
         catch (Exception ex)
         {
-            LogService.Warn("入库", $"小黑盒热门榜异常，转空榜：{ex.Message}");
+            LogService.Warn(L.Get("LogCat_Home"), L.Get("Svc_HhRankError", ex.Message));
         }
         return result;
     }

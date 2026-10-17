@@ -26,4 +26,16 @@ public class CdnEndpoint
     };
 
     public override string ToString() => Name;
+
+    // 显示名翻译键：Name 是固定英文标识，按标识映射；未知标识直接显示原名
+    public static string GetDisplayKey(string name) => name switch
+    {
+        "Store API" => "Settings_Cdn_StoreApi",
+        _ when name.StartsWith("Heybox", StringComparison.OrdinalIgnoreCase) => "Settings_Cdn_Heybox",
+        _ when name.StartsWith("Akamai 主节点", StringComparison.Ordinal) => "Settings_Cdn_AkamaiMain",
+        _ when name.StartsWith("Akamai 备用", StringComparison.Ordinal) => "Settings_Cdn_AkamaiBackup",
+        _ when name.StartsWith("Akamai 大图", StringComparison.Ordinal) => "Settings_Cdn_AkamaiLarge",
+        _ when name.StartsWith("Cloudflare", StringComparison.OrdinalIgnoreCase) => "Settings_Cdn_Cloudflare",
+        _ => name,
+    };
 }

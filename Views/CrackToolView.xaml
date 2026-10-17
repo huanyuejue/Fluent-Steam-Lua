@@ -1,6 +1,7 @@
 <UserControl xmlns:controls="clr-namespace:SteamLuaManager.Controls" x:Class="SteamLuaManager.Views.CrackToolView"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:l="clr-namespace:SteamLuaManager.Markup"
         xmlns:ui="http://schemas.inkore.net/lib/ui/wpf/modern"
         Background="Transparent"
         TextOptions.TextFormattingMode="Display"
@@ -12,12 +13,12 @@
         <StackPanel Margin="36,24,36,24" HorizontalAlignment="Stretch">
 
             <!-- 页面标题 -->
-            <TextBlock Text="免Steam启动游戏" FontSize="28" FontWeight="SemiBold" Margin="0,0,0,4"
+            <TextBlock Text="{l:Loc Crack_Title}" FontSize="28" FontWeight="SemiBold" Margin="0,0,0,4"
                        Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-            <TextBlock Text="脱壳去除SteamStub并配置模拟环境，实现让游戏免Steam启动且可正常弹成就完成体验（成就弹出模拟需填写Steam Web API Key）"
+            <TextBlock Text="{l:Loc Crack_Desc}"
                        FontSize="12" Margin="0,0,0,2" TextWrapping="Wrap"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-            <TextBlock Text="注意：使用Denuvo加密的游戏无效"
+            <TextBlock Text="{l:Loc Crack_Warn}"
                        FontSize="12" Margin="0,0,0,16" TextWrapping="Wrap"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
 
@@ -38,12 +39,12 @@
                             <TextBox x:Name="PathBox" Text="{Binding InputPath, Mode=OneWay}"
                                      IsReadOnly="True" Padding="8,6"
                                      FontSize="14" VerticalContentAlignment="Center" HorizontalAlignment="Stretch"
-                                     ToolTip="通过右侧“选择目录”来指定你要脱壳破解的游戏根目录">
+                                     ToolTip="{l:Loc Crack_PathTip}">
                                 <TextBox.Background>
                                     <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                                 </TextBox.Background>
                             </TextBox>
-                            <TextBlock Text="选择要脱壳的游戏根目录路径" FontSize="14"
+                            <TextBlock Text="{l:Loc Crack_PathWatermark}" FontSize="14"
                                        VerticalAlignment="Center" Margin="10,0,0,0"
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                        IsHitTestVisible="False">
@@ -61,10 +62,10 @@
                         </Grid>
                         <Button Grid.Column="1" Command="{Binding BrowseFolderCommand}"
                                 Padding="16,6" Height="36" FontSize="14" Margin="8,0,0,0"
-                                Content="选择目录"/>
+                                Content="{l:Loc Crack_BrowseDir}"/>
                         <Button Grid.Column="2" Command="{Binding ClearLogCommand}"
                                 Padding="16,6" Height="36" FontSize="14" Margin="8,0,0,0"
-                                Content="清除日志"/>
+                                Content="{l:Loc Common_ClearLog}"/>
                     </Grid>
                     <Grid Margin="0,12,0,0" VerticalAlignment="Center">
                         <Grid.ColumnDefinitions>
@@ -75,40 +76,40 @@
                             <ColumnDefinition Width="*" MinWidth="80"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="AppID（必填）： " FontSize="13" VerticalAlignment="Center"
+                        <TextBlock Grid.Column="0" Text="{l:Loc Crack_AppIdLabel}" FontSize="13" VerticalAlignment="Center"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                         <TextBox Grid.Column="1" Text="{Binding AppId, UpdateSourceTrigger=PropertyChanged}"
                                  Padding="8,6" Height="32" FontSize="13" Width="140"
                                  VerticalContentAlignment="Center"
-                                 ToolTip="输入要脱壳的游戏的Appid，或右侧点击查询"/>
+                                 ToolTip="{l:Loc Crack_AppIdTip}"/>
                         <Button Grid.Column="2" Command="{Binding QueryAppIdCommand}"
                                 Padding="16,6" Height="32" FontSize="13" Margin="8,0,0,0"
-                                Content="查询AppID"
-                                ToolTip="用目录名搜索候选游戏并回填"/>
-                        <TextBlock Grid.Column="3" Text="Steam Web API Key（选填）：" FontSize="13" VerticalAlignment="Center" Margin="16,0,0,0"
+                                Content="{l:Loc Crack_QueryAppId}"
+                                ToolTip="{l:Loc Crack_QueryAppIdTip}"/>
+                        <TextBlock Grid.Column="3" Text="{l:Loc Crack_KeyLabel}" FontSize="13" VerticalAlignment="Center" Margin="16,0,0,0"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                   ToolTip="填了可补全模拟器的成就与库存信息，不填则跳过，不影响破解本身"/>
+                                   ToolTip="{l:Loc Crack_KeyTip}"/>
                         <TextBox Grid.Column="4" Text="{Binding WebApiKey, UpdateSourceTrigger=PropertyChanged}"
                                  Padding="8,6" Height="32" FontSize="13" Margin="8,0,0,0"
                                  VerticalContentAlignment="Center" HorizontalAlignment="Stretch"
-                                 ToolTip="填了可补全模拟器的成就与库存信息，不填则跳过，不影响破解本身"/>
+                                 ToolTip="{l:Loc Crack_KeyTip}"/>
                         <Button Grid.Column="5" Command="{Binding OpenApiKeyPageCommand}"
                                 Padding="16,6" Height="32" FontSize="13" Margin="8,0,0,0"
-                                Content="获取"
-                                ToolTip="去 Steam 官方申请 Key"/>
+                                Content="{l:Loc Crack_GetKey}"
+                                ToolTip="{l:Loc Crack_GetKeyTip}"/>
                     </Grid>
                     <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
-                        <CheckBox IsChecked="{Binding IsUnpackOnly}" Content="仅脱壳" FontSize="14"
+                        <CheckBox IsChecked="{Binding IsUnpackOnly}" Content="{l:Loc Crack_UnpackOnly}" FontSize="14"
                                   VerticalAlignment="Center" Margin="0,0,8,0" MinWidth="0"
-                                  ToolTip="只去除 SteamStub 壳，保留 Steam 启动依赖；原 exe 备份为 .exe.bak，还原可恢复"/>
+                                  ToolTip="{l:Loc Crack_UnpackOnlyTip}"/>
                         <Button Command="{Binding CrackCommand}"
                                 Padding="16,6" Height="36" FontSize="14" Margin="0,0,6,0"
                                 Content="{Binding CrackButtonText}"
-                                ToolTip="仅 SteamStub 游戏有效"
+                                ToolTip="{l:Loc Crack_CrackTip}"
                                 IsEnabled="{Binding IsRunning, Converter={StaticResource BoolInvertConverter}}"/>
                         <Button Command="{Binding RestoreCommand}"
                                 Padding="16,6" Height="36" FontSize="14" Margin="6,0,6,0"
-                                Content="还原破解"
+                                Content="{l:Loc Crack_Restore}"
                                 IsEnabled="{Binding IsRunning, Converter={StaticResource BoolInvertConverter}}"/>
                         <Button Command="{Binding UpdateEmuCommand}"
                                 Padding="16,6" Height="36" FontSize="14" Margin="6,0,0,0"
@@ -118,7 +119,7 @@
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                         <Button Command="{Binding CancelCommand}"
                                 Padding="16,6" Height="36" FontSize="14" Margin="6,0,0,0"
-                                Content="取消"
+                                Content="{l:Loc Common_Cancel}"
                                 Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibilityConverter}}"/>
                     </StackPanel>
                     <ui:ProgressRing IsActive="{Binding IsRunning}" Width="20" Height="20"
@@ -134,7 +135,7 @@
                     <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
                 </Border.Background>
                 <Grid>
-                    <TextBlock Text="暂无日志" Style="{StaticResource LogEmptyStyle}"
+                    <TextBlock Text="{l:Loc Common_NoLog}" Style="{StaticResource LogEmptyStyle}"
                                Visibility="{Binding LogLines.Count, Converter={StaticResource ZeroToVisibilityConverter}}"/>
                     <ScrollViewer x:Name="LogScrollViewer" Height="370"
                                   VerticalScrollBarVisibility="Auto" Margin="16,16,16,16"

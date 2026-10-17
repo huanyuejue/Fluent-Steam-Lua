@@ -1,6 +1,7 @@
 <UserControl xmlns:controls="clr-namespace:SteamLuaManager.Controls" x:Class="SteamLuaManager.Views.CloudSaveView"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:l="clr-namespace:SteamLuaManager.Markup"
         xmlns:ui="http://schemas.inkore.net/lib/ui/wpf/modern"
         Background="Transparent"
         TextOptions.TextFormattingMode="Display"
@@ -11,25 +12,25 @@
     <controls:SmoothScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <StackPanel Margin="36,24,36,24">
 
-            <TextBlock Text="云存档重定向" FontSize="28" FontWeight="SemiBold" Margin="0,0,0,4"
+            <TextBlock Text="{l:Loc Cloud_Title}" FontSize="28" FontWeight="SemiBold" Margin="0,0,0,4"
                        Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
             <StackPanel Margin="0,0,0,24">
-                <TextBlock Text="将Lua游戏的Steam云存档重定向到本地目录或云端存储（Google Drive / OneDrive / R2 / S3），以修复云存档报错问题"
+                <TextBlock Text="{l:Loc Cloud_Desc1}"
                            FontSize="12" TextWrapping="Wrap"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                <TextBlock Text="启用前请先备份重要存档以防出错；开关、目录与服务商变更需重启Steam生效；成就与时长跟随云端同步"
+                <TextBlock Text="{l:Loc Cloud_Desc2}"
                            FontSize="12" TextWrapping="Wrap"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                <TextBlock Text="注意：该功能需要电脑已安装VC++运行库才能正常工作"
+                <TextBlock Text="{l:Loc Cloud_Desc3}"
                            FontSize="12" TextWrapping="Wrap"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
             </StackPanel>
 
-            <ui:SettingsCard Header="云存档" Margin="0,0,0,8"
-                             Description="开启后 Lua 游戏存档将重定向到所选位置"
+            <ui:SettingsCard Header="{l:Loc Cloud_Header}" Margin="0,0,0,8"
+                             Description="{l:Loc Cloud_HeaderDesc}"
                              Style="{StaticResource SettingsCardStyle}">
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                        <Button Content="测试连接" Command="{Binding TestConnectionCommand}"
+                        <Button Content="{l:Loc Cloud_TestConn}" Command="{Binding TestConnectionCommand}"
                                 Padding="12,4" Margin="0,0,8,0" VerticalAlignment="Center"
                                 Visibility="{Binding IsCloudProvider, Converter={StaticResource BoolToVisibilityConverter}}"
                                 IsEnabled="{Binding IsBusy, Converter={StaticResource BoolInvertConverter}}">
@@ -38,8 +39,8 @@
                             </Button.Background>
                         </Button>
                         <ComboBox ItemsSource="{Binding CloudProviders}"
-                                  SelectedValue="{Binding SelectedProvider}"
-                                  SelectedValuePath="Id" DisplayMemberPath="DisplayName"
+                                  SelectedItem="{Binding SelectedProviderOption}"
+                                  DisplayMemberPath="DisplayName"
                                   Padding="8,4" MinWidth="140" Margin="0,0,12,0" VerticalAlignment="Center">
                         <ComboBox.Background>
                             <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
@@ -47,7 +48,7 @@
                     </ComboBox>
                     <ui:ToggleSwitch IsOn="{Binding IsCloudEnabled, Mode=TwoWay}"
                                      IsEnabled="{Binding IsBusy, Converter={StaticResource BoolInvertConverter}}"
-                                     OnContent="开" OffContent="关" VerticalAlignment="Center"/>
+                                     OnContent="{l:Loc Common_On}" OffContent="{l:Loc Common_Off}" VerticalAlignment="Center"/>
                 </StackPanel>
             </ui:SettingsCard>
             <TextBlock Text="{Binding ProviderStatusLine}" FontSize="12" Margin="0,0,0,8"
@@ -55,8 +56,8 @@
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                        Visibility="{Binding ProviderStatusLine, Converter={StaticResource StringNotEmptyToVisibilityConverter}}"/>
 
-            <ui:SettingsCard Header="本地重定向目录" Margin="0,0,0,8"
-                                     Description="云存档在本地的落盘位置"
+            <ui:SettingsCard Header="{l:Loc Cloud_LocalDir}" Margin="0,0,0,8"
+                                     Description="{l:Loc Cloud_LocalDirDesc}"
                                      Style="{StaticResource SettingsCardStyle}"
                                      Visibility="{Binding SelectedProvider, Converter={StaticResource EqualityToVisibilityConverter}, ConverterParameter=folder}">
                 <StackPanel Orientation="Horizontal">
@@ -67,14 +68,14 @@
                             <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                         </TextBox.Background>
                     </TextBox>
-                    <Button Content="自定义" Command="{Binding BrowseSyncPathCommand}"
+                    <Button Content="{l:Loc Common_Custom}" Command="{Binding BrowseSyncPathCommand}"
                             Padding="12,6" Margin="4,0"
                             IsEnabled="{Binding IsBusy, Converter={StaticResource BoolInvertConverter}}">
                         <Button.Background>
                             <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                         </Button.Background>
                     </Button>
-                    <Button Content="重置" Command="{Binding ResetSyncPathCommand}"
+                    <Button Content="{l:Loc Common_Reset}" Command="{Binding ResetSyncPathCommand}"
                             Padding="12,6" Margin="4,0"
                             IsEnabled="{Binding IsBusy, Converter={StaticResource BoolInvertConverter}}">
                         <Button.Background>
@@ -94,26 +95,26 @@
                     <StackPanel>
                         <Grid Margin="0,0,0,8">
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
-                                <Button Content="登录" Padding="20,6" Margin="0,0,8,0"
+                                <Button Content="{l:Loc Cloud_SignIn}" Padding="20,6" Margin="0,0,8,0"
                                         Command="{Binding SignInCommand}"
                                         Visibility="{Binding IsProviderSignedIn, Converter={StaticResource InvertedBoolToVisibilityConverter}}"
                                         IsEnabled="{Binding IsSigningIn, Converter={StaticResource BoolInvertConverter}}"/>
-                                <Button Content="切换账号" Padding="20,6" Margin="0,0,8,0"
+                                <Button Content="{l:Loc Cloud_SwitchAccount}" Padding="20,6" Margin="0,0,8,0"
                                         Command="{Binding SignInCommand}"
                                         Visibility="{Binding IsProviderSignedIn, Converter={StaticResource BoolToVisibilityConverter}}"
                                         IsEnabled="{Binding IsSigningIn, Converter={StaticResource BoolInvertConverter}}"/>
-                                <Button Content="退出登录" Padding="20,6" Margin="0,0,8,0"
+                                <Button Content="{l:Loc Cloud_SignOut}" Padding="20,6" Margin="0,0,8,0"
                                         Command="{Binding SignOutCommand}"
                                         Visibility="{Binding IsProviderSignedIn, Converter={StaticResource BoolToVisibilityConverter}}">
                                     <Button.Foreground>
                                         <SolidColorBrush Color="#E74856"/>
                                     </Button.Foreground>
                                 </Button>
-                                <Button Content="取消" Padding="20,6"
+                                <Button Content="{l:Loc Common_Cancel}" Padding="20,6"
                                         Command="{Binding CancelSignInCommand}"
                                         IsEnabled="{Binding IsSigningIn}"/>
                             </StackPanel>
-                            <Button Content="清空" Padding="20,6" HorizontalAlignment="Right"
+                            <Button Content="{l:Loc Cloud_Clear}" Padding="20,6" HorizontalAlignment="Right"
                                     Command="{Binding ClearAuthLogCommand}"
                                     IsEnabled="{Binding IsSigningIn, Converter={StaticResource BoolInvertConverter}}"/>
                         </Grid>
@@ -167,13 +168,13 @@
                             <TextBlock Grid.Row="5" Grid.Column="0" Text="Endpoint" VerticalAlignment="Center" FontSize="12" Margin="0,4"/>
                             <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding R2Endpoint, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Margin="0,4"/>
                         </Grid>
-                        <TextBlock Text="Endpoint 留空则用默认地址；Key Prefix 为云端目录前缀，两台机器填一致才能互通"
+                        <TextBlock Text="{l:Loc Cloud_R2Hint}"
                                    FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                         <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                            <Button Content="保存 R2 凭证并切换" Padding="20,6" Margin="0,0,8,0"
+                            <Button Content="{l:Loc Cloud_SaveR2}" Padding="20,6" Margin="0,0,8,0"
                                     Command="{Binding SaveR2Command}"/>
-                            <Button Content="清除凭证" Padding="20,6"
+                            <Button Content="{l:Loc Cloud_ClearCred}" Padding="20,6"
                                     Command="{Binding SignOutCommand}" CommandParameter="r2"
                                     Visibility="{Binding IsProviderSignedIn, Converter={StaticResource BoolToVisibilityConverter}}">
                                 <Button.Foreground>
@@ -220,24 +221,24 @@
                             <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding S3Region, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Margin="0,4"/>
                             <TextBlock Grid.Row="5" Grid.Column="0" Text="Key Prefix" VerticalAlignment="Center" FontSize="12" Margin="0,4"/>
                             <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding S3KeyPrefix, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Margin="0,4"/>
-                            <TextBlock Grid.Row="6" Grid.Column="0" Text="CA 证书" VerticalAlignment="Center" FontSize="12" Margin="0,4"/>
+                            <TextBlock Grid.Row="6" Grid.Column="0" Text="{l:Loc Cloud_CaCert}" VerticalAlignment="Center" FontSize="12" Margin="0,4"/>
                             <StackPanel Grid.Row="6" Grid.Column="1" Orientation="Horizontal" Margin="0,4">
                                 <TextBox Text="{Binding S3CaCertPath}" IsReadOnly="True" Width="220" Padding="8,6" Margin="0,0,8,0"/>
-                                <Button Content="选择" Padding="12,6" Command="{Binding BrowseCaCertCommand}"/>
+                                <Button Content="{l:Loc Cloud_Browse}" Padding="12,6" Command="{Binding BrowseCaCertCommand}"/>
                             </StackPanel>
                             <StackPanel Grid.Row="7" Grid.Column="1" Orientation="Horizontal" Margin="0,4">
-                                <CheckBox Content="携带签名载荷" IsChecked="{Binding S3SignPayload}" Margin="0,0,16,0"/>
-                                <CheckBox Content="允许 HTTP" IsChecked="{Binding S3AllowInsecureHttp}" Margin="0,0,16,0"/>
-                                <CheckBox Content="跳过 TLS 校验" IsChecked="{Binding S3AllowInsecureTls}"/>
+                                <CheckBox Content="{l:Loc Cloud_SignPayload}" IsChecked="{Binding S3SignPayload}" Margin="0,0,16,0"/>
+                                <CheckBox Content="{l:Loc Cloud_AllowHttp}" IsChecked="{Binding S3AllowInsecureHttp}" Margin="0,0,16,0"/>
+                                <CheckBox Content="{l:Loc Cloud_SkipTls}" IsChecked="{Binding S3AllowInsecureTls}"/>
                             </StackPanel>
                         </Grid>
-                        <TextBlock Text="Endpoint 填带 https:// 的完整地址；Region 按服务商要求填写（如 us-east-1）；Key Prefix 两台机器填一致才能互通；“携带签名载荷”仅部分老旧 S3 需要，默认不勾"
+                        <TextBlock Text="{l:Loc Cloud_S3Hint}"
                                    FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                         <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                            <Button Content="保存 S3 凭证并切换" Padding="20,6" Margin="0,0,8,0"
+                            <Button Content="{l:Loc Cloud_SaveS3}" Padding="20,6" Margin="0,0,8,0"
                                     Command="{Binding SaveS3Command}"/>
-                            <Button Content="清除凭证" Padding="20,6"
+                            <Button Content="{l:Loc Cloud_ClearCred}" Padding="20,6"
                                     Command="{Binding SignOutCommand}" CommandParameter="s3"
                                     Visibility="{Binding IsProviderSignedIn, Converter={StaticResource BoolToVisibilityConverter}}">
                                 <Button.Foreground>
@@ -260,18 +261,19 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0"
-                                   Text="{Binding RedirectedGames.Count, StringFormat=已重定向游戏（共 {0} 个）}"
+                                   Text="{Binding RedirectedGamesTitle}"
                                    FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"
                                    Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                             <ComboBox ItemsSource="{Binding SortOptions}"
-                                      SelectedItem="{Binding SelectedSortOption}"
+                                      SelectedItem="{Binding SelectedSortOptionItem}"
+                                      DisplayMemberPath="Display"
                                       Padding="8,4" MinWidth="110" Margin="0,0,8,0" VerticalAlignment="Center">
                                 <ComboBox.Background>
                                     <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                                 </ComboBox.Background>
                             </ComboBox>
-                            <Button Content="刷新" Padding="12,6"
+                            <Button Content="{l:Loc Cloud_Refresh}" Padding="12,6"
                                     Command="{Binding RefreshCommand}"
                                     IsEnabled="{Binding IsBusy, Converter={StaticResource BoolInvertConverter}}">
                                 <Button.Background>
@@ -318,14 +320,14 @@
                                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                                         </StackPanel>
                                         <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                                            <Button Content="打开路径" Padding="12,6"
+                                            <Button Content="{l:Loc Cloud_OpenPath}" Padding="12,6"
                                                     Command="{Binding DataContext.OpenSaveFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                     CommandParameter="{Binding AppId}">
                                                 <Button.Background>
                                                     <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
                                                 </Button.Background>
                                             </Button>
-                                            <Button Content="删除存档" Padding="12,6" Margin="8,0,0,0"
+                                            <Button Content="{l:Loc Cloud_DeleteSave}" Padding="12,6" Margin="8,0,0,0"
                                                     Command="{Binding DataContext.DeleteGameCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                     CommandParameter="{Binding}">
                                                 <Button.Background>

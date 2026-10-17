@@ -77,6 +77,10 @@ public partial class MainWindow : Window
     private const double FabSize = 44;
     private const double FabPanelGap = 8;
 
+    // 侧栏最小展开宽度（紧凑模式下的中文基线），以及图标+间距+左右内边距+右侧留白占用宽度
+    private const double MinPaneLength = 105;
+    private const double PaneChromeWidth = 80;
+
     public MainWindow(MainViewModel viewModel, SettingsViewModel settingsViewModel, ScriptDownloadViewModel scriptDownloadViewModel, ExtractionViewModel extractionViewModel, TrainerViewModel trainerViewModel, AchievementViewModel achievementViewModel, AuthorizationViewModel authorizationViewModel, ManifestViewModel manifestViewModel, CloudSaveViewModel cloudSaveViewModel, OnlineFixViewModel onlineFixViewModel, CrackToolViewModel crackToolViewModel, ISettingsService settingsService, ISteamPathService steamPathService, IOpenSteamToolService openSteamToolService)
     {
         InitializeComponent();
@@ -117,19 +121,12 @@ public partial class MainWindow : Window
         _crackToolView = new CrackToolView { DataContext = crackToolViewModel };
         _aboutView = new AboutView();
         ContentTransition.Content = _homeView;
-        SteamMenuList.ItemsSource = new[]
-        {
-            new FabMenuItem("start", "启动 Steam", "\uE768"),
-            FabMenuItem.Separator(),
-            new FabMenuItem("restart", "重启 Steam", "\uE777"),
-            FabMenuItem.Separator(),
-            new FabMenuItem("account", "切换 Steam 账号", "\uE77B", HasSubmenu: true),
-            FabMenuItem.Separator(),
-            new FabMenuItem("kernel", "OpenSteamTool管理", "\uE737", HasSubmenu: true)
-        };
+        BuildSteamMenu();
 
         settingsViewModel.PropertyChanged += SettingsViewModel_PropertyChanged;
         Closed += MainWindow_Closed;
+        // 标题与 FAB 菜单只在窗口构建时求值一次，切语言需重新生成才不会残留旧语言
+        LocalizationService.Instance.PropertyChanged += OnLocalizationChanged;
     }
 
     protected override void OnClosing(CancelEventArgs e)
@@ -144,7 +141,7 @@ public partial class MainWindow : Window
             EnsureTrayIcon();
             _trayIcon!.Visible = true;
             Hide();
-            _trayIcon.ShowBalloonOnce("Fluent Steam Lua 管理工具", "程序已最小化到系统托盘，单击托盘图标恢复");
+            _trayIcon.ShowBalloonOnce(L.Get("Main_TrayTitle"), L.Get("Main_TrayMinimized"));
             return;
         }
 
@@ -250,6 +247,7 @@ public partial class MainWindow : Window
     {
         SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
         _settingsViewModel.PropertyChanged -= SettingsViewModel_PropertyChanged;
+        LocalizationService.Instance.PropertyChanged -= OnLocalizationChanged;
         DisposeIfNeeded(_viewModel);
         DisposeIfNeeded(_settingsViewModel);
         DisposeIfNeeded(_scriptDownloadViewModel);
@@ -314,12 +312,65 @@ public partial class MainWindow : Window
     {
         var status = _steamPathService.DetectSteamToolType() switch
         {
-            SteamToolType.OpenSteamTool => "使用 OpenSteamTool 内核",
-            SteamToolType.SteamTools => "检测到不适配的 SteamTools",
-            SteamToolType.GreenLuma => "检测到不适配的 GreenLuma",
-            _ => "未安装 OpenSteamTool"
+            SteamToolType.OpenSteamTool => L.Get("Home_KernelOST"),
+            SteamToolType.SteamTools => L.Get("Home_KernelMismatch", nameof(SteamToolType.SteamTools)),
+            SteamToolType.GreenLuma => L.Get("Home_KernelMismatch", nameof(SteamToolType.GreenLuma)),
+            _ => L.Get("Home_KernelMissing")
         };
-        Title = $"Fluent Steam Lua 管理工具 - {status}";
+        Title = L.Get("Main_TitleFormat", status);
+    }
+
+    // 菜单项文本由 record 固化，切语言时整体重建 ItemsSource 才能替换为新语言
+    private void BuildSteamMenu()
+    {
+        SteamMenuList.ItemsSource = new[]
+        {
+            new FabMenuItem("start", L.Get("Main_FabStart"), "\uE768"),
+            FabMenuItem.Separator(),
+            new FabMenuItem("restart", L.Get("Main_FabRestart"), "\uE777"),
+            FabMenuItem.Separator(),
+            new FabMenuItem("account", L.Get("Main_FabAccount"), "\uE77B", HasSubmenu: true),
+            FabMenuItem.Separator(),
+            new FabMenuItem("kernel", L.Get("Main_FabKernel"), "\uE737", HasSubmenu: true)
+        };
+    }
+
+    private void OnLocalizationChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        RefreshTitle();
+        BuildSteamMenu();
+        // 导航项宽度取自 Content（由 {l:Loc} 绑定填充），绑定刷新与本次回调的先后顺序 WPF 不保证，
+        // 延后到本轮回调队列末尾再量宽，确保读到的是新语言文本
+        Dispatcher.BeginInvoke(new Action(UpdatePaneLength), DispatcherPriority.Loaded);
+    }
+
+    // 侧栏展开宽度按当前语言最长标签测算：中文短、英文长，固定值不是挤出省略号就是留一大片空白
+    private void UpdatePaneLength()
+    {
+        var maxLabel = 0.0;
+        foreach (var obj in NavView.MenuItems.Cast<object>().Concat(NavView.FooterMenuItems.Cast<object>()))
+        {
+            if (obj is NavigationViewItem item)
+                maxLabel = Math.Max(maxLabel, MeasureNavLabel(item.Content as string));
+        }
+        NavView.OpenPaneLength = Math.Max(MinPaneLength, Math.Ceiling(maxLabel + PaneChromeWidth));
+    }
+
+    // 用与菜单项同一套字体度量文本自然宽度，避免不同语言字形差异带来的估算偏差
+    private double MeasureNavLabel(string? text)
+    {
+        if (string.IsNullOrEmpty(text)) return 0;
+        var probe = new TextBlock
+        {
+            Text = text,
+            FontFamily = HomeItem.FontFamily,
+            FontSize = HomeItem.FontSize,
+            FontWeight = HomeItem.FontWeight,
+            FontStyle = HomeItem.FontStyle,
+            FontStretch = HomeItem.FontStretch
+        };
+        probe.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        return probe.DesiredSize.Width;
     }
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
@@ -328,6 +379,7 @@ public partial class MainWindow : Window
             await _viewModel.LoadedCommand.ExecuteAsync(null);
 
         RefreshTitle();
+        UpdatePaneLength();
 
         var settings = _settingsService.Load();
         UpdateBackdropTheme(ThemeManager.Current.ActualApplicationTheme == ApplicationTheme.Light);
@@ -335,28 +387,23 @@ public partial class MainWindow : Window
         _settingsViewModel.SelectedBackdrop = settings.SelectedBackdrop;
         FabCanvas.Visibility = settings.IsFabVisible ? Visibility.Visible : Visibility.Collapsed;
 
-        switch (_viewModel.OpenSteamToolStatus)
+        var kernelStatus = _viewModel.OpenSteamToolStatus;
+        if (kernelStatus == L.Get("Home_KernelMissing"))
         {
-            case "未安装 OpenSteamTool":
-                await ShowModernDialogAsync(
-                    "未安装 OpenSteamTool",
-                    "未检测到 OpenSteamTool，本软件目前仅适配 OpenSteamTool。\n\n" +
-                    "请确保已在 Steam 目录中正确安装 OpenSteamTool 后再使用。\n\n" +
-                    "可在右下角悬浮按钮中的「OpenSteamTool 管理」中进行安装。");
-                break;
-
-            case "检测到不适配的 SteamTools":
-            case "检测到不适配的 GreenLuma":
-                var foreignName = _viewModel.OpenSteamToolStatus.Contains("GreenLuma") ? "GreenLuma" : "SteamTools";
-                var goPurify = await ShowModernConfirmAsync(
-                    $"不适配的{foreignName}",
-                    $"检测到{foreignName}，该内核与本软件不适配，多内核混装会导致不生效。\n\n" +
-                    "本软件目前仅适配 OpenSteamTool（开源内核）。\n" +
-                    "是否现在一键净化第三方内核，完成后可直接安装 OpenSteamTool？",
-                    "净化");
-                if (goPurify)
-                    await PurifyKernelAsync();
-                break;
+            await ShowModernDialogAsync(
+                L.Get("Main_KernelMissingTitle"),
+                L.Get("Main_KernelMissingBody"));
+        }
+        else if (kernelStatus == L.Get("Home_KernelMismatch", nameof(SteamToolType.SteamTools)) ||
+                 kernelStatus == L.Get("Home_KernelMismatch", nameof(SteamToolType.GreenLuma)))
+        {
+            var foreignName = kernelStatus.Contains("GreenLuma") ? "GreenLuma" : "SteamTools";
+            var goPurify = await ShowModernConfirmAsync(
+                L.Get("Main_ForeignTitle", foreignName),
+                L.Get("Main_ForeignBody", foreignName),
+                L.Get("Main_Purify"));
+            if (goPurify)
+                await PurifyKernelAsync();
         }
 
         // OST 已安装时检测逻辑优先返回，开机即便混装了第三方也不会报；
@@ -369,18 +416,16 @@ public partial class MainWindow : Window
                 if (foreign.Count > 0)
                 {
                     var goPurifyMixed = await ShowModernConfirmAsync(
-                        "检测到内核冲突",
-                        "OpenSteamTool 已安装，但 Steam 目录下还残留第三方内核文件，混装会导致不生效：\n" +
-                        string.Join("\n", foreign.Select(f => $"• {f.RelativePath}（{f.Owner}）")) +
-                        "\n\n是否现在一键净化？",
-                        "净化");
+                        L.Get("Main_ConflictTitle"),
+                        L.Get("Main_ConflictBody", string.Join("\n", foreign.Select(f => $"• {f.RelativePath}（{f.Owner}）"))),
+                        L.Get("Main_Purify"));
                     if (goPurifyMixed)
                         await PurifyKernelAsync();
                 }
             }
             catch (Exception ex)
             {
-                LogService.Warn("内核", $"冲突扫描失败: {ex.Message}");
+                LogService.Warn(L.Get("LogCat_Kernel"), L.Get("Main_LogConflictScanFailed", ex.Message));
             }
         }
 
@@ -427,14 +472,16 @@ public partial class MainWindow : Window
                 TextWrapping = TextWrapping.Wrap,
                 MaxWidth = 420
             },
-            CloseButtonText = "确定",
+            CloseButtonText = L.Get("Common_Confirm"),
             DefaultButton = ContentDialogButton.Close
         };
         await dialog.ShowAsync();
     }
 
-    private async Task<bool> ShowModernConfirmAsync(string title, string message, string primaryText = "确定", string closeText = "取消")
+    private async Task<bool> ShowModernConfirmAsync(string title, string message, string? primaryText = null, string? closeText = null)
     {
+        primaryText ??= L.Get("Common_Confirm");
+        closeText ??= L.Get("Common_Cancel");
         var dialog = new ContentDialog
         {
             Title = title,
@@ -502,7 +549,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            LogService.Warn("界面", $"应用背景材质 {backdropType} 失败，已回退纯色：{ex.Message}");
+            LogService.Warn(L.Get("LogCat_Backdrop"), L.Get("Main_LogBackdropFailed", backdropType, ex.Message));
             backdropType = BackdropType.None;
         }
 
@@ -665,7 +712,7 @@ public partial class MainWindow : Window
         if (newView is null || newView == ContentTransition.Content) return;
         ContentTransition.Content = newView;
         CurrentPage = tag;
-        LogService.Info("导航", $"切换到 {tag}");
+        LogService.Info(L.Get("LogCat_Nav"), L.Get("Main_LogSwitched", tag));
 
         if (tag == "Trainer")
         {
@@ -801,13 +848,13 @@ public partial class MainWindow : Window
 
         if (tickets.Length > 0)
         {
-            LogService.Info("操作", $"拖拽导入授权 {tickets.Length} 个文件: {string.Join("; ", tickets)}");
+            LogService.Info(L.Get("LogCat_Op"), L.Get("Main_LogDragTickets", tickets.Length, string.Join("; ", tickets)));
             foreach (var ticket in tickets)
                 await _authorizationViewModel.ImportFileCommand.ExecuteAsync(ticket);
         }
         if (others.Length > 0)
         {
-            LogService.Info("操作", $"拖拽入库 {others.Length} 个文件: {string.Join("; ", others)}");
+            LogService.Info(L.Get("LogCat_Op"), L.Get("Main_LogDragFiles", others.Length, string.Join("; ", others)));
             await _viewModel.HandleDropAsync(others);
         }
     }
@@ -914,7 +961,7 @@ public partial class MainWindow : Window
     private async void FabMenuItem_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (sender is not Border { Tag: FabMenuItem item }) return;
-        LogService.Info("操作", $"悬浮菜单: {item.Header}");
+        LogService.Info(L.Get("LogCat_Op"), L.Get("Main_LogFabMenu", item.Header));
 
         switch (item.Action)
         {
@@ -1040,7 +1087,7 @@ public partial class MainWindow : Window
             {
                 if (key == null)
                 {
-                    await ShowModernDialogAsync("错误", "无法打开注册表 Steam 项");
+                    await ShowModernDialogAsync(L.Get("Main_DialogError"), L.Get("Main_AccRegFailed"));
                     return;
                 }
                 key.SetValue("AutoLoginUser", target.AccountName, RegistryValueKind.String);
@@ -1051,7 +1098,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            await ShowModernDialogAsync("错误", $"切换账号失败：{ex.Message}");
+            await ShowModernDialogAsync(L.Get("Main_DialogError"), L.Get("Main_AccSwitchFailed", ex.Message));
         }
     }
 
@@ -1120,7 +1167,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var localVersion = await _openSteamToolService.GetLocalVersionAsync() ?? "未知";
+        var localVersion = await _openSteamToolService.GetLocalVersionAsync() ?? L.Get("Main_Unknown");
         var isLight = ThemeManager.Current.ActualApplicationTheme == ApplicationTheme.Light;
         var primaryBrush = isLight
             ? new SolidColorBrush(Color.FromArgb(0xFF, 0x1A, 0x1A, 0x1A))
@@ -1139,30 +1186,30 @@ public partial class MainWindow : Window
 
         KernelList.ItemsSource = new[]
         {
-            new KernelMenuItem("install", "安装", hasDisabled ? "存在被临时禁用的内核" : (isInstalled ? "已安装" : "下载并安装到 Steam 目录"), "\uE737",
+            new KernelMenuItem("install", L.Get("Main_KmInstall"), hasDisabled ? L.Get("Main_KmDisabledHint") : (isInstalled ? L.Get("Main_KmInstalled") : L.Get("Main_KmInstallDesc")), "\uE737",
                 !isInstalled && !hasDisabled ? primaryBrush : disabledBrush,
                 !isInstalled && !hasDisabled ? secondaryBrush : disabledBrush,
                 !isInstalled && !hasDisabled),
             KernelMenuItem.Separator(),
-            new KernelMenuItem("update", "更新", hasDisabled ? "存在被临时禁用的内核" : (isInstalled ? $"本地版本：{localVersion}" : "请先安装"), "\uE777",
+            new KernelMenuItem("update", L.Get("Main_KmUpdate"), hasDisabled ? L.Get("Main_KmDisabledHint") : (isInstalled ? L.Get("Main_KmLocalVersion", localVersion) : L.Get("Main_KmInstallFirst")), "\uE777",
                 isInstalled && !hasDisabled ? primaryBrush : disabledBrush,
                 isInstalled && !hasDisabled ? secondaryBrush : disabledBrush,
                 isInstalled && !hasDisabled),
             KernelMenuItem.Separator(),
-            new KernelMenuItem("toggle-disable", hasDisabled ? "启用内核" : "禁用内核", hasDisabled ? "恢复被临时禁用的内核" : (isInstalled ? "临时禁用内核生效" : "请先安装"), "\uE7E8",
+            new KernelMenuItem("toggle-disable", hasDisabled ? L.Get("Main_KmEnable") : L.Get("Main_KmDisable"), hasDisabled ? L.Get("Main_KmRestoreDisabled") : (isInstalled ? L.Get("Main_KmDisableTemp") : L.Get("Main_KmInstallFirst")), "\uE7E8",
                 isInstalled || hasDisabled ? primaryBrush : disabledBrush,
                 isInstalled || hasDisabled ? secondaryBrush : disabledBrush,
                 isInstalled || hasDisabled),
             KernelMenuItem.Separator(),
-            new KernelMenuItem("uninstall", "卸载", hasDisabled ? "存在被临时禁用的内核" : (isInstalled ? "移除 OpenSteamTool" : "未安装"), "\uE74D",
+            new KernelMenuItem("uninstall", L.Get("Main_KmUninstall"), hasDisabled ? L.Get("Main_KmDisabledHint") : (isInstalled ? L.Get("Main_KmRemove") : L.Get("Main_KmNotInstalled")), "\uE74D",
                 isInstalled && !hasDisabled ? criticalBrush : disabledBrush,
                 isInstalled && !hasDisabled ? secondaryBrush : disabledBrush,
                 isInstalled && !hasDisabled),
             KernelMenuItem.Separator(),
-            new KernelMenuItem("purify", "净化环境", "识别并删除第三方内核", "\uE71C",
+            new KernelMenuItem("purify", L.Get("Main_KmPurify"), L.Get("Main_KmPurifyDesc"), "\uE71C",
                 primaryBrush, secondaryBrush),
             KernelMenuItem.Separator(),
-            new KernelMenuItem("fetch-toml", "一键获取toml文件", "自动获取所需toml文件", "\uE896",
+            new KernelMenuItem("fetch-toml", L.Get("Main_KmFetch"), L.Get("Main_KmFetchDesc"), "\uE896",
                 primaryBrush, secondaryBrush)
         };
 
@@ -1176,7 +1223,7 @@ public partial class MainWindow : Window
         if (sender is not Border b || b.Tag is not KernelMenuItem item || !item.IsEnabled || item.IsSeparator) return;
         KernelSubmenu.Visibility = Visibility.Collapsed;
         SteamPanel.Visibility = Visibility.Collapsed;
-        LogService.Info("操作", $"内核管理: {item.Header}");
+        LogService.Info(L.Get("LogCat_Op"), L.Get("Main_LogKernelAction", item.Header));
 
         switch (item.Action)
         {
@@ -1212,9 +1259,9 @@ public partial class MainWindow : Window
         if (_openSteamToolService.IsInstalled)
         {
             var confirmed = await ShowModernConfirmAsync(
-                "确认安装",
-                "OpenSteamTool 已安装，是否仍要重新安装？这将覆盖现有文件。",
-                "重新安装");
+                L.Get("Main_InstConfirmTitle"),
+                L.Get("Main_InstConfirmBody"),
+                L.Get("Main_Reinstall"));
             if (!confirmed) return;
         }
 
@@ -1223,28 +1270,27 @@ public partial class MainWindow : Window
             var (version, downloadUrl, _) = await _openSteamToolService.GetRemoteInfoAsync();
             if (string.IsNullOrEmpty(downloadUrl))
             {
-                await ShowModernDialogAsync("错误", "无法获取最新版本下载链接");
+                await ShowModernDialogAsync(L.Get("Main_DialogError"), L.Get("Main_NoDownloadUrl"));
                 return;
             }
 
             if (!await RunKernelDownloadAsync(downloadUrl))
                 return;
 
-            await ShowModernDialogAsync("安装完成", $"OpenSteamTool {version} 安装成功！\n请重启 Steam 后生效。");
+            await ShowModernDialogAsync(L.Get("Main_InstDone"), L.Get("Main_InstDoneBody", version));
             RefreshTitle();
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            await ShowModernDialogAsync("错误", $"安装失败：{ex.Message}");
+            await ShowModernDialogAsync(L.Get("Main_DialogError"), L.Get("Main_InstFailed", ex.Message));
         }
     }
-
 
     // 统一的内核下载流程，Install/Update 共用；返回 false 表示已取消
     private async Task<bool> RunKernelDownloadAsync(string downloadUrl)
     {
-        ShowKernelOverlay("正在下载 OpenSteamTool...");
+        ShowKernelOverlay(L.Get("Main_OvDownloading"));
         _kernelCts = new CancellationTokenSource();
         try
         {
@@ -1270,11 +1316,11 @@ public partial class MainWindow : Window
     {
         if (!_openSteamToolService.IsInstalled)
         {
-            await ShowModernDialogAsync("提示", "未检测到 OpenSteamTool，请先安装。");
+            await ShowModernDialogAsync(L.Get("Main_Tip"), L.Get("Main_NotInstalledBody"));
             return;
         }
 
-        var localVersion = await _openSteamToolService.GetLocalVersionAsync() ?? "未知";
+        var localVersion = await _openSteamToolService.GetLocalVersionAsync() ?? L.Get("Main_Unknown");
         var localDisplay = localVersion;
 
         try
@@ -1282,34 +1328,34 @@ public partial class MainWindow : Window
             var (remoteVersion, downloadUrl, releaseUrl) = await _openSteamToolService.GetRemoteInfoAsync();
             if (string.IsNullOrEmpty(downloadUrl))
             {
-                await ShowModernDialogAsync("错误", "无法获取最新版本信息");
+                await ShowModernDialogAsync(L.Get("Main_DialogError"), L.Get("Main_NoRemoteInfo"));
                 return;
             }
 
-            if (localVersion != "未知")
+            if (localVersion != L.Get("Main_Unknown"))
             {
                 // fork 仓库 tag 不带 v 前缀（如 1.4.9），老版本本地号带 v（如 v1.4.7），统一去掉前缀再比对
                 var localVer = Version.TryParse(localVersion.Trim().TrimStart('v', 'V'), out var lv) ? lv : null;
                 var remoteVer = Version.TryParse(remoteVersion.Trim().TrimStart('v', 'V'), out var rv) ? rv : null;
                 if (localVer != null && remoteVer != null && localVer >= remoteVer)
                 {
-                    await ShowModernDialogAsync("无需更新", $"当前已是最新版本。\n本地：{localVersion}\n仓库：{remoteVersion}");
+                    await ShowModernDialogAsync(L.Get("Main_NoUpdate"), L.Get("Main_NoUpdateBody", localVersion, remoteVersion));
                     return;
                 }
             }
 
             var updateDialog = new ContentDialog
             {
-                Title = "更新可用",
+                Title = L.Get("Main_UpdateAvail"),
                 Content = new TextBlock
                 {
-                    Text = $"发现新版本！\n\n当前版本：{localDisplay}\n最新版本：{remoteVersion}\n\n是否更新？",
+                    Text = L.Get("Main_UpdateAvailBody", localDisplay, remoteVersion),
                     TextWrapping = TextWrapping.Wrap,
                     MaxWidth = 420
                 },
-                PrimaryButtonText = "更新",
-                SecondaryButtonText = "跳转发布页",
-                CloseButtonText = "取消",
+                PrimaryButtonText = L.Get("Main_Update"),
+                SecondaryButtonText = L.Get("Main_GoRelease"),
+                CloseButtonText = L.Get("Common_Cancel"),
                 DefaultButton = ContentDialogButton.Primary
             };
             var dialogResult = await updateDialog.ShowAsync();
@@ -1323,13 +1369,13 @@ public partial class MainWindow : Window
             if (!await RunKernelDownloadAsync(downloadUrl))
                 return;
 
-            await ShowModernDialogAsync("更新完成", $"已更新至 {remoteVersion}！\n请重启 Steam 后生效。");
+            await ShowModernDialogAsync(L.Get("Main_UpdDone"), L.Get("Main_UpdDoneBody", remoteVersion));
             RefreshTitle();
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            await ShowModernDialogAsync("错误", $"检查更新失败：{ex.Message}");
+            await ShowModernDialogAsync(L.Get("Main_DialogError"), L.Get("Main_UpdCheckFailed", ex.Message));
         }
     }
 
@@ -1341,36 +1387,36 @@ public partial class MainWindow : Window
             try
             {
                 var done = await _openSteamToolService.EnableKernelAsync();
-                await ShowModernDialogAsync("启用完成", $"已恢复 {done} 个内核文件。重启 Steam 后生效。");
+                await ShowModernDialogAsync(L.Get("Main_EnableDone"), L.Get("Main_EnableDoneBody", done));
                 RefreshTitle();
             }
             catch (Exception ex)
             {
-                await ShowModernDialogAsync("错误", $"启用失败：{ex.Message}");
+                await ShowModernDialogAsync(L.Get("Main_DialogError"), L.Get("Main_EnableFailed", ex.Message));
             }
             return;
         }
 
         if (!_openSteamToolService.IsInstalled)
         {
-            await ShowModernDialogAsync("提示", "未检测到已安装的 OpenSteamTool。");
+            await ShowModernDialogAsync(L.Get("Main_Tip"), L.Get("Main_InstalledNotFound"));
             return;
         }
         // 禁用：重命名被加载的 DLL 不可靠，Steam 关闭门禁
         if (SteamProcess.IsSteamRunning())
         {
-            await ShowModernDialogAsync("Steam 正在运行", "文件被占用，临时禁用前请先完全退出 Steam。");
+            await ShowModernDialogAsync(L.Get("Main_DialogSteamBusy"), L.Get("Main_SteamRunningDisable"));
             return;
         }
         try
         {
             var done = await _openSteamToolService.DisableKernelAsync();
-            await ShowModernDialogAsync("禁用完成", $"已临时禁用 {done} 个内核文件。Steam 将加载原版。");
+            await ShowModernDialogAsync(L.Get("Main_DisableDone"), L.Get("Main_DisableDoneBody", done));
             RefreshTitle();
         }
         catch (Exception ex)
         {
-            await ShowModernDialogAsync("错误", $"禁用失败：{ex.Message}");
+            await ShowModernDialogAsync(L.Get("Main_DialogError"), L.Get("Main_DisableFailed", ex.Message));
         }
     }
 
@@ -1378,25 +1424,25 @@ public partial class MainWindow : Window
     {
         if (!_openSteamToolService.IsInstalled)
         {
-            await ShowModernDialogAsync("提示", "未检测到已安装的 OpenSteamTool。");
+            await ShowModernDialogAsync(L.Get("Main_Tip"), L.Get("Main_InstalledNotFound"));
             return;
         }
 
         var confirmed = await ShowModernConfirmAsync(
-            "确认卸载",
-            "确定要卸载 OpenSteamTool 吗？\n这将删除以下文件：\n• version.dll\n• xinput1_4.dll\n• OpenSteamTool.dll",
-            "卸载");
+            L.Get("Main_UninstConfirmTitle"),
+            L.Get("Main_UninstConfirmBody"),
+            L.Get("Main_Uninstall"));
         if (!confirmed) return;
 
         try
         {
             await _openSteamToolService.UninstallAsync();
-            await ShowModernDialogAsync("卸载完成", "OpenSteamTool 已卸载。\n重启 Steam 后生效。");
+            await ShowModernDialogAsync(L.Get("Main_UninstDone"), L.Get("Main_UninstDoneBody"));
             RefreshTitle();
         }
         catch (Exception ex)
         {
-            await ShowModernDialogAsync("错误", $"卸载失败：{ex.Message}");
+            await ShowModernDialogAsync(L.Get("Main_DialogError"), L.Get("Main_UninstFailed", ex.Message));
         }
     }
 
@@ -1405,7 +1451,7 @@ public partial class MainWindow : Window
         // 删文件前 Steam 必须完全退出，否则占用的 DLL 删不动（更新器同款教训）
         if (SteamProcess.IsSteamRunning())
         {
-            await ShowModernDialogAsync("Steam 正在运行", "检测到 Steam 正在运行，净化前请先完全退出 Steam（含托盘）。");
+            await ShowModernDialogAsync(L.Get("Main_DialogSteamBusy"), L.Get("Main_SteamRunningPurify"));
             return;
         }
 
@@ -1416,21 +1462,20 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            await ShowModernDialogAsync("错误", $"扫描失败：{ex.Message}");
+            await ShowModernDialogAsync(L.Get("Main_DialogError"), L.Get("Main_DialogScanFailed", ex.Message));
             return;
         }
 
         if (found.Count == 0)
         {
-            await ShowModernDialogAsync("环境干净", "未发现第三方内核残留，Steam 目录已是纯净环境。");
+            await ShowModernDialogAsync(L.Get("Main_DialogNoForeign"), L.Get("Main_DialogNoForeignBody"));
             return;
         }
 
         var confirmed = await ShowModernConfirmAsync(
-            "确认净化",
-            "将永久删除以下第三方内核文件（无备份，请确认）：\n" +
-            string.Join("\n", found.Select(f => $"• {f.RelativePath}（{f.Owner}）")),
-            "删除");
+            L.Get("Main_DialogConfirmPurify"),
+            L.Get("Main_DialogConfirmPurifyBody", string.Join("\n", found.Select(f => $"• {f.RelativePath}（{f.Owner}）"))),
+            L.Get("Main_Delete"));
         if (!confirmed) return;
 
         try
@@ -1443,30 +1488,29 @@ public partial class MainWindow : Window
                 // 否则点安装会撞进“已安装是否重新安装”的二次确认
                 if (_openSteamToolService.IsInstalled)
                 {
-                    await ShowModernDialogAsync("净化完成",
-                        $"已移除 {removed} 个第三方内核文件，环境已纯净，OpenSteamTool 可正常工作。\n请重启 Steam 后生效。");
+                    await ShowModernDialogAsync(L.Get("Main_DialogPurifyDone"),
+                        L.Get("Main_DialogPurifyDoneBody", removed));
                 }
                 else
                 {
                     var goInstall = await ShowModernConfirmAsync(
-                        "净化完成",
-                        $"已移除 {removed} 个第三方内核文件，环境已纯净。\n是否现在安装 OpenSteamTool？",
-                        "安装");
+                        L.Get("Main_DialogPurifyDone"),
+                        L.Get("Main_PurifyDoneAskBody", removed),
+                        L.Get("Main_Install"));
                     if (goInstall)
                         await InstallKernelAsync();
                 }
             }
             else
             {
-                await ShowModernDialogAsync("部分失败",
-                    $"已移除 {removed} 个，{failed.Count} 个删除失败：\n" +
-                    string.Join("\n", failed.Select(f => $"• {f}")) +
-                    "\n\n请确认 Steam 已完全退出后重试。");
+                await ShowModernDialogAsync(L.Get("Main_DialogPurifyPartial"),
+                    L.Get("Main_DialogPurifyPartialBody", removed, failed.Count,
+                    string.Join("\n", failed.Select(f => $"• {f}"))));
             }
         }
         catch (Exception ex)
         {
-            await ShowModernDialogAsync("错误", $"净化失败：{ex.Message}");
+            await ShowModernDialogAsync(L.Get("Main_DialogError"), L.Get("Main_DialogPurifyFailed", ex.Message));
         }
     }
 
@@ -1476,7 +1520,7 @@ public partial class MainWindow : Window
         // 两个 ContentDialog 互斥直接闪退（已实测）。静默吞掉，只记日志。
         if (_tomlFetching)
         {
-            LogService.Info("操作", "一键获取toml文件：上一次尚未完成，忽略本次点击");
+            LogService.Info(L.Get("LogCat_Op"), L.Get("Main_LogTomlDupClick"));
             return;
         }
         _tomlFetching = true;
@@ -1500,13 +1544,13 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            await ShowModernDialogAsync("错误", $"识别 Steam DLL 指纹失败：{ex.Message}");
+            await ShowModernDialogAsync(L.Get("Main_DialogError"), L.Get("Main_TomlDetectFailed", ex.Message));
             return;
         }
 
         if (info == null)
         {
-            await ShowModernDialogAsync("未找到 Steam", "未能定位 Steam 安装目录或 steamclient64.dll / steamui.dll 缺失。");
+            await ShowModernDialogAsync(L.Get("Main_SteamNotFoundTitle"), L.Get("Main_SteamNotFoundBody"));
             return;
         }
 
@@ -1516,13 +1560,13 @@ public partial class MainWindow : Window
         var fetchPanel = new StackPanel { MaxWidth = 560 };
         fetchPanel.Children.Add(new TextBlock
         {
-            Text = "识别结果",
+            Text = L.Get("Main_TomlResult"),
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 2)
         });
         fetchPanel.Children.Add(new TextBlock
         {
-            Text = "steamclient64.dll SHA：",
+            Text = L.Get("Main_TomlClientSha"),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 6, 0, 0)
         });
@@ -1535,7 +1579,7 @@ public partial class MainWindow : Window
         });
         fetchPanel.Children.Add(new TextBlock
         {
-            Text = "steamui.dll SHA：",
+            Text = L.Get("Main_TomlUiSha"),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 6, 0, 0)
         });
@@ -1548,7 +1592,7 @@ public partial class MainWindow : Window
         });
         fetchPanel.Children.Add(new TextBlock
         {
-            Text = "将获取文件",
+            Text = L.Get("Main_TomlWillFetch"),
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 12, 0, 2)
         });
@@ -1566,37 +1610,37 @@ public partial class MainWindow : Window
         }
         fetchPanel.Children.Add(new TextBlock
         {
-            Text = "说明",
+            Text = L.Get("Main_TomlNotes"),
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 12, 0, 2)
         });
         fetchPanel.Children.Add(new TextBlock
         {
-            Text = "同名文件直接覆盖；重启 Steam 后生效。",
+            Text = L.Get("Main_TomlOverwrite"),
             TextWrapping = TextWrapping.Wrap
         });
         fetchPanel.Children.Add(new TextBlock
         {
-            Text = "是否自动获取toml文件？",
+            Text = L.Get("Main_TomlAsk"),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 6, 0, 0)
         });
         var fetchDialog = new ContentDialog
         {
-            Title = "一键获取toml文件",
+            Title = L.Get("Main_TomlTitle"),
             Content = new ScrollViewer
             {
                 Content = fetchPanel,
                 MaxHeight = 440,
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto
             },
-            PrimaryButtonText = "获取",
-            CloseButtonText = "取消",
+            PrimaryButtonText = L.Get("Main_Fetch"),
+            CloseButtonText = L.Get("Common_Cancel"),
             DefaultButton = ContentDialogButton.Primary
         };
         if (await fetchDialog.ShowAsync() != ContentDialogResult.Primary) return;
 
-        ShowKernelOverlay("正在获取toml文件...");
+        ShowKernelOverlay(L.Get("Main_OvFetchingToml"));
         _tomlCts = new CancellationTokenSource();
         IReadOnlyList<TomlFetchResult> results;
         try
@@ -1612,7 +1656,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            await ShowModernDialogAsync("错误", $"获取失败：{ex.Message}");
+            await ShowModernDialogAsync(L.Get("Main_DialogError"), L.Get("Main_TomlFailed", ex.Message));
             return;
         }
         finally
@@ -1628,7 +1672,7 @@ public partial class MainWindow : Window
         var failed = results.Where(r => !r.Success).ToList();
         var notFound = failed.Where(r => r.NotFound).ToList();
         var netFailed = failed.Where(r => !r.NotFound).ToList();
-        LogService.Info("操作", $"一键获取toml文件：成功 {ok.Count} 个，失败 {failed.Count} 个（404 {notFound.Count} 个）");
+        LogService.Info(L.Get("LogCat_Op"), L.Get("Main_LogTomlDone", ok.Count, failed.Count, notFound.Count));
 
         // 结果框抄确认框的结构：分节 + 灰色路径。404 和网络失败 advice 不能混：
         // 404=上游没这个版本（多为 Beta 版 Steam），让人更新正式版；其他失败=网络问题，让人查网络
@@ -1637,7 +1681,7 @@ public partial class MainWindow : Window
         {
             resultPanel.Children.Add(new TextBlock
             {
-                Text = "已就位：",
+                Text = L.Get("Main_TomlReady"),
                 FontWeight = FontWeights.SemiBold,
                 Margin = new Thickness(0, 0, 0, 2)
             });
@@ -1657,7 +1701,7 @@ public partial class MainWindow : Window
         {
             resultPanel.Children.Add(new TextBlock
             {
-                Text = "上游暂无以下版本文件：",
+                Text = L.Get("Main_TomlNoUpstream"),
                 FontWeight = FontWeights.SemiBold,
                 Margin = new Thickness(0, 12, 0, 2)
             });
@@ -1674,7 +1718,7 @@ public partial class MainWindow : Window
             }
             resultPanel.Children.Add(new TextBlock
             {
-                Text = "当前 Steam 版本不受支持，可能为测试版（Beta）Steam。请更新到最新正式版 Steam 后重试。",
+                Text = L.Get("Main_TomlBetaHint"),
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 6, 0, 0)
             });
@@ -1683,7 +1727,7 @@ public partial class MainWindow : Window
         {
             resultPanel.Children.Add(new TextBlock
             {
-                Text = "下载失败：",
+                Text = L.Get("Main_TomlDlFailed"),
                 FontWeight = FontWeights.SemiBold,
                 Margin = new Thickness(0, 12, 0, 2)
             });
@@ -1700,7 +1744,7 @@ public partial class MainWindow : Window
             }
             resultPanel.Children.Add(new TextBlock
             {
-                Text = "请检查网络后重试。",
+                Text = L.Get("Main_TomlCheckNet"),
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 6, 0, 0)
             });
@@ -1711,7 +1755,7 @@ public partial class MainWindow : Window
         {
             resultPanel.Children.Add(new TextBlock
             {
-                Text = "重启 Steam 后生效。",
+                Text = L.Get("Main_TomlRestartHint"),
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 6, 0, 0)
             });
@@ -1720,15 +1764,15 @@ public partial class MainWindow : Window
         // 全失败时只要确定一个钮（重启了也没用，不给）。
         var resultDialog = new ContentDialog
         {
-            Title = failed.Count == 0 ? "获取完成" : "部分失败",
+            Title = failed.Count == 0 ? L.Get("Main_TomlDone") : L.Get("Main_TomlPartial"),
             Content = new ScrollViewer
             {
                 Content = resultPanel,
                 MaxHeight = 440,
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto
             },
-            PrimaryButtonText = anyOk ? "重启 Steam" : "确定",
-            SecondaryButtonText = anyOk ? "确定" : null,
+            PrimaryButtonText = anyOk ? L.Get("Main_FabRestart") : L.Get("Common_Confirm"),
+            SecondaryButtonText = anyOk ? L.Get("Common_Confirm") : null,
             DefaultButton = ContentDialogButton.Primary
         };
         var dialogResult = await resultDialog.ShowAsync();

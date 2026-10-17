@@ -35,9 +35,9 @@ public class ManifestHubService : IManifestHubService
     {
         var steamPath = _steamPathService.DetectSteamPath();
         if (string.IsNullOrEmpty(steamPath))
-            return new ManifestHubResult(false, false, null, "未检测到 Steam 路径");
+            return new ManifestHubResult(false, false, null, L.Get("Svc_MfNoSteamPath"));
         if (string.IsNullOrWhiteSpace(apiKey))
-            return new ManifestHubResult(false, true, null, "未配置 API Key");
+            return new ManifestHubResult(false, true, null, L.Get("Svc_MhNoApiKey"));
 
         var url = $"{ApiUrl}?apikey={Uri.EscapeDataString(apiKey)}&depotid={depotId}&manifestid={Uri.EscapeDataString(manifestId)}";
         ManifestHubResult? last = null;
@@ -48,14 +48,14 @@ public class ManifestHubService : IManifestHubService
             {
                 // 重试等待放 try 之外：取消时直接抛 OCE 由调用方处理，不会被误判为超时
                 var wait = ClampRetryDelay(retryAfter, attempt);
-                progress?.Invoke($"Depot {depotId} 触发限流（{DescribeStatus(last)}），{wait.TotalSeconds:F0} 秒后重试（第 {attempt}/{MaxDownloadRetries} 次）");
+                progress?.Invoke(L.Get("Svc_MhRateLimited", depotId, DescribeStatus(last), wait.TotalSeconds.ToString("F0"), attempt, MaxDownloadRetries));
                 await Task.Delay(wait, ct);
             }
             bool transient;
             (last, retryAfter, transient) = await TryDownloadOnceAsync(url, steamPath, depotId, manifestId, ct);
             if (!transient) return last;
             if (attempt == MaxDownloadRetries)
-                return last with { Error = $"{last.Error}，已重试 {MaxDownloadRetries} 次仍失败" };
+                return last with { Error = L.Get("Svc_MhRetryExhausted", last.Error, MaxDownloadRetries) };
         }
         return last!;
     }
@@ -66,7 +66,7 @@ public class ManifestHubService : IManifestHubService
         statusCode is 429 or 500 or 502 or 503 or 504;
 
     private static string DescribeStatus(ManifestHubResult? r) =>
-        r?.StatusCode?.ToString() ?? (r?.Error == "请求超时" ? "超时" : "网络异常");
+        r?.StatusCode?.ToString() ?? (r?.Error == L.Get("Svc_MhRequestTimeout") ? L.Get("Svc_MhTimeoutShort") : L.Get("Svc_MhNetError"));
 
     // 服务端 Retry-After 优先（钳制 1~30 秒），否则按 2/5/10 秒退避，均加半秒内抖动错开并发槽
     private static TimeSpan ClampRetryDelay(TimeSpan? retryAfter, int attempt)
@@ -94,27 +94,27 @@ public class ManifestHubService : IManifestHubService
                 client => client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct),
                 HttpHeaderHelper.ConfigureBrowser);
             if (response.StatusCode == HttpStatusCode.Unauthorized || response.StatusCode == HttpStatusCode.Forbidden)
-                return (new ManifestHubResult(false, true, null, "API Key 无效或已过期，请重新获取", false, (int)response.StatusCode), null, false);
+                return (new ManifestHubResult(false, true, null, L.Get("Svc_MhKeyInvalid"), false, (int)response.StatusCode), null, false);
             // 我把 404/400 单独判为"确认没有"：调用方据此进 DLC 移除流程；
             // 其余非成功不抛异常直接返回，免得异常链把真实状态码弄丢，调用方无法区分"没有"和"限流"。
             if (response.StatusCode == HttpStatusCode.NotFound || response.StatusCode == HttpStatusCode.BadRequest)
-                return (new ManifestHubResult(false, false, null, $"该 depot 暂无可用 manifest（{(int)response.StatusCode}）", true, (int)response.StatusCode), null, false);
+                return (new ManifestHubResult(false, false, null, L.Get("Svc_MhNoManifestStatus", (int)response.StatusCode), true, (int)response.StatusCode), null, false);
             if (!response.IsSuccessStatusCode)
-                return (new ManifestHubResult(false, false, null, $"接口返回 {(int)response.StatusCode} {response.ReasonPhrase}".Trim(), false, (int)response.StatusCode), ReadRetryAfter(response), IsRetryableStatus((int)response.StatusCode));
+                return (new ManifestHubResult(false, false, null, L.Get("Svc_MhApiReturned", (int)response.StatusCode, response.ReasonPhrase).Trim(), false, (int)response.StatusCode), ReadRetryAfter(response), IsRetryableStatus((int)response.StatusCode));
             bytes = await response.Content.ReadAsByteArrayAsync(ct);
             if (bytes.Length == 0)
-                return (new ManifestHubResult(false, false, null, "接口返回空内容", false, (int)response.StatusCode), null, false);
+                return (new ManifestHubResult(false, false, null, L.Get("Svc_MhEmptyBody"), false, (int)response.StatusCode), null, false);
             statusCode = (int)response.StatusCode;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         // 超时（非用户取消）归入瞬时故障参与退避重试
         catch (OperationCanceledException)
         {
-            return (new ManifestHubResult(false, false, null, "请求超时"), null, true);
+            return (new ManifestHubResult(false, false, null, L.Get("Svc_MhRequestTimeout")), null, true);
         }
         catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound || ex.StatusCode == HttpStatusCode.BadRequest)
         {
-            return (new ManifestHubResult(false, false, null, "该 depot 暂无可用 manifest", true, (int?)ex.StatusCode), null, false);
+            return (new ManifestHubResult(false, false, null, L.Get("Svc_MhNoManifest"), true, (int?)ex.StatusCode), null, false);
         }
         catch (HttpRequestException ex)
         {
@@ -138,7 +138,7 @@ public class ManifestHubService : IManifestHubService
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
-            return (new ManifestHubResult(false, false, null, $"写入 depotcache 失败：{ex.Message}", false, statusCode), null, false);
+            return (new ManifestHubResult(false, false, null, L.Get("Svc_MhWriteFailed", ex.Message), false, statusCode), null, false);
         }
         finally
         {

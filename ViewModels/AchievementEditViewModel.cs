@@ -70,9 +70,9 @@ public partial class AchievementEditViewModel : ObservableObject, IDisposable
                 _session = await WorkerSession.StartAsync(_appId);
                 if (_session == null)
                 {
-                    StatusMessage = "启动 Steam 会话失败，请确认 Steam 正在运行且已登录";
-                    EmptyHintText = "启动 Steam 会话失败，可点击「重新加载」重试";
-                    LogService.Error("成就", $"启动 Steam 会话失败 ({_gameName} AppID {_appId})，请确认 Steam 正在运行且已登录");
+                    StatusMessage = L.Get("AchEdit_SessionStartFailed");
+                    EmptyHintText = L.Get("AchEdit_RetryHint", L.Get("AchEdit_Reload"));
+                    LogService.Error(L.Get("LogCat_Achieve"), $"{L.Get("AchEdit_SessionStartFailed")} ({_gameName} AppID {_appId})");
                     return;
                 }
             }
@@ -86,9 +86,9 @@ public partial class AchievementEditViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            StatusMessage = "自动加载异常：" + ex.Message;
-            EmptyHintText = "加载失败，可点击「重新加载」重试";
-            LogService.Error("成就", $"自动加载异常 ({_gameName} AppID {_appId}): {ex}");
+            StatusMessage = L.Get("AchEdit_AutoLoadError", ex.Message);
+            EmptyHintText = L.Get("AchEdit_RetryHint", L.Get("AchEdit_Reload"));
+            LogService.Error(L.Get("LogCat_Achieve"), $"{L.Get("AchEdit_AutoLoadError", ex.Message)} ({_gameName} AppID {_appId})");
         }
         finally
         {
@@ -114,8 +114,8 @@ public partial class AchievementEditViewModel : ObservableObject, IDisposable
         // 会话为空（子进程未启动或已退出）不再静默返回，给一行提示免得界面干等
         if (_session == null)
         {
-            StatusMessage = "Steam 会话不可用，可点击「重新加载」重试";
-            EmptyHintText = "Steam 会话不可用，可点击「重新加载」重试";
+            StatusMessage = L.Get("AchEdit_SessionUnavailable") + "，" + L.Get("AchEdit_RetryHint", L.Get("AchEdit_Reload"));
+            EmptyHintText = L.Get("AchEdit_SessionUnavailable") + "，" + L.Get("AchEdit_RetryHint", L.Get("AchEdit_Reload"));
             return false;
         }
 
@@ -127,9 +127,9 @@ public partial class AchievementEditViewModel : ObservableObject, IDisposable
             var data = await _session.LoadAsync();
             if (data == null)
             {
-                StatusMessage = _session.LastError ?? "加载成就数据失败";
-                EmptyHintText = "加载失败，可点击「重新加载」重试";
-                LogService.Error("成就", $"加载成就数据失败 ({_gameName} AppID {_appId}): {StatusMessage}");
+                StatusMessage = _session.LastError ?? L.Get("AchEdit_LoadFailed");
+                EmptyHintText = L.Get("AchEdit_RetryHint", L.Get("AchEdit_Reload"));
+                LogService.Error(L.Get("LogCat_Achieve"), L.Get("AchEdit_LogSaveFailed", _gameName, _appId, StatusMessage));
                 return false;
             }
 
@@ -139,11 +139,11 @@ public partial class AchievementEditViewModel : ObservableObject, IDisposable
                 Achievements.Add(entry);
             }
 
-            LogService.Info("成就", $"已加载 {Achievements.Count} 个成就 ({_gameName} AppID {_appId})");
-            StatusMessage = $"已加载 {Achievements.Count} 个成就";
+            LogService.Info(L.Get("LogCat_Achieve"), L.Get("AchEdit_LogLoaded", Achievements.Count, _gameName, _appId));
+            StatusMessage = L.Get("AchEdit_LoadedStatus", Achievements.Count);
             if (Achievements.Count == 0)
             {
-                EmptyHintText = "未找到成就定义（游戏未启动过或缺少 schema 文件）";
+                EmptyHintText = L.Get("AchEdit_NoDefinitions");
             }
             return true;
         }
@@ -164,7 +164,7 @@ public partial class AchievementEditViewModel : ObservableObject, IDisposable
 
         if (modifiedAchievements.Count == 0)
         {
-            StatusMessage = "没有需要保存的修改";
+            StatusMessage = L.Get("AchEdit_NoChanges");
             return;
         }
 
@@ -179,15 +179,15 @@ public partial class AchievementEditViewModel : ObservableObject, IDisposable
         var result = await _session.SaveAsync(request);
         if (result == null)
         {
-            StatusMessage = "保存失败（会话无响应）";
-            LogService.Error("成就", $"保存成就失败 ({_gameName} AppID {_appId}): 会话无响应");
+            StatusMessage = L.Get("AchEdit_SaveNoResponse");
+            LogService.Error(L.Get("LogCat_Achieve"), L.Get("AchEdit_LogSaveFailed", _gameName, _appId, L.Get("AchEdit_SaveNoResponse")));
             return;
         }
 
         if (result.Ok == false)
         {
             StatusMessage = result.Message;
-            LogService.Error("成就", $"保存成就失败 ({_gameName} AppID {_appId}): {result.Message}");
+            LogService.Error(L.Get("LogCat_Achieve"), L.Get("AchEdit_LogSaveFailed", _gameName, _appId, result.Message));
             return;
         }
 
@@ -196,8 +196,8 @@ public partial class AchievementEditViewModel : ObservableObject, IDisposable
             entry.OriginalAchieved = entry.IsAchieved;
         }
 
-        LogService.Info("成就", $"已保存 {modifiedAchievements.Count} 个成就修改 ({_gameName} AppID {_appId})");
-        StatusMessage = $"已保存 {modifiedAchievements.Count} 个成就";
+        LogService.Info(L.Get("LogCat_Achieve"), L.Get("AchEdit_LogSaved", modifiedAchievements.Count, _gameName, _appId));
+        StatusMessage = L.Get("AchEdit_SavedStatus", modifiedAchievements.Count);
     }
 
     [RelayCommand]

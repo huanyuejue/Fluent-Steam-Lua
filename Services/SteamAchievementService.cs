@@ -40,7 +40,7 @@ public sealed class SteamAchievementService : ISteamAchievementService
             _steamPath = Steam.GetInstallPath() ?? "";
             if (string.IsNullOrEmpty(_steamPath))
             {
-                LastError = "无法获取 Steam 安装路径";
+                LastError = L.Get("Svc_AchNoSteamPath");
                 return false;
             }
 
@@ -66,14 +66,14 @@ public sealed class SteamAchievementService : ISteamAchievementService
         catch (ClientInitializeException ex)
         {
             LastError = TranslateInitFailure(ex);
-            LogService.Error("成就", $"连接 Steam 初始化失败: {ex}");
+            LogService.Error(L.Get("LogCat_Achieve"), L.Get("Svc_AchConnectInitFailed", ex));
             TryDisposeClient();
             return false;
         }
         catch (Exception ex)
         {
-            LastError = $"连接 Steam 失败：{ex.Message}";
-            LogService.Error("成就", $"连接 Steam 失败: {ex}");
+            LastError = L.Get("Svc_AchConnectFailed", ex.Message);
+            LogService.Error(L.Get("LogCat_Achieve"), L.Get("Svc_AchConnectFailed", ex));
             TryDisposeClient();
             return false;
         }
@@ -84,13 +84,13 @@ public sealed class SteamAchievementService : ISteamAchievementService
         switch (ex.Failure)
         {
             case ClientInitializeFailure.GetInstallPath:
-                return "无法获取 Steam 安装路径，请确认 Steam 已正确安装";
+                return L.Get("Svc_AchInitGetPath");
 
             case ClientInitializeFailure.Load:
-                return "无法加载 Steam 客户端组件（steamclient.dll），请检查 Steam 安装是否完整";
+                return L.Get("Svc_AchInitLoad");
 
             case ClientInitializeFailure.CreateSteamClient:
-                return "创建 Steam 客户端接口失败，请检查 Steam 安装是否完整";
+                return L.Get("Svc_AchInitCreateClient");
 
             case ClientInitializeFailure.CreateSteamPipe:
             {
@@ -99,8 +99,8 @@ public sealed class SteamAchievementService : ISteamAchievementService
                 try
                 {
                     return procs.Length == 0
-                        ? "未检测到 Steam 客户端运行，请先启动并登录 Steam 后重试"
-                        : "Steam 客户端正在运行但连接失败，可能尚未启动完成，请稍后重试";
+                        ? L.Get("Svc_AchInitNoSteamProc")
+                        : L.Get("Svc_AchInitProcBusy");
                 }
                 finally
                 {
@@ -110,13 +110,13 @@ public sealed class SteamAchievementService : ISteamAchievementService
             }
 
             case ClientInitializeFailure.ConnectToGlobalUser:
-                return "连接 Steam 用户会话失败，请确认已登录 Steam 后重试";
+                return L.Get("Svc_AchInitConnectUser");
 
             case ClientInitializeFailure.AppIdMismatch:
-                return "Steam 应用 ID 不匹配，请联系开发者";
+                return L.Get("Svc_AchInitAppIdMismatch");
 
             default:
-                return $"连接 Steam 失败：{ex.Message}";
+                return L.Get("Svc_AchConnectFailed", ex.Message);
         }
     }
 
@@ -140,7 +140,7 @@ public sealed class SteamAchievementService : ISteamAchievementService
             if (!_callbackErrorLogged)
             {
                 _callbackErrorLogged = true;
-                LogService.Warn("成就", $"Steam 回调执行失败: {ex.Message}");
+                LogService.Warn(L.Get("LogCat_Achieve"), L.Get("Svc_AchCallbackFailed", ex.Message));
             }
         }
     }
@@ -164,7 +164,7 @@ public sealed class SteamAchievementService : ISteamAchievementService
         if (_client.SteamUserStats.RequestUserStats(steamId) == CallHandle.Invalid)
         {
             _pendingStatsTcs = null;
-            LastError = "请求统计数据失败";
+            LastError = L.Get("Svc_AchRequestStatsFailed");
             return false;
         }
 
@@ -178,14 +178,14 @@ public sealed class SteamAchievementService : ISteamAchievementService
 
         if (!tcs.Task.IsCompleted)
         {
-            LastError = "等待 Steam 响应超时";
+            LastError = L.Get("Svc_AchWaitTimeout");
             return false;
         }
 
         param = tcs.Task.Result;
         if (param.Result != 1)
         {
-            LastError = $"获取统计数据失败（错误码 {param.Result}），通常表示你不拥有该游戏";
+            LastError = L.Get("Svc_AchGetStatsFailed", param.Result);
             return false;
         }
 
@@ -204,7 +204,7 @@ public sealed class SteamAchievementService : ISteamAchievementService
                 var appInfoPath = Path.Combine(_steamPath, "appcache", "appinfo.vdf");
                 if (File.Exists(appInfoPath) == false)
                 {
-                    LastError = $"未找到 appinfo.vdf（{appInfoPath}）";
+                    LastError = L.Get("Svc_AchAppInfoMissing", appInfoPath);
                     return result;
                 }
 
@@ -225,14 +225,14 @@ public sealed class SteamAchievementService : ISteamAchievementService
 
                 if (result.Count == 0)
                 {
-                    LastError = "appinfo.vdf 未解析出任何游戏条目";
+                    LastError = L.Get("Svc_AchAppInfoEmpty");
                 }
 
                 return result;
             }
             catch (Exception ex)
             {
-                LastError = $"加载游戏列表失败：{ex}";
+                LastError = L.Get("Svc_AchLoadGamesFailed", ex);
                 return result;
             }
         });
@@ -258,7 +258,7 @@ public sealed class SteamAchievementService : ISteamAchievementService
     {
         if (_client == null)
         {
-            LastError = "尚未连接 Steam";
+            LastError = L.Get("Svc_AchNotConnected");
             return null;
         }
 
@@ -274,7 +274,7 @@ public sealed class SteamAchievementService : ISteamAchievementService
             var schema = LoadSchema(appId, language);
             if (schema == null)
             {
-                LastError = "未能加载成就定义（缺少 schema 文件）";
+                LastError = L.Get("Svc_AchSchemaMissing");
                 return null;
             }
 
@@ -311,7 +311,7 @@ public sealed class SteamAchievementService : ISteamAchievementService
         }
         catch (Exception ex)
         {
-            LastError = $"加载成就失败:{ex.Message}";
+            LastError = L.Get("Svc_AchLoadFailed", ex.Message);
             return null;
         }
     }
@@ -322,7 +322,7 @@ public sealed class SteamAchievementService : ISteamAchievementService
         var result = new WorkerSaveResult();
         if (_client == null)
         {
-            result.Message = "尚未连接 Steam";
+            result.Message = L.Get("Svc_AchNotConnected");
             return result;
         }
 
@@ -330,7 +330,7 @@ public sealed class SteamAchievementService : ISteamAchievementService
         {
             if (WaitForStatsReady(out _) == false)
             {
-                result.Message = LastError ?? "无法获取该游戏统计数据";
+                result.Message = LastError ?? L.Get("Svc_AchNoGameStats");
                 return result;
             }
 
@@ -338,14 +338,14 @@ public sealed class SteamAchievementService : ISteamAchievementService
             {
                 if (_client.SteamUserStats.SetAchievement(change.Id, change.Achieved) == false)
                 {
-                    result.Message = $"设置成就「{change.Id}」失败";
+                    result.Message = L.Get("Svc_AchSetFailed", change.Id);
                     return result;
                 }
             }
 
             if (_client.SteamUserStats.StoreStats() == false)
             {
-                result.Message = "保存到 Steam 失败（StoreStats 失败）";
+                result.Message = L.Get("Svc_AchStoreStatsFailed");
                 return result;
             }
 

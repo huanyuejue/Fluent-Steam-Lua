@@ -1,6 +1,7 @@
 <UserControl x:Class="SteamLuaManager.Views.AchievementView"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:l="clr-namespace:SteamLuaManager.Markup"
         xmlns:ui="http://schemas.inkore.net/lib/ui/wpf/modern"
         xmlns:controls="clr-namespace:SteamLuaManager.Controls"
         Background="Transparent"
@@ -29,16 +30,16 @@
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="成就管理" FontSize="28" FontWeight="SemiBold"
+                    <TextBlock Text="{l:Loc Ach_Title}" FontSize="28" FontWeight="SemiBold"
                                Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-                    <TextBlock Grid.Column="1" Text="双击卡片打开成就编辑" FontSize="12"
+                    <TextBlock Grid.Column="1" Text="{l:Loc Ach_Hint}" FontSize="12"
                                Margin="12,14,0,0"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                 </Grid>
                 <TextBlock Text="{Binding GameCountText}" FontSize="13" Margin="0,2,0,0"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
             </StackPanel>
-            <Button Grid.Column="1" Content="刷新游戏列表" VerticalAlignment="Center"
+            <Button Grid.Column="1" Content="{l:Loc Ach_RefreshList}" VerticalAlignment="Center"
                     Command="{Binding LoadGamesCommand}" IsEnabled="{Binding IsLoadingGames, Converter={StaticResource BoolInvertConverter}}"
                     Padding="16,6" Height="36" FontSize="14">
                 <Button.Background>
@@ -54,7 +55,7 @@
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <ui:AutoSuggestBox Grid.Column="0" PlaceholderText="搜索游戏名或 AppID，回车或点放大镜搜索"
+            <ui:AutoSuggestBox Grid.Column="0" PlaceholderText="{l:Loc Ach_SearchPlaceholder}"
                                Text="{Binding SearchText, Mode=TwoWay}"
                                QuerySubmitted="SearchBox_QuerySubmitted"
                                TextChanged="SearchBox_TextChanged"
@@ -68,10 +69,11 @@
                 </ui:AutoSuggestBox.QueryIcon>
             </ui:AutoSuggestBox>
             <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="0,0,12,0">
-                <TextBlock Text="视图:" VerticalAlignment="Center" Margin="0,0,8,0"
+                <TextBlock Text="{l:Loc Home_ViewLabel}" VerticalAlignment="Center" Margin="0,0,8,0"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                 <ComboBox x:Name="ViewModeComboBox" ItemsSource="{Binding ViewModeOptions}"
-                          SelectedItem="{Binding SelectedViewMode, Mode=TwoWay}"
+                          SelectedItem="{Binding SelectedViewModeOption}"
+                          DisplayMemberPath="Display"
                           SelectionChanged="ViewModeComboBox_SelectionChanged"
                           Padding="12,6" HorizontalContentAlignment="Center">
                     <ComboBox.Background>
@@ -80,10 +82,11 @@
                 </ComboBox>
             </StackPanel>
             <StackPanel Grid.Column="2" Orientation="Horizontal">
-                <TextBlock Text="排序:" VerticalAlignment="Center" Margin="0,0,8,0"
+                <TextBlock Text="{l:Loc Home_SortLabel}" VerticalAlignment="Center" Margin="0,0,8,0"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                 <ComboBox x:Name="SortComboBox" ItemsSource="{Binding SortOptions}"
-                          SelectedItem="{Binding SelectedSortOption, Mode=TwoWay}"
+                          SelectedItem="{Binding SelectedSortOptionItem}"
+                          DisplayMemberPath="Display"
                           SelectionChanged="SortComboBox_SelectionChanged"
                           MinWidth="90" Padding="12,6" HorizontalContentAlignment="Center">
                     <ComboBox.Background>
@@ -115,7 +118,7 @@
                                     Tag="{Binding}"
                                     Cursor="Hand"
                                     MouseDoubleClick="Card_MouseDoubleClick"
-                                    ToolTip="双击打开成就编辑">
+                                     ToolTip="{l:Loc Ach_CardEditTip}">
                                 <controls:ClippingBorder.Background>
                                     <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
                                 </controls:ClippingBorder.Background>
@@ -187,7 +190,7 @@
                                             <Run Text="{Binding AppId, Mode=OneWay}"/>
                                         </TextBlock>
                                     </StackPanel>
-                                    <Button Grid.Column="1" Content="成就管理" Tag="{Binding}"
+                                        <Button Grid.Column="1" Content="{l:Loc Ach_Title}" Tag="{Binding}"
                                             Click="ListItemEditButton_Click"
                                             Padding="12,6" VerticalAlignment="Center">
                                         <Button.Background>
@@ -205,7 +208,7 @@
                         Visibility="{Binding Games.Count, Converter={StaticResource ZeroToVisibilityConverter}}">
                 <ui:ProgressRing IsActive="{Binding IsLoadingGames}" Width="32" Height="32" Margin="0,0,0,12"/>
                 <!-- 加载中只转圈+状态，操作指引等加载完再显示，否则误导 -->
-                <TextBlock Text="双击游戏卡片，在独立窗口中编辑成就" FontSize="14" HorizontalAlignment="Center"
+                            <TextBlock Text="{l:Loc Ach_EmptyHint}" FontSize="14" HorizontalAlignment="Center"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                            Visibility="{Binding IsLoadingGames, Converter={StaticResource InvertedBoolToVisibilityConverter}}"/>
                 <TextBlock Text="{Binding StatusMessage}" FontSize="12" Margin="0,6,0,0" HorizontalAlignment="Center"

@@ -39,9 +39,9 @@ public sealed class CloudOAuthService : IDisposable
     public async Task<bool> AuthorizeAsync(string provider, string tokenPath, Action<string> log, CancellationToken cancel = default)
     {
         if (provider != ProviderGDrive && provider != ProviderOneDrive)
-            throw new ArgumentException($"不支持的 OAuth 提供商：{provider}", nameof(provider));
+            throw new ArgumentException(L.Get("Svc_OAuthBadProvider", provider), nameof(provider));
         if (string.IsNullOrWhiteSpace(tokenPath))
-            throw new ArgumentException("缺少 token 保存路径", nameof(tokenPath));
+            throw new ArgumentException(L.Get("Svc_OAuthNoTokenPath"), nameof(tokenPath));
 
         int port;
         string redirectUri;
@@ -57,7 +57,7 @@ public sealed class CloudOAuthService : IDisposable
                 try { _listener.Start(); }
                 catch (HttpListenerException ex)
                 {
-                    log($"本地监听端口 {port} 启动失败（可能被占用）：{ex.Message}");
+                    log(L.Get("Svc_OAuthPortBusy", port, ex.Message));
                     return false;
                 }
                 redirectUri = $"http://localhost:{port}/";
@@ -79,14 +79,14 @@ public sealed class CloudOAuthService : IDisposable
                     }
                     catch (HttpListenerException) when (attempt < 4)
                     {
-                        log($"端口 {port} 被占用，重试...");
+                        log(L.Get("Svc_OAuthPortRetry", port));
                         _listener.Close();
                         _listener = new HttpListener();
                     }
                 }
                 if (!_listener.IsListening)
                 {
-                    log("本地监听启动失败，已重试 5 次");
+                    log(L.Get("Svc_OAuthListenFailed"));
                     return false;
                 }
             }
@@ -108,32 +108,32 @@ public sealed class CloudOAuthService : IDisposable
                   $"&state={Uri.EscapeDataString(state)}" +
                   $"&code_challenge={Uri.EscapeDataString(challenge)}&code_challenge_method=S256";
 
-            log("正在打开浏览器，请在浏览器中完成授权...");
+            log(L.Get("Svc_OAuthOpening"));
             try
             {
                 Process.Start(new ProcessStartInfo(authUrl) { UseShellExecute = true })?.Dispose();
             }
             catch (Exception ex)
             {
-                log($"浏览器拉起失败，请手动打开：{authUrl}");
-                LogService.Warn("云存档", $"OAuth 浏览器拉起失败: {ex.Message}");
+                log(L.Get("Svc_OAuthBrowserFailed", authUrl));
+                LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Svc_OAuthBrowserLog", ex.Message));
             }
 
-            log("等待浏览器回调（5 分钟超时，可取消）...");
+            log(L.Get("Svc_OAuthWaiting"));
             var code = await WaitForCallbackAsync(state, cts.Token);
             if (string.IsNullOrEmpty(code))
             {
-                log("未收到授权码，已取消或超时");
+                log(L.Get("Svc_OAuthNoCode"));
                 return false;
             }
 
-            log("正在交换 token...");
+            log(L.Get("Svc_OAuthExchanging"));
             var tokens = provider == ProviderGDrive
                 ? await ExchangeCodeAsync(GDriveTokenUrl, GDriveClientId, GDriveClientSecret, GDriveScope, code, redirectUri, verifier, null, cts.Token)
                 : await ExchangeCodeAsync(OneDriveTokenUrl, OneDriveClientId, OneDriveClientSecret, OneDriveScope, code, redirectUri, verifier, log, cts.Token);
             if (tokens == null || string.IsNullOrEmpty(tokens.Value.RefreshToken))
             {
-                log("换取 token 失败（无 refresh_token），请撤销授权后重试");
+                log(L.Get("Svc_OAuthNoRefreshToken"));
                 return false;
             }
 
@@ -145,21 +145,21 @@ public sealed class CloudOAuthService : IDisposable
             }, new JsonSerializerOptions { WriteIndented = true });
             if (!CloudCredentialStore.WriteJson(tokenPath, payload))
             {
-                log("token 保存失败，请检查目录写入权限");
+                log(L.Get("Svc_OAuthTokenSaveFailed"));
                 return false;
             }
-            log($"授权成功，token 已保存（DLL 会自动刷新）：{tokenPath}");
+            log(L.Get("Svc_OAuthSuccess", tokenPath));
             return true;
         }
         catch (OperationCanceledException)
         {
-            log("授权已取消");
+            log(L.Get("Svc_OAuthCancelled"));
             return false;
         }
         catch (Exception ex)
         {
-            log($"授权失败：{ex.Message}");
-            LogService.Warn("云存档", $"OAuth 授权异常: {ex.Message}");
+            log(L.Get("Svc_OAuthFail", ex.Message));
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Svc_OAuthExLog", ex.Message));
             return false;
         }
         finally
@@ -172,19 +172,19 @@ public sealed class CloudOAuthService : IDisposable
     public static (bool Ok, string Message) CheckTokenStatus(string tokenPath)
     {
         if (string.IsNullOrEmpty(tokenPath) || !File.Exists(tokenPath))
-            return (false, "未找到 token 文件，请先登录");
+            return (false, L.Get("Svc_OAuthTokenMissing"));
         try
         {
             var json = CloudCredentialStore.ReadJson(tokenPath);
-            if (json == null) return (false, "token 文件无法解密");
+            if (json == null) return (false, L.Get("Svc_OAuthTokenDecryptFailed"));
             using var doc = JsonDocument.Parse(json);
             var ok = doc.RootElement.TryGetProperty("refresh_token", out var rt)
                 && rt.GetString()?.Length > 0;
-            return ok ? (true, "已认证") : (false, "token 文件缺 refresh_token，请重新登录");
+            return ok ? (true, L.Get("Svc_OAuthAuthenticated")) : (false, L.Get("Svc_OAuthTokenNoRefresh"));
         }
         catch (Exception ex)
         {
-            return (false, $"token 文件读取失败：{ex.Message}");
+            return (false, L.Get("Svc_OAuthTokenReadFailed", ex.Message));
         }
     }
 
@@ -217,8 +217,8 @@ public sealed class CloudOAuthService : IDisposable
             }
             var ok = !string.IsNullOrEmpty(code);
             var html = ok
-                ? "<html><body style=\"font-family:'Segoe UI',sans-serif;text-align:center;padding:60px;background:#1e1e1e;color:#fff\"><h1>授权成功</h1><p>可以关闭本页回到软件了</p></body></html>"
-                : $"<html><body style=\"font-family:'Segoe UI',sans-serif;text-align:center;padding:60px;background:#1e1e1e;color:#fff\"><h1>授权失败</h1><p>Error: {WebUtility.HtmlEncode(error ?? "unknown")}</p></body></html>";
+                ? L.Get("Svc_OAuthHtmlOk")
+                : L.Get("Svc_OAuthHtmlFail", WebUtility.HtmlEncode(error ?? "unknown"));
             var buf = Encoding.UTF8.GetBytes(html);
             ctx.Response.ContentType = "text/html; charset=utf-8";
             ctx.Response.ContentLength64 = buf.Length;
@@ -247,8 +247,8 @@ public sealed class CloudOAuthService : IDisposable
         var body = await resp.Content.ReadAsStringAsync(cancel);
         if (!resp.IsSuccessStatusCode)
         {
-            log?.Invoke($"token 交换失败（HTTP {(int)resp.StatusCode}）");
-            LogService.Warn("云存档", $"OAuth token 交换失败 HTTP {(int)resp.StatusCode}: {body}");
+            log?.Invoke(L.Get("Svc_OAuthExchangeFailed", (int)resp.StatusCode));
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Svc_OAuthExchangeLog", (int)resp.StatusCode, body));
             return null;
         }
         try
@@ -262,7 +262,7 @@ public sealed class CloudOAuthService : IDisposable
         }
         catch (Exception ex)
         {
-            LogService.Warn("云存档", $"OAuth token 响应解析失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Svc_OAuthParseFailed", ex.Message));
             return null;
         }
     }

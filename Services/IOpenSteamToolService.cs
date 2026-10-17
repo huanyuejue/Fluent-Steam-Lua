@@ -139,7 +139,7 @@ public class OpenSteamToolService : IOpenSteamToolService
                 }
             }
         }
-        catch (Exception ex) { LogService.Warn("内核", $"读取本地版本失败: {ex.Message}"); }
+        catch (Exception ex) { LogService.Warn(L.Get("LogCat_Kernel"), L.Get("Kernel_LogLocalVersionFailed", ex.Message)); }
 
         return Task.FromResult<string?>(null);
     }
@@ -178,7 +178,7 @@ public class OpenSteamToolService : IOpenSteamToolService
     public async Task InstallAsync(string downloadUrl, IProgress<string>? status = null, IProgress<int>? downloadProgress = null, CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
-        var steamPath = GetSteamPath() ?? throw new InvalidOperationException("无法检测 Steam 路径");
+        var steamPath = GetSteamPath() ?? throw new InvalidOperationException(L.Get("Svc_CantDetectSteamPath"));
 
         // 目标文件被 Steam 占用时覆盖必失败，先探后下，免得白下几个包才报错
         foreach (var dll in RequiredDlls)
@@ -191,7 +191,7 @@ public class OpenSteamToolService : IOpenSteamToolService
             }
             catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
             {
-                throw new InvalidOperationException($"无法写入 {dll}，文件正被占用，请确保 Steam 已关闭后再试", ex);
+                throw new InvalidOperationException(L.Get("Kernel_FileLocked", dll), ex);
             }
         }
 
@@ -204,8 +204,8 @@ public class OpenSteamToolService : IOpenSteamToolService
         {
             var src = sources[i];
             status?.Report(i == 0
-                ? $"正在通过 {GitHubMirror.SourceDisplayName(src)} 下载 OpenSteamTool..."
-                : $"经 {GitHubMirror.SourceDisplayName(sources[i - 1])} 下载失败，正在尝试 {GitHubMirror.SourceDisplayName(src)}…");
+                ? L.Get("Kernel_DownloadingFrom", GitHubMirror.SourceDisplayName(src))
+                : L.Get("Kernel_RetryingSource", GitHubMirror.SourceDisplayName(sources[i - 1]), GitHubMirror.SourceDisplayName(src)));
 
             var tempZip = Path.Combine(Path.GetTempPath(), $"OpenSteamTool_{Guid.NewGuid():N}.zip");
             try
@@ -249,18 +249,18 @@ public class OpenSteamToolService : IOpenSteamToolService
             catch (Exception ex)
             {
                 lastError = ex;
-                LogService.Warn("内核", $"下载源失败 ({src}): {ex.Message}");
+                LogService.Warn(L.Get("LogCat_Kernel"), L.Get("Kernel_LogSourceFailed", src, ex.Message));
                 try { File.Delete(tempZip); } catch { }
             }
         }
 
         if (downloadedZip == null)
-            throw new InvalidOperationException($"OpenSteamTool 下载失败，已尝试 {sources.Count} 个下载源：{lastError?.Message}", lastError);
+            throw new InvalidOperationException(L.Get("Kernel_DownloadFailed", sources.Count, lastError?.Message), lastError);
 
         try
         {
             ct.ThrowIfCancellationRequested();
-            status?.Report("正在解压并安装 DLL...");
+            status?.Report(L.Get("Kernel_Extracting"));
             using var archive = ZipFile.OpenRead(downloadedZip);
             var extracted = 0;
             var extractedVersion = false;
@@ -279,15 +279,15 @@ public class OpenSteamToolService : IOpenSteamToolService
                 }
                 catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
                 {
-                    throw new InvalidOperationException($"无法写入 {fileName}，文件正被占用，请确保 Steam 已关闭后再试", ex);
+                    throw new InvalidOperationException(L.Get("Kernel_FileLocked", fileName), ex);
                 }
                 extracted++;
             }
 
             if (extracted == 0)
-                throw new InvalidOperationException("压缩包中未找到 OpenSteamTool DLL 文件");
+                throw new InvalidOperationException(L.Get("Kernel_ZipNoDll"));
             if (!extractedVersion)
-                LogService.Warn("内核", "压缩包中缺少 version.dll，早注隔离不可用，请更新到新版发行包");
+                LogService.Warn(L.Get("LogCat_Kernel"), L.Get("Kernel_ZipNoVersionDll"));
 
             // 退役残留：旧部署的根目录 dwmapi.dll 会让新版 Steam 启动失败，安装成功即顺手清除（有则删，无则过）
             foreach (var dll in LegacyDlls)
@@ -297,15 +297,15 @@ public class OpenSteamToolService : IOpenSteamToolService
                 try
                 {
                     File.Delete(legacyPath);
-                    status?.Report($"已清除退役残留 {dll}");
+                    status?.Report(L.Get("Kernel_CleanedLegacy", dll));
                 }
                 catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
                 {
-                    throw new InvalidOperationException($"无法清除退役残留 {dll}，文件正被占用，请确保 Steam 已关闭后再试", ex);
+                    throw new InvalidOperationException(L.Get("Kernel_CleanLegacyFailed", dll), ex);
                 }
             }
 
-            status?.Report("安装完成");
+            status?.Report(L.Get("Kernel_Installed"));
         }
         finally
         {
@@ -315,7 +315,7 @@ public class OpenSteamToolService : IOpenSteamToolService
 
     public Task UninstallAsync()
     {
-        var steamPath = GetSteamPath() ?? throw new InvalidOperationException("无法检测 Steam 路径");
+        var steamPath = GetSteamPath() ?? throw new InvalidOperationException(L.Get("Svc_CantDetectSteamPath"));
         var removed = 0;
         foreach (var dll in RequiredDlls)
         {
@@ -329,7 +329,7 @@ public class OpenSteamToolService : IOpenSteamToolService
                 }
                 catch (Exception ex) when (ex is UnauthorizedAccessException || ex is IOException)
                 {
-                    throw new InvalidOperationException($"无法删除 {dll}，文件正被占用，请确保 Steam 已关闭后再试", ex);
+                    throw new InvalidOperationException(L.Get("Kernel_CantDelete", dll), ex);
                 }
             }
         }
@@ -347,12 +347,12 @@ public class OpenSteamToolService : IOpenSteamToolService
                 }
                 catch (Exception ex) when (ex is UnauthorizedAccessException || ex is IOException)
                 {
-                    throw new InvalidOperationException($"无法删除 {rel}，文件正被占用，请确保 Steam 已关闭后再试", ex);
+                    throw new InvalidOperationException(L.Get("Kernel_CantDelete", rel), ex);
                 }
             }
         }
         if (removed == 0)
-            throw new InvalidOperationException("未检测到已安装的 OpenSteamTool 文件");
+            throw new InvalidOperationException(L.Get("Kernel_NotInstalledFiles"));
         return Task.CompletedTask;
     }
 
@@ -360,7 +360,7 @@ public class OpenSteamToolService : IOpenSteamToolService
     // 已是禁用态或目标后缀已存在的跳过，调用方负责 Steam 关闭门禁
     public Task<int> DisableKernelAsync()
     {
-        var steamPath = GetSteamPath() ?? throw new InvalidOperationException("无法检测 Steam 路径");
+        var steamPath = GetSteamPath() ?? throw new InvalidOperationException(L.Get("Svc_CantDetectSteamPath"));
         var done = 0;
         var skipped = new List<string>();
         // 退役残留一并禁用：否则“禁用内核”后它仍会被加载，新版 Steam 照样起不来；
@@ -382,21 +382,21 @@ public class OpenSteamToolService : IOpenSteamToolService
             }
             catch (Exception ex) when (ex is UnauthorizedAccessException || ex is IOException)
             {
-                throw new InvalidOperationException($"无法禁用 {dll}，文件正被占用，请确保 Steam 已关闭后再试", ex);
+                throw new InvalidOperationException(L.Get("Kernel_CantDisable", dll), ex);
             }
         }
         if (done == 0 && skipped.Count == 0)
-            throw new InvalidOperationException("未检测到已安装的 OpenSteamTool 文件");
+            throw new InvalidOperationException(L.Get("Kernel_NotInstalledFiles"));
         if (skipped.Count > 0)
-            LogService.Warn("内核", $"以下文件已处于禁用态，已跳过：{string.Join(", ", skipped)}");
-        LogService.Info("内核", $"已临时禁用 {done} 个内核文件");
+            LogService.Warn(L.Get("LogCat_Kernel"), L.Get("Kernel_LogSkippedDisabled", string.Join(", ", skipped)));
+        LogService.Info(L.Get("LogCat_Kernel"), L.Get("Kernel_LogDisabled", done));
         return Task.FromResult(done);
     }
 
     // 启用：去掉所有已存在的 .disabled 后缀，返回实际处理数；目标原名已存在的跳过，避免覆盖
     public Task<int> EnableKernelAsync()
     {
-        var steamPath = GetSteamPath() ?? throw new InvalidOperationException("无法检测 Steam 路径");
+        var steamPath = GetSteamPath() ?? throw new InvalidOperationException(L.Get("Svc_CantDetectSteamPath"));
         var done = 0;
         var skipped = new List<string>();
         // 退役文件故意不在此恢复：dwmapi.dll.disabled 留在原地即可（加载器不理 .disabled 后缀）
@@ -417,14 +417,14 @@ public class OpenSteamToolService : IOpenSteamToolService
             }
             catch (Exception ex) when (ex is UnauthorizedAccessException || ex is IOException)
             {
-                throw new InvalidOperationException($"无法启用 {dll}：{ex.Message}", ex);
+                throw new InvalidOperationException(L.Get("Kernel_CantEnable", dll, ex.Message), ex);
             }
         }
         if (done == 0 && skipped.Count == 0)
-            throw new InvalidOperationException("未检测到被临时禁用的内核文件");
+            throw new InvalidOperationException(L.Get("Kernel_NoDisabledFound"));
         if (skipped.Count > 0)
-            LogService.Warn("内核", $"以下文件原名已存在，保留禁用副本未覆盖：{string.Join(", ", skipped)}");
-        LogService.Info("内核", $"已启用 {done} 个内核文件");
+            LogService.Warn(L.Get("LogCat_Kernel"), L.Get("Kernel_LogSkippedExists", string.Join(", ", skipped)));
+        LogService.Info(L.Get("LogCat_Kernel"), L.Get("Kernel_LogEnabled", done));
         return Task.FromResult(done);
     }
 
@@ -442,7 +442,7 @@ public class OpenSteamToolService : IOpenSteamToolService
     // 只看 Steam 根目录顶层，劫持 DLL 必须跟 steam.exe 同级才生效
     public Task<IReadOnlyList<ForeignKernelFile>> ScanForeignKernelsAsync()
     {
-        var steamPath = GetSteamPath() ?? throw new InvalidOperationException("无法检测 Steam 路径");
+        var steamPath = GetSteamPath() ?? throw new InvalidOperationException(L.Get("Svc_CantDetectSteamPath"));
         var found = new List<ForeignKernelFile>();
         foreach (var (file, owner) in ForeignKernelFingerprints)
         {
@@ -453,7 +453,7 @@ public class OpenSteamToolService : IOpenSteamToolService
             }
             catch (Exception ex)
             {
-                LogService.Warn("内核", $"扫描 {file} 失败: {ex.Message}");
+                LogService.Warn(L.Get("LogCat_Kernel"), L.Get("Kernel_LogScanFailed", file, ex.Message));
             }
         }
         try
@@ -467,11 +467,11 @@ public class OpenSteamToolService : IOpenSteamToolService
         }
         catch (Exception ex)
         {
-            LogService.Warn("内核", $"扫描 GreenLuma 失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Kernel"), L.Get("Kernel_LogScanGreenLumaFailed", ex.Message));
         }
-        LogService.Info("内核", found.Count == 0
-            ? "未发现第三方内核残留"
-            : $"发现第三方内核残留: {string.Join(", ", found.Select(f => $"{f.RelativePath}({f.Owner})"))}");
+        LogService.Info(L.Get("LogCat_Kernel"), found.Count == 0
+            ? L.Get("Kernel_NoForeignFound")
+            : L.Get("Kernel_ForeignFound", string.Join(", ", found.Select(f => $"{f.RelativePath}({f.Owner})"))));
         return Task.FromResult<IReadOnlyList<ForeignKernelFile>>(found);
     }
 
@@ -479,7 +479,7 @@ public class OpenSteamToolService : IOpenSteamToolService
     // 路径越界、有目录嫌疑的一律跳过；只读属性先清再删；失败收集不中断
     public Task<(int removed, List<string> failed)> PurifyForeignKernelsAsync(IEnumerable<string> relativePaths)
     {
-        var steamPath = GetSteamPath() ?? throw new InvalidOperationException("无法检测 Steam 路径");
+        var steamPath = GetSteamPath() ?? throw new InvalidOperationException(L.Get("Svc_CantDetectSteamPath"));
         var steamFull = Path.GetFullPath(steamPath);
         var removed = 0;
         var failed = new List<string>();
@@ -492,13 +492,13 @@ public class OpenSteamToolService : IOpenSteamToolService
             }
             catch
             {
-                failed.Add($"{rel}：路径非法，已跳过");
+                failed.Add(L.Get("Kernel_PurifyBadPath", rel));
                 continue;
             }
             if (!full.StartsWith(steamFull + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
                 Directory.Exists(full))
             {
-                failed.Add($"{rel}：不在 Steam 根目录下或不是文件，已跳过");
+                failed.Add(L.Get("Kernel_PurifyOutOfRoot", rel));
                 continue;
             }
             if (!File.Exists(full)) continue;
@@ -507,15 +507,15 @@ public class OpenSteamToolService : IOpenSteamToolService
                 try { File.SetAttributes(full, FileAttributes.Normal); } catch { }
                 File.Delete(full);
                 removed++;
-                LogService.Info("内核", $"已移除第三方内核文件: {rel}");
+                LogService.Info(L.Get("LogCat_Kernel"), L.Get("Kernel_LogPurified", rel));
             }
             catch (Exception ex) when (ex is UnauthorizedAccessException || ex is IOException)
             {
-                failed.Add($"{rel}：{ex.Message}（文件被占用？请确保 Steam 已关闭）");
+                failed.Add(L.Get("Kernel_PurifyLocked", rel, ex.Message));
             }
             catch (Exception ex)
             {
-                failed.Add($"{rel}：{ex.Message}");
+                failed.Add(L.Get("Cloud_LabelErrorGeneric", rel, ex.Message));
             }
         }
         return Task.FromResult((removed, failed));
@@ -564,7 +564,7 @@ public class OpenSteamToolService : IOpenSteamToolService
         }
         catch (Exception ex)
         {
-            LogService.Warn("内核", $"识别 Steam DLL 指纹失败：{ex.Message}");
+            LogService.Warn(L.Get("LogCat_Kernel"), L.Get("Kernel_LogDllFingerprintFailed", ex.Message));
             return Task.FromResult<SteamDllTomlInfo?>(null);
         }
     }
@@ -572,7 +572,7 @@ public class OpenSteamToolService : IOpenSteamToolService
     public async Task<IReadOnlyList<TomlFetchResult>> FetchTomlFilesAsync(SteamDllTomlInfo info, IProgress<string>? status = null, IProgress<int>? downloadProgress = null, CancellationToken ct = default)
     {
         var steamPath = GetSteamPath();
-        if (string.IsNullOrEmpty(steamPath)) throw new InvalidOperationException("未找到 Steam 安装路径");
+        if (string.IsNullOrEmpty(steamPath)) throw new InvalidOperationException(L.Get("Kernel_SteamPathNotFound"));
         var results = new List<TomlFetchResult>();
 
         for (var i = 0; i < TomlTargets.Length; i++)
@@ -603,14 +603,14 @@ public class OpenSteamToolService : IOpenSteamToolService
             {
                 try
                 {
-                    status?.Report($"正在通过 {GitHubMirror.SourceDisplayName(url)} 下载 {fileName}...");
+                    status?.Report(L.Get("Kernel_DownloadingToml", GitHubMirror.SourceDisplayName(url), fileName));
                     var bytes = await _httpClientProvider.SendWithProxyRetryAsync(
                         "ost-toml",
                         TimeSpan.FromSeconds(30),
                         client => client.GetByteArrayAsync(url, ct),
                         null,
                         2);
-                    if (bytes == null || bytes.Length == 0) throw new InvalidOperationException("远端返回空内容");
+                    if (bytes == null || bytes.Length == 0) throw new InvalidOperationException(L.Get("Kernel_EmptyRemote"));
                     // 原子替换：先落临时文件再搬家，崩溃也不留截断文件祸害已存在的源文件
                     var tmpPath = targetPath + ".tmp";
                     try
@@ -623,7 +623,7 @@ public class OpenSteamToolService : IOpenSteamToolService
                         try { File.Delete(tmpPath); } catch { }
                         throw;
                     }
-                    LogService.Info("内核", $"toml 已获取：{channel}/{component}/{fileName}（{bytes.Length} 字节）");
+                    LogService.Info(L.Get("LogCat_Kernel"), L.Get("Kernel_LogTomlFetched", channel, component, fileName, bytes.Length));
                     results.Add(new TomlFetchResult(fileName, targetPath, true, null));
                     done = true;
                     break;
@@ -644,7 +644,7 @@ public class OpenSteamToolService : IOpenSteamToolService
                         direct404 = true;
                         break;
                     }
-                    LogService.Warn("内核", $"toml 下载源失败 ({url}): {ex.Message}");
+                    LogService.Warn(L.Get("LogCat_Kernel"), L.Get("Kernel_LogTomlSourceFailed", url, ex.Message));
                 }
             }
 
@@ -659,20 +659,20 @@ public class OpenSteamToolService : IOpenSteamToolService
     // 弹窗里别甩英文原文：SSL/RST 报网络，超时报超时，其他保留原文方便定位
     private static string FriendlyTomlError(Exception? ex)
     {
-        if (ex == null) return "下载失败";
+        if (ex == null) return L.Get("Kernel_TomlFailed");
         for (var e = ex; e != null; e = e.InnerException)
         {
             if (e is AuthenticationException)
-                return "连接失败（TLS/SSL 被中断，常见于网络波动或代理不稳），请检查网络或代理后重试";
+                return L.Get("Kernel_TomlTlsBroken");
             if (e is SocketException)
-                return "连接失败（网络不可达），请检查网络或代理后重试";
+                return L.Get("Kernel_TomlUnreachable");
         }
         if (ex is TaskCanceledException)
-            return "下载超时，请重试";
+            return L.Get("Kernel_TomlTimeout");
         var msg = ex.Message;
         if (!string.IsNullOrEmpty(msg) && msg.Contains("SSL", StringComparison.OrdinalIgnoreCase))
-            return "连接失败（TLS/SSL 被中断，常见于网络波动或代理不稳），请检查网络或代理后重试";
-        return string.IsNullOrEmpty(msg) ? "下载失败" : msg;
+            return L.Get("Kernel_TomlTlsBroken");
+        return string.IsNullOrEmpty(msg) ? L.Get("Kernel_TomlFailed") : msg;
     }
 
 }

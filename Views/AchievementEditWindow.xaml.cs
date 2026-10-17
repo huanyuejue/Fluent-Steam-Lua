@@ -19,7 +19,7 @@ public partial class AchievementEditWindow : Window
         InitializeComponent();
         _viewModel = new AchievementEditViewModel(appId, gameName);
         DataContext = _viewModel;
-        Title = $"成就编辑 - {gameName}";
+        Title = $"{L.Get("AchEdit_Title")} - {gameName}";
         ApplyBackdrop();
         Closed += AchievementEditWindow_Closed;
         _ = _viewModel.LoadAsync();

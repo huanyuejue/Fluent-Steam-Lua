@@ -102,7 +102,7 @@ public sealed class SteamAppInfoService : ISteamAppInfoService, IDisposable
             }
             catch (Exception ex)
             {
-                LogService.Warn("AppInfo", $"发起 Steam 连接失败: {ex.Message}");
+                LogService.Warn(L.Get("LogCat_AppInfo"), L.Get("Svc_AppInfoConnectFailed", ex.Message));
                 return false;
             }
 
@@ -113,7 +113,7 @@ public sealed class SteamAppInfoService : ISteamAppInfoService, IDisposable
             }
             catch (OperationCanceledException)
             {
-                LogService.Warn("AppInfo", "等待 Steam 登录超时");
+                LogService.Warn(L.Get("LogCat_AppInfo"), L.Get("Svc_AppInfoLogonTimeout"));
                 return false;
             }
             return _loggedOn;
@@ -151,7 +151,7 @@ public sealed class SteamAppInfoService : ISteamAppInfoService, IDisposable
             catch (OperationCanceledException) { break; }
             catch (Exception ex)
             {
-                LogService.Warn("AppInfo", $"Steam 回调循环异常: {ex.Message}");
+                LogService.Warn(L.Get("LogCat_AppInfo"), L.Get("Svc_AppInfoLoopError", ex.Message));
                 try { Task.Delay(500, ct).Wait(ct); } catch { break; }
             }
         }
@@ -164,7 +164,7 @@ public sealed class SteamAppInfoService : ISteamAppInfoService, IDisposable
         {
             _loggedOn = cb.Result == EResult.OK;
             if (!_loggedOn)
-                LogService.Warn("AppInfo", $"Steam 匿名登录失败：{cb.Result}");
+                LogService.Warn(L.Get("LogCat_AppInfo"), L.Get("Svc_AppInfoLogonFailed", cb.Result));
             _logonTcs?.TrySetResult();
         });
         _manager.Value.Subscribe<SteamClient.DisconnectedCallback>(cb =>
@@ -200,7 +200,7 @@ public sealed class SteamAppInfoService : ISteamAppInfoService, IDisposable
                     var depotsNode = kv["depots"];
                     if (depotsNode != null)
                     {
-                        LogService.Info("AppInfo", $"AppID {appId} depots 节点子项数: {depotsNode.Children.Count}");
+                        LogService.Info(L.Get("LogCat_AppInfo"), L.Get("Svc_AppInfoDepotCount", appId, depotsNode.Children.Count));
                         foreach (var depot in depotsNode.Children)
                         {
                             var name = depot.Name;
@@ -225,7 +225,7 @@ public sealed class SteamAppInfoService : ISteamAppInfoService, IDisposable
                     }
                     else
                     {
-                        LogService.Warn("AppInfo", $"AppID {appId} 未找到 depots 节点");
+                        LogService.Warn(L.Get("LogCat_AppInfo"), L.Get("Svc_AppInfoNoDepotsNode", appId));
                     }
 
                     var dlcNode = kv["extended"]?["listofdlc"];
@@ -253,7 +253,7 @@ public sealed class SteamAppInfoService : ISteamAppInfoService, IDisposable
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            LogService.Warn("AppInfo", $"查询 AppID {appId} 超时");
+            LogService.Warn(L.Get("LogCat_AppInfo"), L.Get("Svc_AppInfoQueryTimeout", appId));
             return null;
         }
         catch (OperationCanceledException)
@@ -263,7 +263,7 @@ public sealed class SteamAppInfoService : ISteamAppInfoService, IDisposable
         }
         catch (Exception ex)
         {
-            LogService.Warn("AppInfo", $"查询 AppID {appId} 失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_AppInfo"), L.Get("Svc_AppInfoQueryFailed", appId, ex.Message));
             return null;
         }
     }

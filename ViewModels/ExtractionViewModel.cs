@@ -32,7 +32,7 @@ public partial class ExtractionViewModel : ObservableObject, IDisposable
     private bool _isRunning;
 
     [ObservableProperty]
-    private string _statusMessage = "就绪";
+    private string _statusMessage = L.Get("Extract_Ready");
 
     [ObservableProperty]
     private bool _pinManifest;
@@ -49,14 +49,21 @@ public partial class ExtractionViewModel : ObservableObject, IDisposable
     // 令牌只在点提取时兑现，平时不联网
     public bool IsLoggedOn => _accountService.IsLoggedOn || _accountService.HasCachedToken();
     public string LoginStatusText => _accountService.IsLoggedOn
-        ? $"已登录：{_accountService.CurrentAccountName}"
+        ? L.Get("Extract_LoggedInAs", _accountService.CurrentAccountName)
         : (_accountService.SavedAccountName is string saved
-            ? $"已登录：{saved}"
-            : "未登录");
+            ? L.Get("Extract_LoggedInAs", saved)
+            : L.Get("Extract_NotLoggedIn"));
 
     // 待决议的 depot 行：拼装前只收集再统一写出。
     // IsDlc 按 ID 判定（含与主 depot 同 ID 的 DLC，这类行 Scope 是"仓库"不能按 Scope 判）。
     // HasDepots 仅 DLC 行有意义：无独立仓库的 DLC 裸 addappid 本身就是完整解锁，必须写出。
+    private static string ScopeDisplay(string scope) => scope switch
+    {
+        "主仓库" => L.Get("Extract_ScopeMain"),
+        "仓库" => L.Get("Extract_ScopeDepot"),
+        _ => scope,
+    };
+
     private sealed record PendingDepot(uint Id, uint ParentAppId, string? ManifestId, string Scope, int? DlcAppId, bool IsSub, bool IsDlc, bool HasDepots);
 
     public ExtractionViewModel(ISteamDepotService depotService, ISteamPathService steamPathService, IDialogService dialogService, ISteamAccountService accountService)
@@ -66,6 +73,12 @@ public partial class ExtractionViewModel : ObservableObject, IDisposable
         _dialogService = dialogService;
         _accountService = accountService;
         _accountService.SessionChanged += OnSessionChanged;
+        LocalizationService.Instance.PropertyChanged += OnLanguageChanged;
+    }
+
+    private void OnLanguageChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        OnPropertyChanged(nameof(LoginStatusText));
     }
 
     private void OnSessionChanged()
@@ -81,7 +94,7 @@ public partial class ExtractionViewModel : ObservableObject, IDisposable
     private void Logout()
     {
         _accountService.LogOff();
-        PostLog("已退出登录");
+        PostLog(L.Get("Extract_LoggedOut"));
     }
 
     private async Task<bool> ShowLoginWindowAsync()
@@ -106,13 +119,13 @@ public partial class ExtractionViewModel : ObservableObject, IDisposable
         var id = AppId?.Trim();
         if (string.IsNullOrEmpty(id))
         {
-            StatusMessage = "请输入 AppID";
+            StatusMessage = L.Get("Extract_EnterAppId");
             return;
         }
 
         if (!int.TryParse(id, out var appId) || appId <= 0)
         {
-            StatusMessage = "AppID 必须为正整数";
+            StatusMessage = L.Get("Extract_AppIdMustBePositive");
             return;
         }
 
@@ -123,56 +136,56 @@ public partial class ExtractionViewModel : ObservableObject, IDisposable
         }
 
         IsRunning = true;
-        StatusMessage = "正在查询游戏仓库信息...";
+        StatusMessage = L.Get("Extract_QueryingDepots");
         LogLines.Clear();
         _cts = new CancellationTokenSource();
         var ct = _cts.Token;
 
         try
         {
-            PostLog($"开始查询 AppID:{id}");
+            PostLog(L.Get("Extract_StartQuery", id));
 
             // 0. 登录门禁：先兑现缓存令牌静默登录，不行再弹登录窗
             if (!_accountService.IsLoggedOn)
             {
                 if (_accountService.HasCachedToken())
                 {
-                    PostLog("正在使用缓存令牌登录...");
+                    PostLog(L.Get("Extract_LoginWithCache"));
                     var restored = await _accountService.TryRestoreSessionAsync(ct);
                     if (!restored.Success)
-                        PostLog($"缓存登录失败：{restored.Message}");
+                        PostLog(L.Get("Extract_CacheLoginFailed", restored.Message));
                 }
                 if (!_accountService.IsLoggedOn)
                 {
-                    PostLog("提取需要先登录 Steam 账号");
+                    PostLog(L.Get("Extract_NeedLogin"));
                     var loginOk = await ShowLoginWindowAsync();
                     if (!loginOk || !_accountService.IsLoggedOn)
                     {
-                        StatusMessage = "未登录，已取消提取";
-                        PostLog("未登录，已取消提取");
+                        StatusMessage = L.Get("Extract_LoginCancelled");
+                        PostLog(L.Get("Extract_LoginCancelled"));
                         return;
                     }
                 }
             }
-            PostLog($"当前账号：{_accountService.CurrentAccountName}");
+            PostLog(L.Get("Extract_CurrentAccount", _accountService.CurrentAccountName));
 
             // 1. Query depot info from api.steamcmd.net
             var queryResult = await _depotService.QueryAppAsync(appId, ct);
             if (queryResult == null || queryResult.GameDepots.Count == 0)
             {
-                StatusMessage = "查询失败，未找到该游戏的仓库信息";
-                PostLog("查询失败，未找到该游戏的仓库信息");
+                StatusMessage = L.Get("Extract_QueryFailedNoDepots");
+                PostLog(L.Get("Extract_QueryFailedNoDepots"));
                 return;
             }
 
-            PostLog($"已获取仓库信息，游戏名称：{queryResult.AppName}");
-            PostLog($"找到 {queryResult.GameDepots.Count} 个仓库（已排除共享仓库），{queryResult.DlcAppIds.Count} 个 DLC");
-            StatusMessage = "正在整理仓库信息...";
+            PostLog(L.Get("Extract_GotDepots", queryResult.AppName));
+            PostLog(L.Get("Extract_DepotCounts", queryResult.GameDepots.Count, queryResult.DlcAppIds.Count));
+            StatusMessage = L.Get("Extract_Organizing");
 
             // 2. Steam 路径只用于成就提取；密钥走纯云端，不再读 config.vdf
             var steamPath = _steamPathService.DetectSteamPath();
             if (string.IsNullOrEmpty(steamPath))
-                PostLog("未检测到 Steam 安装路径，成就提取将不可用");
+                PostLog(L.Get("Extract_NoSteamPath"));
 
             // 3. 待决议行：主 App 行 + 主 depots（顺序与旧逻辑一致，先收集不写出）
             var dlcIdSet = new HashSet<int>(queryResult.DlcAppIds);
@@ -202,13 +215,13 @@ public partial class ExtractionViewModel : ObservableObject, IDisposable
             }
 
             // 5. 纯云端取 key（登录门禁已保证会话，会话内并行下发）
-            StatusMessage = "正在获取仓库密钥...";
+            StatusMessage = L.Get("Extract_FetchingKeys");
             var mergedKeys = new Dictionary<uint, string>();
             var fetched = await _accountService.GetDepotKeysAsync(
                 lines.Select(m => (m.Id, m.ParentAppId)), ct);
             foreach (var (depId, k) in fetched)
                 mergedKeys[depId] = Convert.ToHexString(k).ToLowerInvariant();
-            PostLog($"密钥获取 {mergedKeys.Count}/{lines.Count} 个");
+            PostLog(L.Get("Extract_KeysFetched", mergedKeys.Count, lines.Count));
 
             // 6. 单遍拼装：有独立仓库但无 key 的 DLC 行跳过（无权限写了也无效，含与主 depot 同 ID 的 DLC）；
             // 无独立仓库的 DLC 裸行本身就是完整解锁，必须写出；子仓库无 key 不写行；主行/纯主 depot 无 key 保留裸行
@@ -228,12 +241,12 @@ public partial class ExtractionViewModel : ObservableObject, IDisposable
                     matchedCount++;
                     if (line.IsSub && line.DlcAppId is int subDlcId)
                         dlcSubMatched[subDlcId] = dlcSubMatched.TryGetValue(subDlcId, out var c) ? c + 1 : 1;
-                    PostLog($"{line.Scope} {line.Id} 密钥匹配成功");
+                    PostLog(L.Get("Extract_KeyMatched", ScopeDisplay(line.Scope), line.Id));
                 }
                 else if (line.Scope == "主仓库")
                 {
                     sb.AppendLine($"addappid({line.Id})");
-                    PostLog($"主仓库 {line.Id} 未找到密钥，跳过加密");
+                    PostLog(L.Get("Extract_MainNoKey", line.Id));
                 }
                 else if (line.IsSub)
                 {
@@ -241,17 +254,17 @@ public partial class ExtractionViewModel : ObservableObject, IDisposable
                 }
                 else if (line.IsDlc && line.HasDepots)
                 {
-                    PostLog($"DLC {line.Id} 无密钥（无权限），跳过");
+                    PostLog(L.Get("Extract_DlcNoKeyNoPerm", line.Id));
                 }
                 else if (line.IsDlc)
                 {
                     sb.AppendLine($"addappid({line.Id})");
-                    PostLog($"DLC {line.Id} 无独立仓库，写入解锁行");
+                    PostLog(L.Get("Extract_DlcBareRow", line.Id));
                 }
                 else
                 {
                     sb.AppendLine($"addappid({line.Id})");
-                    PostLog($"仓库 {line.Id} 未找到密钥，跳过");
+                    PostLog(L.Get("Extract_DepotNoKey", line.Id));
                 }
             }
 
@@ -265,31 +278,31 @@ public partial class ExtractionViewModel : ObservableObject, IDisposable
                 {
                     if (dlcResult.GameDepots.Count > 0)
                         PostLog(isMainDepot
-                            ? $"DLC {dlcAppId}（跳过，已是主仓库）{subMatched}/{dlcResult.GameDepots.Count} 子仓库匹配密钥"
-                            : $"DLC {dlcAppId} {subMatched}/{dlcResult.GameDepots.Count} 子仓库匹配密钥");
+                            ? L.Get("Extract_DlcSubMain", dlcAppId, subMatched, dlcResult.GameDepots.Count)
+                            : L.Get("Extract_DlcSub", dlcAppId, subMatched, dlcResult.GameDepots.Count));
                     else
                         PostLog(isMainDepot
-                            ? $"DLC {dlcAppId}（跳过，已是主仓库），无额外子仓库"
-                            : $"DLC {dlcAppId} 无子仓库");
+                            ? L.Get("Extract_DlcNoSubMain", dlcAppId)
+                            : L.Get("Extract_DlcNoSub", dlcAppId));
                 }
                 else
                 {
                     PostLog(isMainDepot
-                        ? $"DLC {dlcAppId}（跳过，已是主仓库），无额外子仓库信息"
-                        : $"DLC {dlcAppId} 无子仓库信息");
+                        ? L.Get("Extract_DlcNoSubInfoMain", dlcAppId)
+                        : L.Get("Extract_DlcNoSubInfo", dlcAppId));
                 }
             }
 
             if (matchedCount == 0)
             {
-                StatusMessage = "未找到任何可用密钥";
-                PostLog("账号未找到该游戏及其仓库的任何可用密钥");
-                PostLog("提示：请确认登录账号拥有该游戏正版");
+                StatusMessage = L.Get("Extract_NoKeysFound");
+                PostLog(L.Get("Extract_NoKeysAccount"));
+                PostLog(L.Get("Extract_OwnGameHint"));
                 return;
             }
 
             // 4. Save to Cache\dump\{appid}\
-            StatusMessage = "正在保存 Lua 清单...";
+            StatusMessage = L.Get("Extract_SavingLua");
             var dumpDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Cache", "dump", id);
             if (!Directory.Exists(dumpDir))
                 Directory.CreateDirectory(dumpDir);
@@ -300,7 +313,7 @@ public partial class ExtractionViewModel : ObservableObject, IDisposable
             if (DownloadManifests)
             {
                 // 登录门禁已保证会话，直接下载；CDN 下载限流 3 并行，结果按原顺序打日志
-                StatusMessage = "正在提取 Manifest 清单文件...";
+                StatusMessage = L.Get("Extract_FetchingManifests");
                 var seen = new HashSet<(uint, ulong)>();
                 var targets = new List<(PendingDepot Line, ulong Gid)>();
                 foreach (var line in lines)
@@ -328,22 +341,22 @@ public partial class ExtractionViewModel : ObservableObject, IDisposable
                     if (item is not { } done) continue;
                     if (done.R.Success && done.R.FilePath != null) dlOk++;
                     PostLog(done.R.Success && done.R.FilePath != null
-                        ? $"已提取 Manifest：{Path.GetFileName(done.R.FilePath)}"
-                        : $"Manifest 跳过 ({done.Line.Id})：{done.R.Message}");
+                        ? L.Get("Extract_ManifestDone", Path.GetFileName(done.R.FilePath))
+                        : L.Get("Extract_ManifestSkipped", done.Line.Id, done.R.Message));
                 }
                 // 全挂/部分挂必须在结论里明示，否则"提取完成"误导用户以为全成功
                 if (targets.Count > 0 && dlOk == 0)
-                    PostLog("Manifest 全部下载失败：密钥文件已生成可用，清单文件请稍后手动重试");
+                    PostLog(L.Get("Extract_ManifestAllFailed"));
                 else if (dlOk < targets.Count)
-                    PostLog($"Manifest 部分下载失败（{dlOk}/{targets.Count}），失败项可稍后手动重试");
+                    PostLog(L.Get("Extract_ManifestPartialFailed", dlOk, targets.Count));
             }
 
             if (ExtractAchievements)
             {
-                PostLog("提示：请确认登录账号拥有该游戏并用 Steam 客户端启动过，否则无成就缓存");
+                PostLog(L.Get("Extract_AchHint"));
                 if (string.IsNullOrEmpty(steamPath))
                 {
-                    PostLog("未检测到 Steam 安装路径，跳过成就提取");
+                    PostLog(L.Get("Extract_AchSkippedNoPath"));
                 }
                 else
                 {
@@ -358,34 +371,34 @@ public partial class ExtractionViewModel : ObservableObject, IDisposable
                         var largest = achFiles.OrderByDescending(f => new FileInfo(f).Length).First();
                         var dest = Path.Combine(dumpDir, Path.GetFileName(largest));
                         File.Copy(largest, dest, true);
-                        PostLog($"已提取成就文件：{Path.GetFileName(largest)}");
+                        PostLog(L.Get("Extract_AchExtracted", Path.GetFileName(largest)));
                     }
                     else
                     {
-                        PostLog("未找到该游戏的成就缓存文件");
+                        PostLog(L.Get("Extract_AchNotFound"));
                     }
                 }
                 else
                 {
-                    PostLog($"成就缓存目录不存在：{statsDir}");
+                    PostLog(L.Get("Extract_AchDirMissing", statsDir));
                 }
                 }
             }
 
-            StatusMessage = $"提取完成，匹配到 {matchedCount} 个密钥";
-            PostLog($"提取成功！文件已保存到：{luaPath}");
+            StatusMessage = L.Get("Extract_DoneStatus", matchedCount);
+            PostLog(L.Get("Extract_DoneLog", luaPath));
 
             ShowOpenDirectoryPrompt(dumpDir);
         }
         catch (OperationCanceledException)
         {
-            StatusMessage = "已取消";
-            PostLog("操作已取消");
+            StatusMessage = L.Get("Extract_Cancelled");
+            PostLog(L.Get("Extract_CancelledLog"));
         }
         catch (Exception ex)
         {
-            StatusMessage = $"异常: {ex.Message}";
-            PostLog($"异常: {ex.Message}");
+            StatusMessage = L.Get("Extract_Error", ex.Message);
+            PostLog(L.Get("Extract_Error", ex.Message));
         }
         finally
         {
@@ -400,15 +413,15 @@ public partial class ExtractionViewModel : ObservableObject, IDisposable
         try
         {
             var confirmed = await _dialogService.ShowConfirmAsync(
-                "提取完成",
-                $"提取完成！文件已保存到:\n{directory}\n\n是否打开该目录？",
-                "打开目录", "关闭");
+                L.Get("Extract_DoneTitle"),
+                L.Get("Extract_DoneBody", directory),
+                L.Get("Extract_OpenDir"), L.Get("Extract_Close"));
             if (confirmed)
                 Process.Start("explorer.exe", directory);
         }
         catch (Exception ex)
         {
-            LogService.Warn("提取", $"显示完成对话框失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Extract"), L.Get("Extract_LogDialogFailed", ex.Message));
         }
     }
 
@@ -416,7 +429,7 @@ public partial class ExtractionViewModel : ObservableObject, IDisposable
 
     private void PostLog(string message)
     {
-        LogService.Info("提取", message);
+        LogService.Info(L.Get("LogCat_Extract"), message);
         var line = $"[{DateTime.Now:HH:mm:ss}] {message}";
         _ = Application.Current.Dispatcher.InvokeAsync(() =>
         {
@@ -431,6 +444,7 @@ public partial class ExtractionViewModel : ObservableObject, IDisposable
         if (_disposed) return;
         _disposed = true;
         _accountService.SessionChanged -= OnSessionChanged;
+        LocalizationService.Instance.PropertyChanged -= OnLanguageChanged;
         _cts?.Cancel();
         _cts?.Dispose();
         _cts = null;

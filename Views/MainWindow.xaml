@@ -1,6 +1,7 @@
 ﻿<Window x:Class="SteamLuaManager.Views.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:l="clr-namespace:SteamLuaManager.Markup"
         xmlns:ui="http://schemas.inkore.net/lib/ui/wpf/modern"
         Title="Fluent Steam Lua 管理工具"
         Icon="pack://application:,,,/Assets/app.ico"
@@ -46,52 +47,52 @@
             </ui:NavigationView.Resources>
 
             <ui:NavigationView.MenuItems>
-                <ui:NavigationViewItem x:Name="HomeItem" Content="主页" Tag="Home" Padding="12,0">
+                <ui:NavigationViewItem x:Name="HomeItem" Content="{l:Loc Nav_Home}" Tag="Home" Padding="12,0">
                     <ui:NavigationViewItem.Icon>
                         <ui:FontIcon Glyph="&#xE80F;" FontSize="16"/>
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
-                <ui:NavigationViewItem x:Name="ScriptDownloadItem" Content="入库" Tag="ScriptDownload" Padding="12,0">
+                <ui:NavigationViewItem x:Name="ScriptDownloadItem" Content="{l:Loc Nav_Ruku}" Tag="ScriptDownload" Padding="12,0">
                     <ui:NavigationViewItem.Icon>
                         <ui:FontIcon Glyph="&#xE990;" FontSize="16"/>
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
-                <ui:NavigationViewItem x:Name="ManifestItem" Content="清单" Tag="Manifest" Padding="12,0">
+                <ui:NavigationViewItem x:Name="ManifestItem" Content="{l:Loc Nav_Manifest}" Tag="Manifest" Padding="12,0">
                     <ui:NavigationViewItem.Icon>
                         <ui:FontIcon Glyph="&#xE9D9;" FontSize="16"/>
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
-                <ui:NavigationViewItem x:Name="ExtractionItem" Content="提取" Tag="Extraction" Padding="12,0">
+                <ui:NavigationViewItem x:Name="ExtractionItem" Content="{l:Loc Nav_Extract}" Tag="Extraction" Padding="12,0">
                     <ui:NavigationViewItem.Icon>
                         <ui:FontIcon Glyph="&#xE8B7;" FontSize="16"/>
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
-                <ui:NavigationViewItem x:Name="AuthorizationItem" Content="授权" Tag="Authorization" Padding="12,0">
+                <ui:NavigationViewItem x:Name="AuthorizationItem" Content="{l:Loc Nav_Auth}" Tag="Authorization" Padding="12,0">
                     <ui:NavigationViewItem.Icon>
                         <ui:FontIcon Glyph="&#xE72D;" FontSize="16"/>
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
-                <ui:NavigationViewItem x:Name="TrainerItem" Content="修改器" Tag="Trainer" Padding="12,0">
+                <ui:NavigationViewItem x:Name="TrainerItem" Content="{l:Loc Nav_Trainer}" Tag="Trainer" Padding="12,0">
                     <ui:NavigationViewItem.Icon>
                         <ui:FontIcon Glyph="&#xE7FC;" FontSize="16"/>
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
-                <ui:NavigationViewItem x:Name="AchievementItem" Content="成就" Tag="Achievement" Padding="12,0">
+                <ui:NavigationViewItem x:Name="AchievementItem" Content="{l:Loc Nav_Achieve}" Tag="Achievement" Padding="12,0">
                     <ui:NavigationViewItem.Icon>
                         <ui:FontIcon Glyph="&#xE734;" FontSize="16"/>
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
-                <ui:NavigationViewItem x:Name="CloudSaveItem" Content="云存档" Tag="CloudSave" Padding="12,0">
+                <ui:NavigationViewItem x:Name="CloudSaveItem" Content="{l:Loc Nav_Cloud}" Tag="CloudSave" Padding="12,0">
                     <ui:NavigationViewItem.Icon>
                         <ui:FontIcon Glyph="&#xE753;" FontSize="16"/>
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
-                <ui:NavigationViewItem x:Name="OnlineFixItem" Content="联机" Tag="OnlineFix" Padding="12,0">
+                <ui:NavigationViewItem x:Name="OnlineFixItem" Content="{l:Loc Nav_Online}" Tag="OnlineFix" Padding="12,0">
                     <ui:NavigationViewItem.Icon>
                         <ui:FontIcon Glyph="&#xE774;" FontSize="16"/>
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
-                <ui:NavigationViewItem x:Name="CrackToolItem" Content="免启动" Tag="CrackTool" Padding="12,0">
+                <ui:NavigationViewItem x:Name="CrackToolItem" Content="{l:Loc Nav_Crack}" Tag="CrackTool" Padding="12,0">
                     <ui:NavigationViewItem.Icon>
                         <ui:FontIcon Glyph="&#xE768;" FontSize="16"/>
                     </ui:NavigationViewItem.Icon>
@@ -99,12 +100,12 @@
             </ui:NavigationView.MenuItems>
 
             <ui:NavigationView.FooterMenuItems>
-                <ui:NavigationViewItem x:Name="SettingsItem" Content="设置" Tag="Settings" Padding="12,0">
+                <ui:NavigationViewItem x:Name="SettingsItem" Content="{l:Loc Nav_Settings}" Tag="Settings" Padding="12,0">
                     <ui:NavigationViewItem.Icon>
                         <ui:FontIcon Glyph="&#xE713;" FontSize="16"/>
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
-                <ui:NavigationViewItem x:Name="AboutItem" Content="关于" Tag="About" Padding="12,0">
+                <ui:NavigationViewItem x:Name="AboutItem" Content="{l:Loc Nav_About}" Tag="About" Padding="12,0">
                     <ui:NavigationViewItem.Icon>
                         <ui:FontIcon Glyph="&#xE9CE;" FontSize="16"/>
                     </ui:NavigationViewItem.Icon>
@@ -417,7 +418,7 @@
                     <TextBlock x:Name="KernelOverlayHint" FontSize="11" TextAlignment="Center"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                Margin="0,4,0,0" Visibility="Collapsed"
-                               Text="若下载过慢可尝试开启代理或 VPN"/>
+                                                               Text="{l:Loc Overlay_SlowHint}"/>
                     <Grid Margin="0,12,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -431,7 +432,7 @@
                     </Grid>
                     <ui:ProgressRing x:Name="KernelOverlayRing" IsActive="True" Width="28" Height="28"
                                      Margin="0,12,0,0" HorizontalAlignment="Left"/>
-                    <Button x:Name="KernelCancelButton" Content="取消" Margin="0,14,0,0"
+                    <Button x:Name="KernelCancelButton" Content="{l:Loc Common_Cancel}" Margin="0,14,0,0"
                             Padding="12,6" FontSize="13" HorizontalAlignment="Center"
                             Click="KernelCancelButton_Click"/>
                 </StackPanel>
@@ -454,7 +455,7 @@
                                Margin="0,12,0,0"
                                FontSize="14" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
                                TextAlignment="Center"/>
-                    <Button Content="取消" Margin="0,14,0,0"
+                        <Button Content="{l:Loc Common_Cancel}" Margin="0,14,0,0"
                             Padding="12,6" FontSize="13" HorizontalAlignment="Center"
                             Command="{Binding CancelDlcQueryCommand}"/>
                 </StackPanel>
@@ -475,10 +476,10 @@
                     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="32,24">
                         <ui:FontIcon Glyph="&#xE896;" FontSize="48" HorizontalAlignment="Center"
                                      Foreground="{DynamicResource SystemAccentColorBrush}"/>
-                        <TextBlock Text="拖拽到此处即可一键导入" FontSize="18" FontWeight="SemiBold"
+                        <TextBlock Text="{l:Loc Drop_ImportTitle}" FontSize="18" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                    HorizontalAlignment="Center" Margin="0,16,0,0"/>
-                        <TextBlock Text="支持 .lua（游戏清单）、.bin（成就数据）和 .manifest（仓库清单）文件" FontSize="13"
+                        <TextBlock Text="{l:Loc Drop_ImportDesc}" FontSize="13"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                    HorizontalAlignment="Center" Margin="0,6,0,0"/>
                     </StackPanel>
@@ -500,10 +501,10 @@
                     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="32,24">
                         <ui:FontIcon Glyph="&#xE8B5;" FontSize="48" HorizontalAlignment="Center"
                                      Foreground="{DynamicResource SystemAccentColorBrush}"/>
-                        <TextBlock Text="拖拽到此处导入授权" FontSize="18" FontWeight="SemiBold"
+                        <TextBlock Text="{l:Loc Drop_AuthTitle}" FontSize="18" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                    HorizontalAlignment="Center" Margin="0,16,0,0"/>
-                        <TextBlock Text="支持 tickets.txt（appticket / eticket 票据文件）" FontSize="13"
+                        <TextBlock Text="{l:Loc Drop_AuthDesc}" FontSize="13"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                    HorizontalAlignment="Center" Margin="0,6,0,0"/>
                     </StackPanel>

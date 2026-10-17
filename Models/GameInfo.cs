@@ -1,5 +1,6 @@
 ﻿using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using SteamLuaManager.Services;
 
 namespace SteamLuaManager.Models;
 
@@ -27,8 +28,11 @@ public partial class GameInfo : ObservableObject
 
     // 云存档行副标题：无存档时间显示未知，不留空
     public string SaveSubtitle => LastSaveTime.HasValue
-        ? $"AppID: {AppId} • 上次存档: {LastSaveTime:yyyy-MM-dd HH:mm}"
-        : $"AppID: {AppId} • 上次存档: 未知";
+        ? L.Get("Game_SaveSubtitle", AppId, LastSaveTime.Value.ToString("yyyy-MM-dd HH:mm"))
+        : L.Get("Game_SaveSubtitleUnknown", AppId);
+
+    // 语言切换后由视图模型调用，让副标题的本地化文案重新取值
+    public void RefreshLocalizedTexts() => OnPropertyChanged(nameof(SaveSubtitle));
 
     [ObservableProperty]
     private bool _isLoading;

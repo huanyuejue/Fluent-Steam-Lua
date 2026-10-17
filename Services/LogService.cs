@@ -33,7 +33,7 @@ public static class LogService
                 _writer = new StreamWriter(
                     new FileStream(LogFilePath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite),
                     new UTF8Encoding(false)) { AutoFlush = true };
-                WriteCore("INFO", "日志系统", "日志记录已开启");
+                WriteCore("INFO", L.Get("LogCat_LogSystem"), L.Get("Svc_LogEnabled"));
             }
             catch
             {
@@ -60,7 +60,7 @@ public static class LogService
         {
             if (_enabled && _writer != null)
             {
-                try { WriteCore("INFO", "日志系统", "程序退出，日志记录已关闭"); }
+                try { WriteCore("INFO", L.Get("LogCat_LogSystem"), L.Get("Svc_LogDisabled")); }
                 catch { }
             }
             CloseWriter();

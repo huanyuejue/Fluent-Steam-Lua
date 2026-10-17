@@ -45,7 +45,7 @@ public class AppUpdateService : IAppUpdateService
         var exeName = ExeName;
         var url = isLoose ? check.LooseAssetUrl : check.SingleAssetUrl;
         if (string.IsNullOrEmpty(url))
-            throw new InvalidOperationException("新版本未提供当前版本的安装包，请前往 GitHub 手动下载更新");
+            throw new InvalidOperationException(L.Get("Svc_AusNoAsset"));
 
         // 安装目录不可写时直接报错，免得下完包才发现装不上
         var probePath = Path.Combine(InstallDir, ".write-test");
@@ -55,7 +55,7 @@ public class AppUpdateService : IAppUpdateService
         }
         catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
         {
-            throw new InvalidOperationException("安装目录不可写，请以管理员身份运行或前往 GitHub 手动下载更新", ex);
+            throw new InvalidOperationException(L.Get("Svc_AusDirNotWritable"), ex);
         }
         finally
         {
@@ -70,8 +70,8 @@ public class AppUpdateService : IAppUpdateService
         {
             var src = sources[i];
             status?.Report(i == 0
-                ? $"正在通过 {GitHubMirror.SourceDisplayName(src)} 下载新版本..."
-                : $"经 {GitHubMirror.SourceDisplayName(sources[i - 1])} 下载失败，正在尝试 {GitHubMirror.SourceDisplayName(src)}…");
+                ? L.Get("Svc_AusDownloading", GitHubMirror.SourceDisplayName(src))
+                : L.Get("Svc_AusRetrySource", GitHubMirror.SourceDisplayName(sources[i - 1]), GitHubMirror.SourceDisplayName(src)));
 
             var tempZip = Path.Combine(Path.GetTempPath(), $"FluentSteamLuaUpdate_{Guid.NewGuid():N}.zip");
             try
@@ -115,25 +115,25 @@ public class AppUpdateService : IAppUpdateService
             catch (Exception ex)
             {
                 lastError = ex;
-                LogService.Warn("更新", $"下载源失败 ({src}): {ex.Message}");
+                LogService.Warn(L.Get("LogCat_Update"), L.Get("Svc_AusSourceFailed", src, ex.Message));
                 try { File.Delete(tempZip); } catch { }
             }
         }
 
         if (downloadedZip == null)
-            throw new InvalidOperationException($"新版本下载失败，已尝试 {sources.Count} 个下载源：{lastError?.Message}", lastError);
+            throw new InvalidOperationException(L.Get("Svc_AusDownloadFailed", sources.Count, lastError?.Message), lastError);
 
         try
         {
             ct.ThrowIfCancellationRequested();
-            status?.Report("正在解压更新包...");
+            status?.Report(L.Get("Svc_AusExtracting"));
 
             using (var archive = ZipFile.OpenRead(downloadedZip))
             {
                 var hasExe = archive.Entries.Any(e =>
                     string.Equals(Path.GetFileName(e.FullName), exeName, StringComparison.OrdinalIgnoreCase));
                 if (!hasExe)
-                    throw new InvalidOperationException("更新包中未找到主程序文件，请前往 GitHub 手动下载更新");
+                    throw new InvalidOperationException(L.Get("Svc_AusNoExe"));
             }
 
             var stagingDir = Path.Combine(InstallDir, "update-staging");
@@ -149,7 +149,7 @@ public class AppUpdateService : IAppUpdateService
                     var dest = Path.GetFullPath(Path.Combine(stagingDir, entry.FullName));
                     if (!dest.StartsWith(Path.GetFullPath(stagingDir) + Path.DirectorySeparatorChar,
                             StringComparison.OrdinalIgnoreCase))
-                        throw new InvalidOperationException("更新包内路径非法，已终止更新");
+                        throw new InvalidOperationException(L.Get("Svc_AusBadPath"));
                     Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
                     entry.ExtractToFile(dest, overwrite: true);
                     try { File.SetAttributes(dest, FileAttributes.Normal); } catch { }
@@ -161,7 +161,7 @@ public class AppUpdateService : IAppUpdateService
             if (rootEntries.Length == 1 && Directory.Exists(rootEntries[0]))
                 stagingDir = rootEntries[0];
 
-            status?.Report("更新包就绪，正在启动更新程序...");
+            status?.Report(L.Get("Svc_AusReady"));
             return new StagedAppUpdate(stagingDir, InstallDir, exeName, check.LatestVersion.ToString(), isLoose);
         }
         finally
@@ -184,7 +184,7 @@ public class AppUpdateService : IAppUpdateService
             using var stream = assembly.GetManifestResourceStream("SteamLuaManager.Resources.Updater.zip");
             if (stream == null)
             {
-                LogService.Warn("更新", "内嵌更新程序缺失，无法自更新");
+                LogService.Warn(L.Get("LogCat_Update"), L.Get("Svc_AusUpdaterMissing"));
                 return false;
             }
             using var zip = new ZipArchive(stream);
@@ -203,7 +203,7 @@ public class AppUpdateService : IAppUpdateService
             var updaterExe = Path.Combine(updaterDir, "Updater.exe");
             if (!File.Exists(updaterExe))
             {
-                LogService.Warn("更新", "更新程序释放失败，无法自更新");
+                LogService.Warn(L.Get("LogCat_Update"), L.Get("Svc_AusUpdaterExtractFailed"));
                 return false;
             }
 
@@ -225,12 +225,12 @@ public class AppUpdateService : IAppUpdateService
             psi.ArgumentList.Add("--version");
             psi.ArgumentList.Add(staged.Version);
             Process.Start(psi)?.Dispose();
-            LogService.Info("更新", $"已启动更新程序，目标版本 {staged.Version}");
+            LogService.Info(L.Get("LogCat_Update"), L.Get("Svc_AusUpdaterStarted", staged.Version));
             return true;
         }
         catch (Exception ex)
         {
-            LogService.Warn("更新", $"启动更新程序失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Update"), L.Get("Svc_AusUpdaterStartFailed", ex.Message));
             return false;
         }
     }

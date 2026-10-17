@@ -167,7 +167,7 @@ public class SteamApiService : ISteamApiService
 		}
 		catch (Exception ex)
 		{
-			LogService.Warn("名称缓存", $"加载缓存失败: {ex.Message}");
+			LogService.Warn(L.Get("LogCat_NameCache"), L.Get("Svc_ApiLoadCacheFailed", ex.Message));
 			_nameCache = new();
 		}
 	}
@@ -182,7 +182,7 @@ public class SteamApiService : ISteamApiService
 				var json = JsonSerializer.Serialize(_nameCache, new JsonSerializerOptions { WriteIndented = true });
 				File.WriteAllText(_cacheFilePath, json);
 			}
-			catch (Exception ex) { LogService.Warn("名称缓存", $"保存缓存失败: {ex.Message}"); }
+			catch (Exception ex) { LogService.Warn(L.Get("LogCat_NameCache"), L.Get("Svc_ApiSaveCacheFailed", ex.Message)); }
 		}
 	}
 
@@ -290,7 +290,7 @@ public class SteamApiService : ISteamApiService
 		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
 		catch (Exception ex)
 		{
-			LogService.Warn("封面", $"刷新游戏信息失败 (AppID {game.AppId}): {ex.Message}");
+			LogService.Warn(L.Get("LogCat_Cover"), L.Get("Svc_ApiRefreshFailed", game.AppId, ex.Message));
 		}
 		finally
 		{
@@ -475,7 +475,7 @@ public class SteamApiService : ISteamApiService
 				settings.SelectedCdnIndex = i;
 				_settingsService.Save(settings);
 				CdnAutoSwitched?.Invoke(i);
-				LogService.Warn("封面", $"选中 CDN 连续失败，自动切换到节点 {endpoints[i].Name}");
+				LogService.Warn(L.Get("LogCat_Cover"), L.Get("Svc_ApiCdnSwitched", endpoints[i].Name));
 				return;
 			}
 		}
@@ -487,7 +487,7 @@ public class SteamApiService : ISteamApiService
 		s.SelectedCdnIndex = 0;
 		_settingsService.Save(s);
 		CdnAutoSwitched?.Invoke(0);
-		LogService.Warn("封面", $"所有 CDN 节点均不可用，已重置为 Store API（10 分钟内不再自动切换）");
+		LogService.Warn(L.Get("LogCat_Cover"), L.Get("Svc_ApiCdnAllDead"));
 	}
 
 	private static bool IsValidCoverFile(string path)
@@ -528,7 +528,7 @@ public class SteamApiService : ISteamApiService
 	private static void DeleteInvalidCover(string path, GameInfo? game = null)
 	{
 		try { File.Delete(path); }
-		catch (Exception ex) { LogService.Warn("封面清理", $"删除无效封面失败 {path}: {ex.Message}"); }
+		catch (Exception ex) { LogService.Warn(L.Get("LogCat_CoverClean"), L.Get("Svc_ApiDelCoverFailed", path, ex.Message)); }
 		if (game != null)
 			game.CoverImagePath = string.Empty;
 	}
@@ -583,9 +583,9 @@ public class SteamApiService : ISteamApiService
 		}
 		catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
 		{
-			LogService.Warn("Steam API", $"appdetails 请求超时 (AppID {appId})");
+			LogService.Warn(L.Get("LogCat_SteamApi"), L.Get("Svc_ApiStoreTimeout", appId));
 		}
-		catch (Exception ex) { LogService.Warn("Steam API", $"appdetails 请求失败 (AppID {appId}): {ex.Message}"); }
+		catch (Exception ex) { LogService.Warn(L.Get("LogCat_SteamApi"), L.Get("Svc_ApiStoreFailed", appId, ex.Message)); }
 		return (null, null);
 	}
 
@@ -619,11 +619,11 @@ public class SteamApiService : ISteamApiService
 		}
 		catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
 		{
-			LogService.Warn("Steam API", $"coming_soon 查询超时 (AppID {appId})");
+			LogService.Warn(L.Get("LogCat_SteamApi"), L.Get("Svc_ApiSoonTimeout", appId));
 		}
 		catch (Exception ex)
 		{
-			LogService.Warn("Steam API", $"coming_soon 查询失败 (AppID {appId}): {ex.Message}");
+			LogService.Warn(L.Get("LogCat_SteamApi"), L.Get("Svc_ApiSoonFailed", appId, ex.Message));
 		}
 		return null;
 	}
@@ -648,7 +648,7 @@ public class SteamApiService : ISteamApiService
 			if (doc.RootElement.TryGetProperty("name", out var name))
 				return name.GetString();
 		}
-		catch (Exception ex) { LogService.Warn("Steam API", $"steamspy 请求失败 (AppID {appId}): {ex.Message}"); }
+		catch (Exception ex) { LogService.Warn(L.Get("LogCat_SteamApi"), L.Get("Svc_ApiSpyFailed", appId, ex.Message)); }
 		return null;
 	}
 
@@ -698,7 +698,7 @@ public class SteamApiService : ISteamApiService
 		}
 		catch (Exception ex)
 		{
-			LogService.Warn("Steam API", $"steamcommunity 请求失败 (AppID {appId}): {ex.Message}");
+			LogService.Warn(L.Get("LogCat_SteamApi"), L.Get("Svc_ApiCommunityFailed", appId, ex.Message));
 			return null;
 		}
 		finally
@@ -741,7 +741,7 @@ public class SteamApiService : ISteamApiService
 		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
 		catch (Exception ex)
 		{
-			LogService.Warn("封面", $"下载封面失败 (AppID {appId}): {ex.Message}");
+			LogService.Warn(L.Get("LogCat_Cover"), L.Get("Svc_ApiCoverDownloadFailed", appId, ex.Message));
 			return (null, true);
 		}
 	}

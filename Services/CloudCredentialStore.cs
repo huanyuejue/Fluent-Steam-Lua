@@ -19,7 +19,7 @@ internal static class CloudCredentialStore
         catch (Exception ex)
         {
             // 只记路径不记内容；文件不存在走正常 null 分支，不记（防刷屏）
-            LogService.Warn("云存档", $"凭证文件读取失败 {path}: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Svc_CcsReadFailed", path, ex.Message));
             return null;
         }
         if (raw.Length == 0) return null;
@@ -33,7 +33,7 @@ internal static class CloudCredentialStore
         catch (Exception ex)
         {
             // DPAPI 换机/换用户解不开从此有明确信号，凭此提示用户重登录
-            LogService.Warn("云存档", $"凭证文件解密失败 {path}（可能换了系统用户），需重新登录: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Svc_CcsDecryptFailed", path, ex.Message));
             return null;
         }
     }
@@ -51,7 +51,7 @@ internal static class CloudCredentialStore
         }
         catch (Exception ex)
         {
-            LogService.Warn("云存档", $"凭证文件写入失败 {path}: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Svc_CcsWriteFailed", path, ex.Message));
             return false;
         }
     }

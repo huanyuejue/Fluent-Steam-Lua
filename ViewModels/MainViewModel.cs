@@ -64,13 +64,21 @@ namespace SteamLuaManager.ViewModels;
 	private bool _isFetchingInfo;
 
 	[ObservableProperty]
-	private string _selectedSortOption = "名称 A-Z";
+	private string _selectedSortOption = "NameAsc";
 
 	[ObservableProperty]
-	private string _selectedDisableFilter = "全部游戏";
+	private string _selectedDisableFilter = "All";
 
 	[ObservableProperty]
-	private string _selectedViewMode = "卡片";
+	private string _selectedViewMode = "Card";
+
+	// 入库旧存档里是中文值（卡片/全部游戏/名称 A-Z…），读出来归一化成英文码
+	private static string NormalizeViewMode(string? v) => v switch
+	{
+		"列表" or "列表模式" or "List" => "List",
+		"表格" or "Table" => "Table",
+		_ => "Card"
+	};
 
 	[ObservableProperty]
 	private bool _isRefreshSlow;
@@ -106,7 +114,7 @@ namespace SteamLuaManager.ViewModels;
 		_statusMessageTimer?.Dispose();
 		if (!string.IsNullOrEmpty(value))
 		{
-			LogService.Info("主页", value);
+			LogService.Info(L.Get("LogCat_Home"), value);
 			_statusMessageTimer = new Timer(_ => Application.Current.Dispatcher.Invoke(() => StatusMessage = string.Empty),
 				null, 3000, Timeout.Infinite);
 		}
@@ -137,7 +145,7 @@ namespace SteamLuaManager.ViewModels;
 	{
 		// 选中态挂在 GameInfo 上与 _filteredCache 同引用，计数按筛选全量而非当前页
 		var count = _filteredCache.Count(g => g.IsSelected);
-		SelectionSummary = $"已选择 {count}/{_filteredCache.Count}";
+		SelectionSummary = L.Get("Home_SelectedCount", count, _filteredCache.Count);
 	}
 
 	// 手动勾选 CheckBox 只改 GameInfo 不经过 VM，订阅选中变化实时刷新计数；
@@ -176,8 +184,8 @@ namespace SteamLuaManager.ViewModels;
 		var index = _steamApiService.SelectedCdnIndex;
 		var defaults = CdnEndpoint.Defaults;
 		if (index >= 0 && index < defaults.Count)
-			return defaults[index].Name;
-		return "未知节点";
+			return L.Get(CdnEndpoint.GetDisplayKey(defaults[index].Name));
+		return L.Get("Home_UnknownNode");
 	}
 
 	public MainViewModel(
@@ -208,7 +216,7 @@ namespace SteamLuaManager.ViewModels;
 		var settings = settingsService.Load();
 		IsAutoRefreshEnabled = settings.AutoRefreshEnabled;
 		IsCardRefreshVisible = settings.IsCardRefreshVisible;
-		SelectedViewMode = settings.SelectedViewMode;
+		SelectedViewMode = NormalizeViewMode(settings.SelectedViewMode);
 		if (!string.IsNullOrEmpty(settings.SteamPath))
 			steamPathService.SetCustomPath(settings.SteamPath);
 	}
@@ -245,7 +253,7 @@ namespace SteamLuaManager.ViewModels;
 	{
 		Application.Current.Dispatcher.Invoke(() =>
 		{
-			KernelUpdateBannerText = $"检测到 OST 内核新版本 {msg.RemoteVersion}（当前 {msg.LocalVersion}），请前往右下角工具栏更新";
+			KernelUpdateBannerText = L.Get("Home_KernelUpdate", msg.RemoteVersion, msg.LocalVersion);
 			IsKernelUpdateBannerVisible = true;
 		});
 	}
@@ -263,13 +271,13 @@ namespace SteamLuaManager.ViewModels;
 		var detectedPath = _steamPathService.DetectSteamPath();
 		SteamPath = !string.IsNullOrEmpty(settings.SteamPath)
 			? settings.SteamPath
-			: detectedPath ?? "未检测到Steam";
+			: detectedPath ?? L.Get("Home_SteamNotFound");
 		OpenSteamToolStatus = _steamPathService.DetectSteamToolType() switch
 		{
-			SteamToolType.OpenSteamTool => "使用 OpenSteamTool 内核",
-			SteamToolType.SteamTools => "检测到不适配的 SteamTools",
-			SteamToolType.GreenLuma => "检测到不适配的 GreenLuma",
-			_ => "未安装 OpenSteamTool"
+			SteamToolType.OpenSteamTool => L.Get("Home_KernelOST"),
+			SteamToolType.SteamTools => L.Get("Home_KernelMismatch", nameof(SteamToolType.SteamTools)),
+			SteamToolType.GreenLuma => L.Get("Home_KernelMismatch", nameof(SteamToolType.GreenLuma)),
+			_ => L.Get("Home_KernelMissing")
 		};
 		await RefreshGamesAsync();
 		if (IsAutoRefreshEnabled)
@@ -294,7 +302,7 @@ namespace SteamLuaManager.ViewModels;
 			UpdateStatus();
 			scanOk = true;
 		}
-		catch (Exception ex) { StatusText = $"刷新失败: {ex.Message}"; LogService.Error("主页", $"刷新游戏信息失败: {ex}"); }
+		catch (Exception ex) { StatusText = L.Get("Home_RefreshFailed", ex.Message); LogService.Error(L.Get("LogCat_Home"), L.Get("Home_LogRefreshFailed", ex)); }
 		finally
 		{
 			IsRefreshing = false;
@@ -314,15 +322,15 @@ namespace SteamLuaManager.ViewModels;
 		if (settings.AutoFetchCovers && !settings.CoverFetchAsked && _filteredCache.Count >= 500)
 		{
 			var auto = await ShowModernConfirmAsync(
-				"游戏较多",
-				$"检测到 {_filteredCache.Count} 个游戏，启动时自动获取全部封面可能较慢。\n\n选“自动获取”保持现状，选“仅手动”则关闭自动（卡片上的刷新按钮仍可手动获取，可在设置中改回）。",
-				"自动获取", "仅手动");
+				L.Get("Home_BigLibraryTitle"),
+				L.Get("Home_BigLibraryBody", _filteredCache.Count, L.Get("Home_BigLibraryAuto"), L.Get("Home_BigLibraryManual")),
+				L.Get("Home_BigLibraryAuto"), L.Get("Home_BigLibraryManual"));
 			settings.CoverFetchAsked = true;
 			if (!auto)
 			{
 				settings.AutoFetchCovers = false;
-				StatusText = "已关闭封面自动获取（大库），可在设置中重新开启";
-				LogService.Info("主页", $"大库（{_filteredCache.Count}）用户选择手动获取封面");
+				StatusText = L.Get("Home_CoversManualOff");
+				LogService.Info(L.Get("LogCat_Home"), L.Get("Home_LogManualCovers", _filteredCache.Count));
 			}
 			_settingsService.Save(settings);
 		}
@@ -338,7 +346,7 @@ namespace SteamLuaManager.ViewModels;
 
 		IsFetchingInfo = true;
 		IsRefreshSlow = false;
-		RefreshProgressText = "正在获取游戏信息…";
+		RefreshProgressText = L.Get("Home_FetchingInfo");
 		StartProgressTimer();
 		_ = SlowTimerAsync(token);
 		_ = FetchGameInfoBackgroundAsync(snapshot, token);
@@ -365,7 +373,7 @@ namespace SteamLuaManager.ViewModels;
 			UpdateStatus();
 		}
 		catch (OperationCanceledException) { }
-		catch (Exception ex) { StatusText = $"刷新失败: {ex.Message}"; LogService.Error("主页", $"后台获取游戏信息失败: {ex}"); }
+		catch (Exception ex) { StatusText = L.Get("Home_RefreshFailed", ex.Message); LogService.Error(L.Get("LogCat_Home"), L.Get("Home_BackgroundFetchFailed", ex)); }
 		finally
 		{
 			if (_refreshCts?.Token == token)
@@ -375,7 +383,7 @@ namespace SteamLuaManager.ViewModels;
 				IsFetchingInfo = false;
 				StopProgressTimer();
 				IsRefreshSlow = false;
-				RefreshProgressText = wasCancelled ? "已取消获取" : $"共 {_allGames.Count} 个游戏";
+				RefreshProgressText = wasCancelled ? L.Get("Home_FetchCancelled") : L.Get("Home_FetchedTotal", _allGames.Count);
 			}
 		}
 	}
@@ -408,7 +416,7 @@ namespace SteamLuaManager.ViewModels;
 			}
 		}
 		catch (OperationCanceledException) { }
-		catch (Exception ex) { LogService.Warn("主页", $"慢速提示计时异常: {ex.Message}"); }
+		catch (Exception ex) { LogService.Warn(L.Get("LogCat_Home"), L.Get("Home_SlowTipError", ex.Message)); }
 	}
 
 	private void StartProgressTimer()
@@ -434,13 +442,13 @@ namespace SteamLuaManager.ViewModels;
 		if (_allGames.Count == 0)
 		{
 			if (!string.IsNullOrEmpty(RefreshProgressText))
-				RefreshProgressText = $"正在获取... | {GetCurrentCdnName()}";
+				RefreshProgressText = L.Get("Home_Fetching", GetCurrentCdnName());
 			return;
 		}
 		var done = _allGames.Count(g => !string.IsNullOrEmpty(g.CoverImagePath));
 		RefreshProgressText = IsRefreshSlow
-			? $"{done} / {_allGames.Count} 个游戏已获取 | 获取较慢，可点取消"
-			: $"{done} / {_allGames.Count} 个游戏已获取 | {GetCurrentCdnName()}";
+			? L.Get("Home_FetchedSlow", done, _allGames.Count)
+			: L.Get("Home_FetchedProgress", done, _allGames.Count, GetCurrentCdnName());
 	}
 
 	private async Task QuickRefreshAsync()
@@ -461,7 +469,7 @@ namespace SteamLuaManager.ViewModels;
 			UpdateStatus();
 			scanOk = true;
 		}
-		catch (Exception ex) { StatusText = $"刷新失败: {ex.Message}"; LogService.Error("主页", $"快速刷新失败: {ex}"); }
+		catch (Exception ex) { StatusText = L.Get("Home_RefreshFailed", ex.Message); LogService.Error(L.Get("LogCat_Home"), L.Get("Home_LogQuickRefreshFailed", ex)); }
 		finally
 		{
 			IsRefreshing = false;
@@ -539,18 +547,18 @@ namespace SteamLuaManager.ViewModels;
 
 				q = disableFilter switch
 				{
-					"已启用入库" => q.Where(g => !g.IsDisabled),
-					"已禁用入库" => q.Where(g => g.IsDisabled),
+					"Enabled" => q.Where(g => !g.IsDisabled),
+					"Disabled" => q.Where(g => g.IsDisabled),
 					_ => q
 				};
 
 				q = sortOption switch
 				{
-					"名称 Z-A" => q.OrderByDescending(g => g.GameName),
-					"AppID 升序" => q.OrderBy(g => g.AppId),
-					"AppID 降序" => q.OrderByDescending(g => g.AppId),
-					"入库时间升序" => q.OrderBy(g => g.LuaFileTime),
-					"入库时间降序" => q.OrderByDescending(g => g.LuaFileTime),
+					"NameDesc" => q.OrderByDescending(g => g.GameName),
+					"AppIdAsc" => q.OrderBy(g => g.AppId),
+					"AppIdDesc" => q.OrderByDescending(g => g.AppId),
+					"TimeAsc" => q.OrderBy(g => g.LuaFileTime),
+					"TimeDesc" => q.OrderByDescending(g => g.LuaFileTime),
 					_ => q.OrderBy(g => g.GameName)
 				};
 
@@ -565,13 +573,13 @@ namespace SteamLuaManager.ViewModels;
 		UpdateStatus();
 	}
 
-	private void UpdateStatus() => StatusText = $"共 {_filteredCache.Count} 个游戏";
+	private void UpdateStatus() => StatusText = L.Get("Home_GameCount", _filteredCache.Count);
 
 	private Task ShowModernDialogAsync(string title, string message)
 		=> _dialogService.ShowAlertAsync(title, message);
 
-	private Task<bool> ShowModernConfirmAsync(string title, string message, string primaryText = "确定", string closeText = "取消")
-		=> _dialogService.ShowConfirmAsync(title, message, primaryText, closeText);
+	private Task<bool> ShowModernConfirmAsync(string title, string message, string? primaryText = null, string? closeText = null)
+		=> _dialogService.ShowConfirmAsync(title, message, primaryText ?? L.Get("Common_Confirm"), closeText ?? L.Get("Common_Cancel"));
 
 	private async void OnFilesChanged(object? sender, EventArgs e)
 	{
@@ -583,9 +591,9 @@ namespace SteamLuaManager.ViewModels;
 	{
 		var dialog = new Microsoft.Win32.OpenFileDialog
 		{
-			Filter = "游戏文件 (*.lua;*.bin;*.manifest;*.zip;*.tar;*.7z;*.rar)|*.lua;*.bin;*.manifest;*.zip;*.tar;*.7z;*.rar",
+			Filter = L.Get("Home_FileDialogFilter"),
 			Multiselect = true,
-			Title = "选择游戏文件"
+			Title = L.Get("Home_FileDialogTitle")
 		};
 
 		if (dialog.ShowDialog() == true)
@@ -619,16 +627,16 @@ namespace SteamLuaManager.ViewModels;
 						manifestCount++;
 					}
 				}
-				catch (Exception ex) { StatusText = $"添加失败: {ex.Message}"; LogService.Error("主页", $"添加文件失败: {ex}"); }
+				catch (Exception ex) { StatusText = L.Get("Home_AddFailed", ex.Message); LogService.Error(L.Get("LogCat_Home"), L.Get("Home_LogAddFailed", ex)); }
 			}
-			if (luaCount > 0) msgs.Add($"导入游戏成功 ({luaCount})");
-			if (binCount > 0) msgs.Add($"导入成就成功 ({binCount})");
-			if (manifestCount > 0) msgs.Add($"导入清单成功 ({manifestCount})");
-			if (msgs.Count > 0)
-			{
-				StatusMessage = string.Join("，", msgs);
-				LogService.Info("主页", string.Join("，", msgs));
-			}
+		if (luaCount > 0) msgs.Add(L.Get("Home_ImportGameOk", luaCount));
+		if (binCount > 0) msgs.Add(L.Get("Home_ImportBinOk", binCount));
+		if (manifestCount > 0) msgs.Add(L.Get("Home_ImportManifestOk", manifestCount));
+		if (msgs.Count > 0)
+		{
+			StatusMessage = string.Join("，", msgs);
+			LogService.Info(L.Get("LogCat_Home"), string.Join("，", msgs));
+		}
 			await QuickRefreshAsync();
 		}
 	}
@@ -640,14 +648,14 @@ namespace SteamLuaManager.ViewModels;
 		try
 		{
 			var r = await _archiveImport.ImportAsync(file, null);
-			if (r.LuaCount > 0) lines.Add($"导入游戏成功 ({r.LuaCount})");
-			if (r.BinCount > 0) lines.Add($"导入成就成功 ({r.BinCount})");
-			if (r.ManifestCount > 0) lines.Add($"导入清单成功 ({r.ManifestCount})");
-			if (r.SkippedCount > 0) lines.Add($"跳过同名文件 ({r.SkippedCount}：{string.Join("、", r.SkippedFiles.Take(5))}{(r.SkippedFiles.Count > 5 ? "…" : "")})");
-			foreach (var f in r.FailedFiles) lines.Add($"导入失败：{f}");
-			if (lines.Count == 0) lines.Add("压缩包内没有可导入的游戏文件");
-		}
-		catch (Exception ex) { StatusText = $"压缩包导入失败: {ex.Message}"; LogService.Error("主页", $"压缩包导入失败: {ex}"); }
+		if (r.LuaCount > 0) lines.Add(L.Get("Home_ImportGameOk", r.LuaCount));
+		if (r.BinCount > 0) lines.Add(L.Get("Home_ImportBinOk", r.BinCount));
+		if (r.ManifestCount > 0) lines.Add(L.Get("Home_ImportManifestOk", r.ManifestCount));
+		if (r.SkippedCount > 0) lines.Add(L.Get("Home_ImportSkip", r.SkippedCount, string.Join("、", r.SkippedFiles.Take(5)), r.SkippedFiles.Count > 5 ? "…" : ""));
+		foreach (var f in r.FailedFiles) lines.Add(L.Get("Home_ImportFailFile", f));
+		if (lines.Count == 0) lines.Add(L.Get("Home_ImportArchiveEmpty"));
+	}
+	catch (Exception ex) { StatusText = L.Get("Home_ArchiveImportFailed", ex.Message); LogService.Error(L.Get("LogCat_Home"), L.Get("Home_ArchiveImportFailed", ex)); }
 		return lines;
 	}
 
@@ -658,19 +666,19 @@ namespace SteamLuaManager.ViewModels;
 
 		if (game.IsDisabled)
 		{
-			await ShowModernDialogAsync("操作被阻止", $"该游戏已被禁用入库，请先启用后再删除。");
+			await ShowModernDialogAsync(L.Get("Home_OpBlocked"), L.Get("Home_DisabledDeleteWarn"));
 			return;
 		}
 
 		var confirmed = await ShowModernConfirmAsync(
-			"确认删除",
-			$"确定要删除 {game.GameName} ({game.AppId}) 的Lua文件吗？",
-			"删除");
+			L.Get("Home_ConfirmDelete"),
+			L.Get("Home_ConfirmDeleteBody", game.GameName, game.AppId),
+			L.Get("Home_Delete"));
 
 		if (confirmed)
 		{
 			try { await _luaFileManager.DeleteLuaFileAsync(game.AppId); await QuickRefreshAsync(); }
-			catch (Exception ex) { StatusText = $"删除失败: {ex.Message}"; LogService.Error("主页", $"删除游戏失败 ({game.GameName} AppID {game.AppId}): {ex}"); }
+			catch (Exception ex) { StatusText = L.Get("Home_DeleteFailed", ex.Message); LogService.Error(L.Get("LogCat_Home"), L.Get("Home_LogDeleteFailed", game.GameName, game.AppId, ex)); }
 		}
 	}
 
@@ -693,16 +701,16 @@ namespace SteamLuaManager.ViewModels;
 	{
 		if (game == null) return;
 		var go = await ShowModernConfirmAsync(
-			"推荐使用清单监听",
-			"手动获取 Manifest 已下线，成功率不如自动方案。\n\n请前往「清单」→ 清单监听：填入 Key 并启动监听，然后去 Steam 触发下载即可自动获取，更好用。",
-			"前往清单监听", "知道了");
+			L.Get("Home_RecommendMonitor"),
+			L.Get("Home_MonitorRetiredBody", L.Get("Nav_Manifest"), L.Get("Home_MonitorTab")),
+			L.Get("Home_GoMonitor"), L.Get("Home_GotIt"));
 		if (!go) return;
 		try
 		{
 			if (Application.Current.MainWindow is Views.MainWindow main)
 				main.NavigateTo("Manifest");
 		}
-		catch (Exception ex) { LogService.Warn("主页", $"跳转清单监听页失败: {ex.Message}"); }
+		catch (Exception ex) { LogService.Warn(L.Get("LogCat_Home"), L.Get("Home_NavMonitorFail", ex.Message)); }
 	}
 
 	[RelayCommand]
@@ -738,13 +746,13 @@ namespace SteamLuaManager.ViewModels;
 		var selected = _filteredCache.Where(g => g.IsSelected && g.IsDisabled).ToList();
 		if (selected.Count == 0)
 		{
-			await ShowModernDialogAsync("批量启用", "没有选中的已禁用游戏。");
+			await ShowModernDialogAsync(L.Get("Home_BatchEnableTitle"), L.Get("Home_BatchEnableEmpty"));
 			return;
 		}
 		foreach (var game in selected)
 			await _luaFileManager.EnableGameAsync(game.AppId);
-		StatusText = $"已启用 {selected.Count} 个游戏";
-		LogService.Info("主页", $"批量启用 {selected.Count} 个游戏");
+		StatusText = L.Get("Home_BatchEnabled", selected.Count);
+		LogService.Info(L.Get("LogCat_Home"), L.Get("Home_BatchEnabled", selected.Count));
 		await QuickRefreshAsync();
 		ClearSelection();
 	}
@@ -755,13 +763,13 @@ namespace SteamLuaManager.ViewModels;
 		var selected = _filteredCache.Where(g => g.IsSelected && !g.IsDisabled).ToList();
 		if (selected.Count == 0)
 		{
-			await ShowModernDialogAsync("批量禁用", "没有选中的已启用游戏。");
+			await ShowModernDialogAsync(L.Get("Home_BatchDisableTitle"), L.Get("Home_BatchDisableEmpty"));
 			return;
 		}
 		foreach (var game in selected)
 			await _luaFileManager.DisableGameAsync(game.AppId);
-		StatusText = $"已禁用 {selected.Count} 个游戏";
-		LogService.Info("主页", $"批量禁用 {selected.Count} 个游戏");
+		StatusText = L.Get("Home_BatchDisabled", selected.Count);
+		LogService.Info(L.Get("LogCat_Home"), L.Get("Home_BatchDisabled", selected.Count));
 		await QuickRefreshAsync();
 		ClearSelection();
 	}
@@ -772,19 +780,19 @@ namespace SteamLuaManager.ViewModels;
 		var selected = _filteredCache.Where(g => g.IsSelected && !g.IsDisabled).ToList();
 		if (selected.Count == 0)
 		{
-			await ShowModernDialogAsync("批量删除", "没有选中的已启用游戏。\n已禁用的游戏需先启用后再删除。");
+			await ShowModernDialogAsync(L.Get("Home_BatchDeleteTitle"), L.Get("Home_BatchDeleteEmpty"));
 			return;
 		}
 		var confirmed = await ShowModernConfirmAsync(
-			"批量删除",
-			$"确定要删除选中的 {selected.Count} 个游戏吗？\n此操作不可恢复！",
-			"删除");
+			L.Get("Home_BatchDeleteTitle"),
+			L.Get("Home_BatchDeleteBody", selected.Count),
+			L.Get("Home_Delete"));
 		if (confirmed)
 		{
 			foreach (var game in selected)
 				await _luaFileManager.DeleteLuaFileAsync(game.AppId);
-			StatusText = $"已删除 {selected.Count} 个游戏";
-			LogService.Info("主页", $"批量删除 {selected.Count} 个游戏");
+			StatusText = L.Get("Home_BatchDeleted", selected.Count);
+			LogService.Info(L.Get("LogCat_Home"), L.Get("Home_BatchDeleted", selected.Count));
 			await QuickRefreshAsync();
 			ClearSelection();
 		}
@@ -797,7 +805,7 @@ namespace SteamLuaManager.ViewModels;
 
 		if (game.IsDisabled)
 		{
-			await ShowModernDialogAsync("操作被阻止", $"该游戏已被禁用入库，请先启用后再编辑。");
+			await ShowModernDialogAsync(L.Get("Home_OpBlocked"), L.Get("Home_DisabledEditWarn"));
 			return;
 		}
 
@@ -807,7 +815,7 @@ namespace SteamLuaManager.ViewModels;
 		if (File.Exists(filePath))
 		{
 			try { Process.Start(new ProcessStartInfo { FileName = filePath, UseShellExecute = true }); }
-			catch (Exception ex) { StatusText = $"打开失败: {ex.Message}"; LogService.Warn("主页", $"打开 Lua 文件失败 ({game.GameName}): {ex.Message}"); }
+			catch (Exception ex) { StatusText = L.Get("Home_OpenFailed", ex.Message); LogService.Warn(L.Get("LogCat_Home"), L.Get("Home_LogOpenLuaFailed", game.GameName, ex.Message)); }
 		}
 	}
 
@@ -817,7 +825,7 @@ namespace SteamLuaManager.ViewModels;
 		var luaFolder = _steamPathService.GetLuaFolder();
 		if (string.IsNullOrEmpty(luaFolder) || !Directory.Exists(luaFolder))
 		{
-			StatusText = "Lua 文件夹不存在";
+			StatusText = L.Get("Home_LuaFolderMissing");
 			return;
 		}
 		try
@@ -826,8 +834,8 @@ namespace SteamLuaManager.ViewModels;
 		}
 		catch (Exception ex)
 		{
-			StatusText = $"打开失败: {ex.Message}";
-			LogService.Warn("主页", $"打开 Lua 文件夹失败 ({luaFolder}): {ex.Message}");
+			StatusText = L.Get("Home_OpenFailed", ex.Message);
+			LogService.Warn(L.Get("LogCat_Home"), L.Get("Home_LogOpenLuaFolderFailed", luaFolder, ex.Message));
 		}
 	}
 
@@ -847,7 +855,7 @@ namespace SteamLuaManager.ViewModels;
 
 		if (game.IsDisabled)
 		{
-			await ShowModernDialogAsync("操作被阻止", $"该游戏已被禁用入库，请先启用后再固定版本。");
+			await ShowModernDialogAsync(L.Get("Home_OpBlocked"), L.Get("Home_DisabledPinWarn"));
 			return;
 		}
 
@@ -868,7 +876,7 @@ namespace SteamLuaManager.ViewModels;
 
 		if (game.IsDisabled)
 		{
-			await ShowModernDialogAsync("操作被阻止", $"该游戏已被禁用入库，请先启用后再固定版本。");
+			await ShowModernDialogAsync(L.Get("Home_OpBlocked"), L.Get("Home_DisabledPinWarn"));
 			return;
 		}
 
@@ -881,7 +889,7 @@ namespace SteamLuaManager.ViewModels;
 		var acfPath = _steamPathService.FindAppManifest(game.AppId);
 		if (acfPath == null)
 		{
-			await ShowModernDialogAsync("无法固定版本", $"{game.GameName} 未在本地安装，无法固定到当前版本");
+			await ShowModernDialogAsync(L.Get("Home_PinNotInstalledTitle"), L.Get("Home_PinNotInstalledBody", game.GameName));
 			return;
 		}
 
@@ -902,13 +910,13 @@ namespace SteamLuaManager.ViewModels;
 		{
 			await _luaFileManager.SetManifestPinAsync(game.AppId, false);
 			game.ManifestSourceIndex = 0;
-			StatusText = $"已解除 {game.GameName} 的版本固定";
-			LogService.Info("主页", $"已解除 {game.GameName} 的版本固定");
+			StatusText = L.Get("Home_Unpinned", game.GameName);
+			LogService.Info(L.Get("LogCat_Home"), L.Get("Home_Unpinned", game.GameName));
 		}
 		else
 		{
 			var manifestIds = new Dictionary<int, string>();
-			var sourceName = game.ManifestSourceIndex == 0 ? "当前安装版本" : "Steam 最新版本";
+			var sourceName = game.ManifestSourceIndex == 0 ? L.Get("Home_SourceInstalled") : L.Get("Home_SourceLatest");
 
 			foreach (var depot in game.Depots)
 			{
@@ -934,13 +942,13 @@ namespace SteamLuaManager.ViewModels;
 
 			if (manifestIds.Count == 0)
 			{
-				await ShowModernDialogAsync("无法固定版本", $"无法获取 {game.GameName} 的 manifest 信息");
+				await ShowModernDialogAsync(L.Get("Home_CannotPin"), L.Get("Home_PinNoManifest", game.GameName));
 				return;
 			}
 
 			await _luaFileManager.SetManifestPinAsync(game.AppId, true, manifestIds);
-			StatusText = $"已将 {game.GameName} 固定到{sourceName}";
-			LogService.Info("主页", $"已将 {game.GameName} 固定到{sourceName} (manifest: {string.Join(", ", manifestIds.Select(kv => $"{kv.Key}={kv.Value}"))})");
+			StatusText = L.Get("Home_PinnedTo", game.GameName, sourceName);
+			LogService.Info(L.Get("LogCat_Home"), L.Get("Home_PinnedTo", game.GameName, sourceName) + $" (manifest: {string.Join(", ", manifestIds.Select(kv => $"{kv.Key}={kv.Value}"))})");
 		}
 
 		var refreshed = await _luaFileManager.ParseLuaFileAsync(game.AppId);
@@ -969,12 +977,12 @@ namespace SteamLuaManager.ViewModels;
 			_dlcQueryCts = new CancellationTokenSource();
 			var ct = _dlcQueryCts.Token;
 
-			DlcQueryOverlayText = $"正在查询 {game.GameName} 的 DLC 信息...";
+			DlcQueryOverlayText = L.Get("Home_DlcQuerying", game.GameName);
 			var result = await _steamDepotService.QueryAppAsync(game.AppId, ct);
 			if (result == null || result.DlcAppIds.Count == 0)
 			{
 				IsDlcQueryOverlayVisible = false;
-				await ShowModernDialogAsync("DLC 查询", $"{game.GameName} 没有找到关联的 DLC。");
+				await ShowModernDialogAsync(L.Get("Home_DlcTitle"), L.Get("Home_DlcNone", game.GameName));
 				return;
 			}
 
@@ -992,22 +1000,22 @@ namespace SteamLuaManager.ViewModels;
 			Dictionary<int, DlcDepotStatus?> depotMap = new();
 			try
 			{
-				DlcQueryOverlayText = "正在分析 DLC 仓库信息...";
+				DlcQueryOverlayText = L.Get("Home_DlcAnalyzing");
 				var depotProgress = new Progress<(int Done, int Total)>(p =>
-					DlcQueryOverlayText = $"正在分析 DLC 仓库信息... ({p.Done}/{p.Total})");
+					DlcQueryOverlayText = L.Get("Home_DlcAnalyzingProgress", p.Done, p.Total));
 				depotMap = await _steamDepotService.GetDlcHasDepotsAsync(result.DlcAppIds, depotProgress, ct);
 			}
 			catch (OperationCanceledException) { throw; }
 			catch (Exception ex)
 			{
-				LogService.Warn("主页", $"批量查询 DLC 仓库失败，回退旧判定：{ex.Message}");
+				LogService.Warn(L.Get("LogCat_Home"), L.Get("Home_DlcDepotFallback", ex.Message));
 			}
 
 			for (int i = 0; i < totalDlcs; i++)
 			{
 				ct.ThrowIfCancellationRequested();
 				var dlcId = result.DlcAppIds[i];
-				DlcQueryOverlayText = $"正在分析 DLC 信息... ({i + 1}/{totalDlcs})";
+				DlcQueryOverlayText = L.Get("Home_DlcAnalyzingInfo", i + 1, totalDlcs);
 
 				var isImported = !string.IsNullOrEmpty(gameLuaContent) &&
 					System.Text.RegularExpressions.Regex.IsMatch(gameLuaContent,
@@ -1028,14 +1036,14 @@ namespace SteamLuaManager.ViewModels;
 			}
 
 			// 并行获取 DLC 名称
-			DlcQueryOverlayText = "正在获取 DLC 名称...";
+				DlcQueryOverlayText = L.Get("Home_DlcFetchingNames");
 			var slowCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
 			_ = Task.Run(async () =>
 			{
 				try
 				{
 					await Task.Delay(5000, slowCts.Token);
-					DlcQueryOverlayText += "\n如获取缓慢可尝试开启代理或梯子";
+					DlcQueryOverlayText += "\n" + L.Get("Home_DlcSlowHint");
 				}
 				catch (OperationCanceledException) { }
 			});
@@ -1086,7 +1094,7 @@ namespace SteamLuaManager.ViewModels;
 		catch (Exception ex)
 		{
 			IsDlcQueryOverlayVisible = false;
-			await ShowModernDialogAsync("查询失败", $"查询 DLC 信息时出错：{ex.Message}");
+			await ShowModernDialogAsync(L.Get("Home_DlcQueryFailed"), L.Get("Home_DlcQueryError", ex.Message));
 		}
 		finally
 		{
@@ -1111,29 +1119,29 @@ namespace SteamLuaManager.ViewModels;
 			}
 			if (file.EndsWith(".lua", StringComparison.OrdinalIgnoreCase))
 			{
-				try { await _luaFileManager.AddLuaFileAsync(file); luaCount++; }
-				catch (Exception ex) { StatusText = $"拖拽添加 lua 失败: {ex.Message}"; LogService.Error("主页", $"拖拽添加 lua 失败: {ex}"); }
+			try { await _luaFileManager.AddLuaFileAsync(file); luaCount++; }
+			catch (Exception ex) { StatusText = L.Get("Home_DragAddFailed", "lua", ex.Message); LogService.Error(L.Get("LogCat_Home"), L.Get("Home_DragAddFailed", "lua", ex)); }
 			}
 			else if (file.EndsWith(".bin", StringComparison.OrdinalIgnoreCase))
 			{
-				try { await _luaFileManager.AddBinFileAsync(file); binCount++; }
-				catch (Exception ex) { StatusText = $"拖拽添加 bin 失败: {ex.Message}"; LogService.Error("主页", $"拖拽添加 bin 失败: {ex}"); }
+			try { await _luaFileManager.AddBinFileAsync(file); binCount++; }
+			catch (Exception ex) { StatusText = L.Get("Home_DragAddFailed", "bin", ex.Message); LogService.Error(L.Get("LogCat_Home"), L.Get("Home_DragAddFailed", "bin", ex)); }
 			}
 			else if (file.EndsWith(".manifest", StringComparison.OrdinalIgnoreCase))
 			{
-				try { await _luaFileManager.AddManifestFileAsync(file); manifestCount++; }
-				catch (Exception ex) { StatusText = $"拖拽添加 manifest 失败: {ex.Message}"; LogService.Error("主页", $"拖拽添加 manifest 失败: {ex}"); }
+			try { await _luaFileManager.AddManifestFileAsync(file); manifestCount++; }
+			catch (Exception ex) { StatusText = L.Get("Home_DragAddFailed", "manifest", ex.Message); LogService.Error(L.Get("LogCat_Home"), L.Get("Home_DragAddFailed", "manifest", ex)); }
 			}
 		}
 		if (luaCount > 0 || binCount > 0 || manifestCount > 0 || extraMsgs.Count > 0)
 		{
 			var msgs = new List<string>();
-			if (luaCount > 0) msgs.Add($"导入游戏成功 ({luaCount})");
-			if (binCount > 0) msgs.Add($"导入成就成功 ({binCount})");
-			if (manifestCount > 0) msgs.Add($"导入清单成功 ({manifestCount})");
-			msgs.AddRange(extraMsgs);
+		if (luaCount > 0) msgs.Add(L.Get("Home_ImportGameOk", luaCount));
+		if (binCount > 0) msgs.Add(L.Get("Home_ImportBinOk", binCount));
+		if (manifestCount > 0) msgs.Add(L.Get("Home_ImportManifestOk", manifestCount));
+		msgs.AddRange(extraMsgs);
 			StatusMessage = string.Join("，", msgs);
-			LogService.Info("主页", $"拖拽导入: {string.Join("，", msgs)}");
+			LogService.Info(L.Get("LogCat_Home"), L.Get("Home_DragImportLog", string.Join("，", msgs)));
 		}
 		await QuickRefreshAsync();
 	}

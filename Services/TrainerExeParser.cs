@@ -13,7 +13,7 @@ public static class TrainerExeParser
         var fileInfo = new FileInfo(exePath);
         if (fileInfo.Length > MaxFileSizeBytes)
         {
-            LogService.Warn("修改器", $"文件过大跳过解析: {exePath} ({fileInfo.Length / (1024 * 1024)} MB)");
+            LogService.Warn(L.Get("LogCat_Trainer"), L.Get("Svc_TlaFileTooLarge", exePath, fileInfo.Length / (1024 * 1024)));
             return ("", new List<CheatOption>());
         }
         var bytes = File.ReadAllBytes(exePath);

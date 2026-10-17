@@ -57,7 +57,7 @@ public sealed class CodeCdnManifestFetcher : IManifestFetcher
         {
             if (IsCoolingDown(source.Name))
             {
-                failures.Add($"{source.Name}=冷却中");
+                failures.Add(L.Get("Svc_MfCooling", source.Name));
                 continue;
             }
             var (ok, code, desc) = await TryFetchCodeAsync(source, depotId, manifestId, ct);
@@ -65,11 +65,11 @@ public sealed class CodeCdnManifestFetcher : IManifestFetcher
             {
                 MarkFailed(source.Name);
                 failures.Add($"{source.Name}={desc}");
-                progress?.Invoke($"Depot {depotId} 取码：{source.Name}失败（{desc}），换下一个源…");
+                progress?.Invoke(L.Get("Svc_MfTryNext", depotId, source.Name, desc));
                 continue;
             }
             RecordSuccess(source.Name);
-            progress?.Invoke($"Depot {depotId} 取码成功（源：{source.Name}），开始从 CDN 下载…");
+            progress?.Invoke(L.Get("Svc_MfCodeOk", depotId, source.Name));
             var (dlResult, codeRejected) = await DownloadFromCdnAsync(depotId, manifestId, code, source.Name, ct, progress);
             if (dlResult.Success)
                 return dlResult;
@@ -77,14 +77,14 @@ public sealed class CodeCdnManifestFetcher : IManifestFetcher
             {
                 // 所有 CDN 都 401/403：码是死的，换下一个源重取（源记失败进冷却）
                 MarkFailed(source.Name);
-                failures.Add($"{source.Name}=code被CDN拒绝");
-                progress?.Invoke($"Depot {depotId} 取码：{source.Name} 的码被CDN拒绝，换下一个源重取…");
+                failures.Add(L.Get("Svc_MfCodeRejected", source.Name));
+                progress?.Invoke(L.Get("Svc_MfCodeRejectedRetry", depotId, source.Name));
                 continue;
             }
             // CDN/网络类失败：换码也救不了，直接返回详情
             return dlResult;
         }
-        return new ManifestFetchResult(false, false, $"取码失败：{string.Join("，", failures)}");
+        return new ManifestFetchResult(false, false, L.Get("Svc_MfAllFailed", string.Join(L.Get("Common_ListSep"), failures)));
     }
 
     private bool IsCoolingDown(string name)
@@ -125,16 +125,16 @@ public sealed class CodeCdnManifestFetcher : IManifestFetcher
                 return (false, 0, $"HTTP {statusCode}");
             body = (await response.Content.ReadAsStringAsync(ct)).Trim();
             if (string.IsNullOrEmpty(body))
-                return (false, 0, "空响应");
+                return (false, 0, L.Get("Svc_MfEmptyResp"));
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (OperationCanceledException)
         {
-            return (false, 0, "超时");
+            return (false, 0, L.Get("Svc_MfTimeout"));
         }
         catch (HttpRequestException ex)
         {
-            return (false, 0, ex.StatusCode.HasValue ? $"HTTP {(int)ex.StatusCode.Value}" : "网络异常");
+            return (false, 0, ex.StatusCode.HasValue ? $"HTTP {(int)ex.StatusCode.Value}" : L.Get("Svc_MfNetError"));
         }
         catch (Exception ex)
         {
@@ -142,9 +142,9 @@ public sealed class CodeCdnManifestFetcher : IManifestFetcher
         }
 
         if (!TryParseCode(source, body, out var code))
-            return (false, 0, "解析失败");
+            return (false, 0, L.Get("Svc_MfParseFailed"));
         if (code == 0)
-            return (false, 0, "官方拒发（0）");
+            return (false, 0, L.Get("Svc_MfRefused"));
         return (true, code, string.Empty);
     }
 
@@ -184,12 +184,12 @@ public sealed class CodeCdnManifestFetcher : IManifestFetcher
     {
         var steamPath = _steamPathService.DetectSteamPath();
         if (string.IsNullOrEmpty(steamPath))
-            return (new ManifestFetchResult(false, false, "未检测到 Steam 路径"), false);
+            return (new ManifestFetchResult(false, false, L.Get("Svc_MfNoSteamPath")), false);
 
         var hosts = new List<string> { FixedCdnHost };
         var dynamicHosts = await _cdnServerList.GetHostsAsync(ct);
         if (dynamicHosts.Count == 0)
-            progress?.Invoke($"Depot {depotId} 动态CDN列表暂不可用，仅使用固定CDN下载");
+            progress?.Invoke(L.Get("Svc_MfNoDynamic", depotId));
         foreach (var h in dynamicHosts)
         {
             if (hosts.Count >= 1 + MaxDynamicHosts) break;
@@ -212,7 +212,7 @@ public sealed class CodeCdnManifestFetcher : IManifestFetcher
                     maxAttempts: 1);
                 if (!response.IsSuccessStatusCode)
                 {
-                    failures.Add($"{host}=HTTP {(int)response.StatusCode}");
+                    failures.Add(L.Get("Svc_MfHostHttp", host, (int)response.StatusCode));
                     if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
                         authFailures++;
                     continue;
@@ -222,12 +222,12 @@ public sealed class CodeCdnManifestFetcher : IManifestFetcher
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
             catch (OperationCanceledException)
             {
-                failures.Add($"{host}=超时");
+                failures.Add(L.Get("Svc_MfHostTimeout", host));
                 continue;
             }
             catch (HttpRequestException ex)
             {
-                failures.Add($"{host}={(ex.StatusCode.HasValue ? $"HTTP {(int)ex.StatusCode.Value}" : "网络异常")}");
+                failures.Add($"{host}={(ex.StatusCode.HasValue ? $"HTTP {(int)ex.StatusCode.Value}" : L.Get("Svc_MfNetError"))}");
                 if (ex.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
                     authFailures++;
                 continue;
@@ -240,19 +240,19 @@ public sealed class CodeCdnManifestFetcher : IManifestFetcher
 
             if (!TryUnwrapManifest(bytes, out var manifestBytes, out var wrapDesc))
             {
-                failures.Add($"{host}=内容异常");
+                failures.Add(L.Get("Svc_MfHostBadContent", host));
                 continue;
             }
 
             var error = PlaceManifest(steamPath, depotId, manifestId, manifestBytes);
             if (error != null)
                 return (new ManifestFetchResult(false, false, error), false);
-            var via = host.Equals(FixedCdnHost, StringComparison.OrdinalIgnoreCase) ? "固定CDN" : host;
-            progress?.Invoke($"Depot {depotId} 下载成功（{via}，{wrapDesc}）");
+            var via = host.Equals(FixedCdnHost, StringComparison.OrdinalIgnoreCase) ? L.Get("Svc_MfFixedCdn") : host;
+            progress?.Invoke(L.Get("Svc_MfDownloadOk", depotId, via, wrapDesc));
             return (new ManifestFetchResult(true, false, null, false, $"{codeSource}+{via}"), false);
         }
         var allRejected = failures.Count > 0 && authFailures == failures.Count;
-        return (new ManifestFetchResult(false, false, $"CDN 下载失败：{string.Join("，", failures)}"), allRejected);
+        return (new ManifestFetchResult(false, false, L.Get("Svc_MfDownloadFailed", string.Join(L.Get("Common_ListSep"), failures))), allRejected);
     }
 
     // 内容校验 + 脱壳：CDN 回来的可能是 ZIP 套壳（单 entry，一般叫 z），里面才是
@@ -264,7 +264,7 @@ public sealed class CodeCdnManifestFetcher : IManifestFetcher
     private static bool TryUnwrapManifest(byte[] bytes, out byte[] manifest, out string wrap)
     {
         manifest = bytes;
-        wrap = "裸包";
+        wrap = L.Get("Svc_MfRaw");
         if (bytes.Length >= 4 && bytes[0] == 0x50 && bytes[1] == 0x4B && bytes[2] == 0x03 && bytes[3] == 0x04)
         {
             try
@@ -278,7 +278,7 @@ public sealed class CodeCdnManifestFetcher : IManifestFetcher
                 using var outMs = new MemoryStream();
                 es.CopyTo(outMs);
                 manifest = outMs.ToArray();
-                wrap = $"ZIP解包({entry.FullName},{manifest.Length}字节)";
+                wrap = L.Get("Svc_MfZipUnwrap", entry.FullName, manifest.Length);
             }
             catch { return false; }
         }
@@ -306,7 +306,7 @@ public sealed class CodeCdnManifestFetcher : IManifestFetcher
         }
         catch (Exception ex)
         {
-            return $"写入 depotcache 失败：{ex.Message}";
+            return L.Get("Svc_MfWriteFailed", ex.Message);
         }
         finally
         {

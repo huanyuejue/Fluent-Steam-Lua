@@ -53,7 +53,7 @@ public partial class AppIdQueryViewModel : ObservableObject, IDisposable
         var keyword = SearchText?.Trim();
         if (string.IsNullOrWhiteSpace(keyword))
         {
-            StatusMessage = "请输入游戏名";
+            StatusMessage = L.Get("AppId_EnterName");
             return;
         }
         if (IsSearching) return;
@@ -78,7 +78,7 @@ public partial class AppIdQueryViewModel : ObservableObject, IDisposable
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                LogService.Warn("免启动", $"小黑盒搜索失败，转商店搜索：{ex.Message}");
+                LogService.Warn(L.Get("LogCat_Crack"), L.Get("AppId_HeiHeFailed", ex.Message));
                 found = new List<HeiHeGame>();
             }
             // 商店兜底：中文区 + 英文区各一次
@@ -100,15 +100,15 @@ public partial class AppIdQueryViewModel : ObservableObject, IDisposable
             }
             foreach (var g in found.Take(10))
                 Results.Add(g);
-            StatusMessage = Results.Count == 0 ? "未找到匹配的游戏，换个英文名试试" : $"找到 {Results.Count} 个候选";
+            StatusMessage = Results.Count == 0 ? L.Get("AppId_NoMatch") : L.Get("AppId_FoundCount", Results.Count);
         }
         catch (OperationCanceledException)
         {
-            StatusMessage = "已取消搜索";
+            StatusMessage = L.Get("AppId_SearchCancelled");
         }
         catch (Exception ex)
         {
-            StatusMessage = $"搜索失败：{ex.Message}";
+            StatusMessage = L.Get("AppId_SearchFailed", ex.Message);
         }
         finally
         {
@@ -155,7 +155,7 @@ public partial class AppIdQueryViewModel : ObservableObject, IDisposable
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                LogService.Warn("免启动", $"定性 AppID {id} 失败，已保留：{ex.Message}");
+                LogService.Warn(L.Get("LogCat_Crack"), L.Get("AppId_ClassifyFailed", id, ex.Message));
             }
         }
         if (bad.Count > 0) list.RemoveAll(g => bad.Contains(g.AppId));

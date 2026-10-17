@@ -29,7 +29,61 @@ public partial class AchievementViewModel : ObservableObject, IDisposable
 
     public ObservableCollection<AchievementGameInfo> Games { get; } = new();
 
-    public IReadOnlyList<string> SortOptions { get; } = ["名称 A-Z", "名称 Z-A", "AppID 升序", "AppID 降序"];
+    // 选项列表永不重建：显示名每次按当前语言计算，切语言只通知刷新文本，
+    // 列表实例与选择器选中项因此始终保持稳定
+    public sealed class ViewOption : System.ComponentModel.INotifyPropertyChanged
+    {
+        private readonly string _displayKey;
+        public string Value { get; }
+
+        public ViewOption(string displayKey, string value)
+        {
+            _displayKey = displayKey;
+            Value = value;
+        }
+
+        public string Display => L.Get(_displayKey);
+
+        public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
+
+        public void RefreshDisplay() =>
+            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(Display)));
+    }
+
+    public List<ViewOption> SortOptions { get; } = new()
+    {
+        new("Home_SortNameAsc", "NameAsc"),
+        new("Home_SortNameDesc", "NameDesc"),
+        new("Home_SortAppIdAsc", "AppIdAsc"),
+        new("Home_SortAppIdDesc", "AppIdDesc"),
+    };
+
+    public List<ViewOption> ViewModeOptions { get; } = new()
+    {
+        new("Ach_ViewCardMode", "Card"),
+        new("Ach_ViewListMode", "List"),
+    };
+
+    // 下拉用对象引用绑定：列表实例稳定后选择器选中项不会因列表变化被清空
+    public ViewOption? SelectedViewModeOption
+    {
+        get => ViewModeOptions.FirstOrDefault(o => o.Value == SelectedViewMode);
+        set { if (value != null) SelectedViewMode = value.Value; }
+    }
+
+    public ViewOption? SelectedSortOptionItem
+    {
+        get => SortOptions.FirstOrDefault(o => o.Value == SelectedSortOption);
+        set { if (value != null) SelectedSortOption = value.Value; }
+    }
+
+    private void RefreshLocalizedOptions()
+    {
+        // 选项列表保持同一实例，只刷新显示名；列表不重建，选择器选中项不受影响
+        foreach (var o in SortOptions) o.RefreshDisplay();
+        foreach (var o in ViewModeOptions) o.RefreshDisplay();
+        GameCountText = L.Get("Ach_GameCount", _filtered.Count);
+    }
 
     [ObservableProperty]
     private bool _isLoadingGames;
@@ -44,22 +98,33 @@ public partial class AchievementViewModel : ObservableObject, IDisposable
     private string _searchText = string.Empty;
 
     [ObservableProperty]
-    private string _selectedSortOption = "名称 A-Z";
+    [NotifyPropertyChangedFor(nameof(SelectedSortOptionItem))]
+    private string _selectedSortOption = "NameAsc";
 
-    /// <summary>成就页视图模式：卡片/列表。持久化，重启后保持。</summary>
+    /// <summary>成就页视图模式：Card/List 码值持久化，重启后保持；入库旧存档中文值迁移。</summary>
     [ObservableProperty]
-    private string _selectedViewMode = "卡片";
-
-    public IReadOnlyList<string> ViewModeOptions { get; } = ["卡片模式", "列表模式"];
+    [NotifyPropertyChangedFor(nameof(SelectedViewModeOption))]
+    private string _selectedViewMode = "Card";
 
     public AchievementViewModel(ISteamAchievementService achievementService, ISteamApiService steamApiService, ISettingsService settingsService)
     {
         _achievementService = achievementService;
         _steamApiService = steamApiService;
         _settingsService = settingsService;
-        var saved = settingsService.Load().AchievementViewMode;
-        _selectedViewMode = saved is "列表" or "列表模式" ? "列表模式" : "卡片模式";
+        var settings = settingsService.Load();
+        var saved = settings.AchievementViewMode;
+        _selectedViewMode = saved is "列表" or "列表模式" or "List" ? "List" : "Card";
+        // 历史存档可能残留空值，归一化后就近落盘，避免以后每次启动重复修正
+        if (settings.AchievementViewMode != _selectedViewMode)
+        {
+            settings.AchievementViewMode = _selectedViewMode;
+            settingsService.Save(settings);
+        }
+        LocalizationService.Instance.PropertyChanged += OnLocalizationChanged;
     }
+
+    private void OnLocalizationChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e) =>
+        RefreshLocalizedOptions();
 
     partial void OnSelectedViewModeChanged(string value)
     {
@@ -107,6 +172,7 @@ public partial class AchievementViewModel : ObservableObject, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        LocalizationService.Instance.PropertyChanged -= OnLocalizationChanged;
         if (_statusTimer != null)
         {
             _statusTimer.Stop();
@@ -132,9 +198,9 @@ public partial class AchievementViewModel : ObservableObject, IDisposable
 
         items = SelectedSortOption switch
         {
-            "名称 Z-A" => items.OrderByDescending(g => g.Name, StringComparer.OrdinalIgnoreCase),
-            "AppID 升序" => items.OrderBy(g => g.AppId),
-            "AppID 降序" => items.OrderByDescending(g => g.AppId),
+            "NameDesc" => items.OrderByDescending(g => g.Name, StringComparer.OrdinalIgnoreCase),
+            "AppIdAsc" => items.OrderBy(g => g.AppId),
+            "AppIdDesc" => items.OrderByDescending(g => g.AppId),
             _ => items.OrderBy(g => g.Name, StringComparer.OrdinalIgnoreCase)
         };
 
@@ -147,7 +213,7 @@ public partial class AchievementViewModel : ObservableObject, IDisposable
         Games.Clear();
         for (var i = 0; i < _visibleCount; i++) Games.Add(list[i]);
 
-        GameCountText = $"共 {list.Count} 款游戏";
+        GameCountText = L.Get("Ach_GameCount", list.Count);
     }
 
     /// <summary>滚动接近底部时增量追加一页（PageSize 张）卡片；搜索/排序后 _fillVersion 变化会自动中止旧批次。</summary>
@@ -199,21 +265,21 @@ public partial class AchievementViewModel : ObservableObject, IDisposable
         if (IsLoadingGames) return;
 
         IsLoadingGames = true;
-        StatusMessage = "正在加载游戏列表...";
+        StatusMessage = L.Get("Ach_Loading");
         try
         {
             if (!_achievementService.IsConnected && !_achievementService.Connect())
             {
-                var error = _achievementService.LastError ?? "连接 Steam 失败";
+                var error = _achievementService.LastError ?? L.Get("Ach_ConnectFail");
                 StatusMessage = error;
-                LogService.Error("成就", $"连接 Steam 失败: {error}");
+                LogService.Error(L.Get("LogCat_Achieve"), error);
                 return;
             }
 
             var candidates = await _achievementService.ParseOwnedGamesAsync();
             var games = _achievementService.FilterSubscribed(candidates);
             _allGames = games;
-            LogService.Info("成就", $"游戏列表加载完成: 解析 {candidates.Count} 款，筛选后 {games.Count} 款");
+            LogService.Info(L.Get("LogCat_Achieve"), L.Get("Ach_LogLoaded", candidates.Count, games.Count));
 
             foreach (var game in _allGames)
                 game.CoverUrl = BuildCoverUrl(game);
@@ -222,19 +288,19 @@ public partial class AchievementViewModel : ObservableObject, IDisposable
 
             if (Games.Count == 0)
             {
-                StatusMessage = "未找到账号拥有的游戏，请确认 Steam 已登录";
-                LogService.Warn("成就", "未找到账号拥有的游戏，请确认 Steam 已登录");
+                StatusMessage = L.Get("Ach_NoGames");
+                LogService.Warn(L.Get("LogCat_Achieve"), L.Get("Ach_NoGames"));
             }
             else
             {
-                StatusMessage = $"游戏列表已刷新，共 {games.Count} 款";
-                LogService.Info("成就", $"游戏列表刷新完成: {games.Count} 款");
+                StatusMessage = L.Get("Ach_Refreshed", games.Count);
+                LogService.Info(L.Get("LogCat_Achieve"), L.Get("Ach_Refreshed", games.Count));
             }
         }
         catch (Exception ex)
         {
-            StatusMessage = $"加载游戏列表失败:{ex.Message}";
-            LogService.Error("成就", $"加载游戏列表失败: {ex}");
+            StatusMessage = L.Get("Ach_LoadFailed", ex.Message);
+            LogService.Error(L.Get("LogCat_Achieve"), L.Get("Ach_LoadFailed", ex));
         }
         finally
         {

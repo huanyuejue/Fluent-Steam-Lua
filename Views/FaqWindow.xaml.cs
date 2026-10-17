@@ -16,7 +16,7 @@ public partial class FaqWindow : Window
     {
         DataContext = new AboutViewModel();
         InitializeComponent();
-        Title = "常见问题";
+        Title = L.Get("Faq_Title");
         WindowHelper.SetUseModernWindowStyle(this, true);
         ApplyBackdrop();
         // 打开不抢焦点：默认会落到搜索框，清掉它

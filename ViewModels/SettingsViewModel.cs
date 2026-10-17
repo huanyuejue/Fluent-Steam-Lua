@@ -42,6 +42,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     private string _statusMessage = string.Empty;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SelectedCdnOption))]
     private int _selectedCdnIndex;
 
     [ObservableProperty]
@@ -71,27 +72,131 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     public string SpeedTestProgressText => $"{SpeedTestProgress}/{SpeedTestTotal}";
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SelectedBackdropOption))]
     private string _selectedBackdrop = "Acrylic10";
 
-    public record BackdropOption(string Display, string Value);
+    [ObservableProperty]
+    private string _language = "zh";
+
+    public List<LanguageOption> LanguageOptions { get; } =
+        LocalizationService.SupportedLanguages.ToList();
+
+    // 选项列表永不重建：显示名每次按当前语言计算，切语言只通知刷新文本，
+    // 列表实例与选择器选中项因此始终保持稳定，不依赖任何重建后的复位
+    public sealed class BackdropOption : System.ComponentModel.INotifyPropertyChanged
+    {
+        private readonly string _displayKey;
+        public string Value { get; }
+
+        public BackdropOption(string displayKey, string value)
+        {
+            _displayKey = displayKey;
+            Value = value;
+        }
+
+        public string Display => L.Get(_displayKey);
+
+        public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
+
+        public void RefreshDisplay() =>
+            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(Display)));
+    }
+
+    public sealed class ThemeOption : System.ComponentModel.INotifyPropertyChanged
+    {
+        private readonly string _displayKey;
+        public string Value { get; }
+
+        public ThemeOption(string displayKey, string value)
+        {
+            _displayKey = displayKey;
+            Value = value;
+        }
+
+        public string Display => L.Get(_displayKey);
+
+        public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
+
+        public void RefreshDisplay() =>
+            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(Display)));
+    }
+
+    // CDN 下拉顺序/数量必须与 CdnEndpoint.Defaults 严格一致
+    public sealed class CdnDisplayOption : System.ComponentModel.INotifyPropertyChanged
+    {
+        public CdnEndpoint Endpoint { get; }
+
+        public CdnDisplayOption(CdnEndpoint endpoint) => Endpoint = endpoint;
+
+        public string Display => L.Get(CdnEndpoint.GetDisplayKey(Endpoint.Name));
+
+        public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
+
+        public void RefreshDisplay() =>
+            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(Display)));
+    }
 
     public List<BackdropOption> BackdropOptions { get; } = new()
     {
-        new("亚克力", "Acrylic10"),
-        new("云母", "Mica"),
-        new("无", "None"),
+        new("Settings_Backdrop_Acrylic", "Acrylic10"),
+        new("Settings_Backdrop_Mica", "Mica"),
+        new("Settings_Backdrop_None", "None"),
     };
-
-    public record ThemeOption(string Display, string Value);
 
     public List<ThemeOption> ThemeOptions { get; } = new()
     {
-        new("跟随系统", "System"),
-        new("深色模式", "Dark"),
-        new("浅色模式", "Light"),
+        new("Settings_Theme_System", "System"),
+        new("Settings_Theme_Dark", "Dark"),
+        new("Settings_Theme_Light", "Light"),
     };
 
-    public List<CdnEndpoint> CdnEndpoints { get; } = CdnEndpoint.Defaults;
+    public List<CdnDisplayOption> CdnDisplayOptions { get; } =
+        CdnEndpoint.Defaults.Select(e => new CdnDisplayOption(e)).ToList();
+
+    // 下拉用对象引用绑定：列表实例稳定后选择器选中项不会因列表变化被清空
+    public ThemeOption? SelectedThemeOption
+    {
+        get => ThemeOptions.FirstOrDefault(o => o.Value == SelectedTheme);
+        set { if (value != null) SelectedTheme = value.Value; }
+    }
+
+    public BackdropOption? SelectedBackdropOption
+    {
+        get => BackdropOptions.FirstOrDefault(o => o.Value == SelectedBackdrop);
+        set { if (value != null) SelectedBackdrop = value.Value; }
+    }
+
+    public CdnDisplayOption? SelectedCdnOption
+    {
+        get => SelectedCdnIndex >= 0 && SelectedCdnIndex < CdnDisplayOptions.Count
+            ? CdnDisplayOptions[SelectedCdnIndex]
+            : null;
+        set { if (value != null) SelectedCdnIndex = CdnDisplayOptions.IndexOf(value); }
+    }
+
+    // 语言切换时重建选项文案并刷新测速行（计算属性 StatusText 需重估）
+    private void OnLocalizationChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e) =>
+        RefreshLocalizedOptions();
+
+    private void RefreshLocalizedOptions()
+    {
+        // 选项列表保持同一实例，只让每项按当前语言刷新显示名；列表不重建，选择器选中项不受影响
+        foreach (var o in ThemeOptions) o.RefreshDisplay();
+        foreach (var o in BackdropOptions) o.RefreshDisplay();
+        foreach (var o in CdnDisplayOptions) o.RefreshDisplay();
+        RefreshCollectionView(SpeedTestResults);
+        RefreshCollectionView(MirrorSpeedTestResults);
+        RefreshCollectionView(ManifestTestResults);
+    }
+
+    private static void RefreshCollectionView(System.Collections.IEnumerable collection)
+    {
+        try
+        {
+            System.Windows.Data.CollectionViewSource.GetDefaultView(collection)?.Refresh();
+        }
+        catch { }
+    }
 
     public ObservableCollection<SpeedTestItem> SpeedTestResults { get; } = new();
 
@@ -126,36 +231,48 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         EnableLogging = _settings.EnableLogging;
         MinimizeToTray = _settings.MinimizeToTray;
 
-        SelectedTheme = _settings.SelectedTheme;
-        SelectedCdnIndex = Math.Clamp(_settings.SelectedCdnIndex, 0, CdnEndpoints.Count - 1);
-        _selectedBackdrop = _settings.SelectedBackdrop;
+        // 历史存档可能残留空值或旧码值（曾被下拉重建时的空回填污染），统一归一化到合法项
+        SelectedTheme = ThemeOptions.Any(o => o.Value == _settings.SelectedTheme) ? _settings.SelectedTheme : "System";
+        SelectedCdnIndex = Math.Clamp(_settings.SelectedCdnIndex, 0, CdnEndpoint.Defaults.Count - 1);
+        _selectedBackdrop = BackdropOptions.Any(o => o.Value == _settings.SelectedBackdrop) ? _settings.SelectedBackdrop : "Acrylic10";
+        _settings.SelectedTheme = SelectedTheme;
+        _settings.SelectedCdnIndex = SelectedCdnIndex;
+        _settings.SelectedBackdrop = _selectedBackdrop;
+        _language = LocalizationService.Normalize(_settings.Language);
         DownloadMode = _settings.DownloadMode;
         KeyFolderPath = _settings.KeyFolderPath;
 
         _steamApiService.CdnAutoSwitched += OnCdnAutoSwitched;
+        LocalizationService.Instance.PropertyChanged += OnLocalizationChanged;
 
         if (string.IsNullOrEmpty(SteamPath))
         {
             var detectedPath = steamPathService.DetectSteamPath();
-            SteamPath = detectedPath ?? "未检测到Steam";
+            SteamPath = detectedPath ?? L.Get("Settings_SteamNotFound");
         }
 
-        LuaFolderPath = steamPathService.GetLuaFolder() ?? "未配置";
+        LuaFolderPath = steamPathService.GetLuaFolder() ?? L.Get("Settings_NotConfigured");
 
         RefreshFriendBroadcastToggle();
         RefreshManifestSource();
         RefreshManifestFailoverToggle();
     }
 
+    // 显示名按下标取：CdnDisplayOptions 与 Defaults 同序，语言切换重建后依然对齐
+    private string CdnDisplayLabel(int index) =>
+        index >= 0 && index < CdnDisplayOptions.Count
+            ? CdnDisplayOptions[index].Display
+            : CdnEndpoint.Defaults[index].Name;
+
     private void OnCdnAutoSwitched(int newIndex)
     {
         Application.Current.Dispatcher.Invoke(() =>
         {
-            if (newIndex >= 0 && newIndex < CdnEndpoints.Count)
+            if (newIndex >= 0 && newIndex < CdnEndpoint.Defaults.Count)
             {
                 SelectedCdnIndex = newIndex;
-                StatusMessage = $"封面节点已自动切换: {CdnEndpoints[newIndex].Name}";
-                LogService.Warn("设置", $"封面节点已自动切换: {CdnEndpoints[newIndex].Name}");
+                StatusMessage = L.Get("Settings_CdnAutoSwitched", CdnDisplayLabel(newIndex));
+                LogService.Warn(L.Get("LogCat_Settings"), StatusMessage);
             }
         });
     }
@@ -182,6 +299,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     public void Dispose()
     {
         _steamApiService.CdnAutoSwitched -= OnCdnAutoSwitched;
+        LocalizationService.Instance.PropertyChanged -= OnLocalizationChanged;
         if (_statusTimer != null)
         {
             _statusTimer.Stop();
@@ -195,16 +313,16 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         _settings.SelectedCdnIndex = value;
         _settingsService.Save(_settings);
         _steamApiService.UpdateCdnPreference(value);
-        StatusMessage = $"封面节点已切换: {CdnEndpoints[value].Name}";
-        LogService.Info("设置", $"封面节点已切换: {CdnEndpoints[value].Name}");
+        StatusMessage = L.Get("Settings_CdnSwitched", CdnDisplayLabel(value));
+        LogService.Info(L.Get("LogCat_Settings"), StatusMessage);
     }
 
     partial void OnIsFabVisibleChanged(bool value)
     {
         _settings.IsFabVisible = value;
         _settingsService.Save(_settings);
-        StatusMessage = value ? "悬浮按钮已显示" : "悬浮按钮已隐藏";
-        LogService.Info("设置", value ? "悬浮按钮已显示" : "悬浮按钮已隐藏");
+        StatusMessage = value ? L.Get("Settings_FabShown") : L.Get("Settings_FabHidden");
+        LogService.Info(L.Get("LogCat_Settings"), StatusMessage);
     }
 
     partial void OnSelectedThemeChanged(string value)
@@ -228,11 +346,11 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         }
         StatusMessage = value switch
         {
-            "Dark" => "已切换为深色模式",
-            "Light" => "已切换为浅色模式",
-            _ => "已跟随系统主题",
+            "Dark" => L.Get("Settings_ThemeDark"),
+            "Light" => L.Get("Settings_ThemeLight"),
+            _ => L.Get("Settings_ThemeSystem"),
         };
-        LogService.Info("设置", $"主题已切换: {StatusMessage}");
+        LogService.Info(L.Get("LogCat_Settings"), L.Get("Settings_ThemeChangedLog", StatusMessage));
     }
 
     private static ApplicationTheme GetSystemTheme()
@@ -252,16 +370,16 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     {
         _settings.IsCardRefreshVisible = value;
         _settingsService.Save(_settings);
-        StatusMessage = value ? "卡片刷新按钮已显示" : "卡片刷新按钮已隐藏";
-        LogService.Info("设置", value ? "卡片刷新按钮已显示" : "卡片刷新按钮已隐藏");
+        StatusMessage = value ? L.Get("Settings_CardRefreshShown") : L.Get("Settings_CardRefreshHidden");
+        LogService.Info(L.Get("LogCat_Settings"), StatusMessage);
     }
 
     partial void OnAutoFetchCoversChanged(bool value)
     {
         _settings.AutoFetchCovers = value;
         _settingsService.Save(_settings);
-        StatusMessage = value ? "主页游戏封面自动获取已开启" : "主页游戏封面自动获取已关闭";
-        LogService.Info("设置", value ? "主页游戏封面自动获取已开启" : "主页游戏封面自动获取已关闭");
+        StatusMessage = value ? L.Get("Settings_CoversOn") : L.Get("Settings_CoversOff");
+        LogService.Info(L.Get("LogCat_Settings"), StatusMessage);
     }
 
     partial void OnIsAutoRefreshEnabledChanged(bool value)
@@ -273,40 +391,40 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             _luaFileManager.StartWatching();
         else
             _luaFileManager.StopWatching();
-        StatusMessage = value ? "自动监控已开启" : "自动监控已关闭";
-        LogService.Info("设置", value ? "自动监控已开启" : "自动监控已关闭");
+        StatusMessage = value ? L.Get("Settings_MonitorOn") : L.Get("Settings_MonitorOff");
+        LogService.Info(L.Get("LogCat_Settings"), StatusMessage);
     }
 
     partial void OnAutoCheckUpdateEnabledChanged(bool value)
     {
         _settings.AutoCheckUpdateEnabled = value;
         _settingsService.Save(_settings);
-        StatusMessage = value ? "启动时自动检查更新已开启" : "启动时自动检查更新已关闭";
-        LogService.Info("设置", value ? "启动时自动检查更新已开启" : "启动时自动检查更新已关闭");
+        StatusMessage = value ? L.Get("Settings_UpdateCheckOn") : L.Get("Settings_UpdateCheckOff");
+        LogService.Info(L.Get("LogCat_Settings"), StatusMessage);
     }
 
     partial void OnAutoCheckKernelUpdateEnabledChanged(bool value)
     {
         _settings.AutoCheckKernelUpdateEnabled = value;
         _settingsService.Save(_settings);
-        StatusMessage = value ? "内核启动自动检测更新已开启" : "内核启动自动检测更新已关闭";
-        LogService.Info("设置", value ? "内核启动自动检测更新已开启" : "内核启动自动检测更新已关闭");
+        StatusMessage = value ? L.Get("Settings_KernelCheckOn") : L.Get("Settings_KernelCheckOff");
+        LogService.Info(L.Get("LogCat_Settings"), StatusMessage);
     }
 
     partial void OnAutoRefreshKeyCacheChanged(bool value)
     {
         _settings.AutoRefreshKeyCache = value;
         _settingsService.Save(_settings);
-        StatusMessage = value ? "自动更新密钥缓存已开启" : "自动更新密钥缓存已关闭";
-        LogService.Info("设置", value ? "自动更新密钥缓存已开启" : "自动更新密钥缓存已关闭");
+        StatusMessage = value ? L.Get("Settings_KeyCacheOn") : L.Get("Settings_KeyCacheOff");
+        LogService.Info(L.Get("LogCat_Settings"), StatusMessage);
     }
 
     partial void OnMinimizeToTrayChanged(bool value)
     {
         _settings.MinimizeToTray = value;
         _settingsService.Save(_settings);
-        StatusMessage = value ? "关闭时最小化到系统托盘已开启" : "关闭时最小化到系统托盘已关闭";
-        LogService.Info("设置", value ? "关闭时最小化到系统托盘已开启" : "关闭时最小化到系统托盘已关闭");
+        StatusMessage = value ? L.Get("Settings_TrayOn") : L.Get("Settings_TrayOff");
+        LogService.Info(L.Get("LogCat_Settings"), StatusMessage);
     }
 
     partial void OnSelectedBackdropChanged(string value)
@@ -315,13 +433,24 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         _settingsService.Save(_settings);
         StatusMessage = value switch
         {
-            "Acrylic10" => "背景效果已切换为亚克力",
-            "Mica" => "背景效果已切换为云母",
-            "None" => "背景效果已关闭",
+            "Acrylic10" => L.Get("Settings_BackdropAcrylic"),
+            "Mica" => L.Get("Settings_BackdropMica"),
+            "None" => L.Get("Settings_BackdropNone"),
             _ => ""
         };
         if (!string.IsNullOrEmpty(StatusMessage))
-            LogService.Info("设置", StatusMessage);
+            LogService.Info(L.Get("LogCat_Settings"), StatusMessage);
+    }
+
+    partial void OnLanguageChanged(string value)
+    {
+        value = LocalizationService.Normalize(value);
+        _settings.Language = value;
+        _settingsService.Save(_settings);
+        // 先切语言再写提示，提示本身就用新语言显示
+        LocalizationService.Instance.SetLanguage(value);
+        StatusMessage = L.Get("Settings_LanguageChanged");
+        LogService.Info(L.Get("LogCat_Settings"), StatusMessage);
     }
 
     [RelayCommand]
@@ -330,8 +459,8 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         var dialog = new OpenFileDialog
         {
             FileName = "steam.exe",
-            Filter = "Steam可执行文件|steam.exe",
-            Title = "选择Steam安装路径"
+            Filter = L.Get("Settings_ExeFilter"),
+            Title = L.Get("Settings_BrowseSteamTitle")
         };
         if (dialog.ShowDialog() == true)
         {
@@ -345,8 +474,8 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
                 RefreshFriendBroadcastToggle();
                 RefreshManifestSource();
                 RefreshManifestFailoverToggle();
-                StatusMessage = $"Steam路径已设置为: {dir}";
-                LogService.Info("设置", $"Steam路径已设置为: {dir}");
+                StatusMessage = L.Get("Settings_SteamPathSet", dir);
+                LogService.Info(L.Get("LogCat_Settings"), StatusMessage);
             }
         }
     }
@@ -356,14 +485,14 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     {
         _steamPathService.SetCustomPath(string.Empty);
         var detectedPath = _steamPathService.DetectSteamPath();
-        SteamPath = detectedPath ?? "未检测到Steam";
+        SteamPath = detectedPath ?? L.Get("Settings_SteamNotFound");
         _settings.SteamPath = string.Empty;
         _settingsService.Save(_settings);
         RefreshFriendBroadcastToggle();
         RefreshManifestSource();
         RefreshManifestFailoverToggle();
-        StatusMessage = "已重置为自动检测路径";
-        LogService.Info("设置", "已重置为自动检测路径");
+        StatusMessage = L.Get("Settings_SteamPathReset");
+        LogService.Info(L.Get("LogCat_Settings"), StatusMessage);
     }
 
     [RelayCommand]
@@ -374,8 +503,8 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             var cacheDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "cache");
             if (!Directory.Exists(cacheDir))
             {
-                StatusMessage = "没有需要清理的缓存";
-                LogService.Info("设置", "没有需要清理的缓存");
+                StatusMessage = L.Get("Settings_NoCacheToClean");
+                LogService.Info(L.Get("LogCat_Settings"), StatusMessage);
                 return;
             }
 
@@ -409,19 +538,19 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
 
             if (lockedFiles.Count > 0)
             {
-                StatusMessage = $"缓存已清理(跳过{lockedFiles.Count}个占用文件)";
-                LogService.Info("设置", $"缓存已清理(跳过{lockedFiles.Count}个占用文件): {string.Join(", ", lockedFiles)}");
+                StatusMessage = L.Get("Settings_CacheSkipped", lockedFiles.Count);
+                LogService.Info(L.Get("LogCat_Settings"), L.Get("Settings_CacheSkippedLog", lockedFiles.Count, string.Join(", ", lockedFiles)));
             }
             else
             {
-                StatusMessage = $"缓存已清理(共{deletedCount}个文件)";
-                LogService.Info("设置", $"缓存已清理(共{deletedCount}个文件)");
+                StatusMessage = L.Get("Settings_CacheCleaned", deletedCount);
+                LogService.Info(L.Get("LogCat_Settings"), StatusMessage);
             }
         }
         catch (Exception ex)
         {
-            StatusMessage = $"清理失败: {ex.Message}";
-            LogService.Error("设置", $"清理缓存失败: {ex}");
+            StatusMessage = L.Get("Settings_CleanFailed", ex.Message);
+            LogService.Error(L.Get("LogCat_Settings"), L.Get("Settings_LogCleanFailed", ex));
         }
     }
 
@@ -431,8 +560,8 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         var luaFolder = _steamPathService.GetLuaFolder();
         if (string.IsNullOrEmpty(luaFolder) || !Directory.Exists(luaFolder))
         {
-            StatusMessage = "Lua文件夹不存在";
-            LogService.Warn("设置", "Lua文件夹不存在");
+            StatusMessage = L.Get("Settings_LuaFolderMissing");
+            LogService.Warn(L.Get("LogCat_Settings"), StatusMessage);
             return;
         }
         try
@@ -441,8 +570,8 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            StatusMessage = $"打开失败: {ex.Message}";
-            LogService.Error("设置", $"打开 Lua 文件夹失败 ({luaFolder}): {ex}");
+            StatusMessage = L.Get("Settings_OpenFailed", ex.Message);
+            LogService.Error(L.Get("LogCat_Settings"), L.Get("Settings_LogOpenLuaFailed", luaFolder, ex));
         }
     }
 
@@ -459,8 +588,8 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            LogService.Error("设置", $"选择 Lua 目录失败: {ex}");
-            StatusMessage = "打开目录选择失败，请重试";
+            LogService.Error(L.Get("LogCat_Settings"), L.Get("Settings_LogPickLuaFailed", ex));
+            StatusMessage = L.Get("Settings_PickDirFailed");
             return;
         }
         if (string.IsNullOrEmpty(dir)) return;
@@ -468,7 +597,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
 
         if (_steamPathService.SetConfiguredLuaPath(dir))
         {
-            LuaFolderPath = _steamPathService.GetLuaFolder() ?? "未配置";
+            LuaFolderPath = _steamPathService.GetLuaFolder() ?? L.Get("Settings_NotConfigured");
 
             // 路径变更后重启文件监听，指向新目录
             if (IsAutoRefreshEnabled)
@@ -483,13 +612,13 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             // 通知主页重新扫描游戏，避免残留旧路径的 lua 引用
             WeakReferenceMessenger.Default.Send(new LuaFolderChangedMessage());
 
-            StatusMessage = $"Lua 目录已设置为: {dir}";
-            LogService.Info("设置", $"Lua 目录已设置为: {dir}");
+            StatusMessage = L.Get("Settings_LuaDirSet", dir);
+            LogService.Info(L.Get("LogCat_Settings"), StatusMessage);
         }
         else
         {
-            StatusMessage = "Lua 目录设置失败，请检查配置文件写入权限";
-            LogService.Error("设置", "Lua 目录设置失败，请检查配置文件写入权限");
+            StatusMessage = L.Get("Settings_LuaDirSetFailed");
+            LogService.Error(L.Get("LogCat_Settings"), StatusMessage);
         }
     }
 
@@ -500,7 +629,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
 
         if (_steamPathService.ResetConfiguredLuaPath())
         {
-            LuaFolderPath = _steamPathService.GetLuaFolder() ?? "未配置";
+            LuaFolderPath = _steamPathService.GetLuaFolder() ?? L.Get("Settings_NotConfigured");
 
             // 自定义路径 → 默认路径，同样触发迁移检测
             await MigrateLuaFilesIfNeededAsync(oldFolder, LuaFolderPath);
@@ -513,13 +642,13 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
 
             WeakReferenceMessenger.Default.Send(new LuaFolderChangedMessage());
 
-            StatusMessage = $"已重置为默认目录: {LuaFolderPath}";
-            LogService.Info("设置", $"已重置 Lua 目录为默认: {LuaFolderPath}");
+            StatusMessage = L.Get("Settings_LuaDirReset", LuaFolderPath);
+            LogService.Info(L.Get("LogCat_Settings"), L.Get("Settings_LogLuaDirReset", LuaFolderPath));
         }
         else
         {
-            StatusMessage = "重置失败，请检查配置文件写入权限";
-            LogService.Error("设置", "重置 Lua 目录配置失败");
+            StatusMessage = L.Get("Settings_ResetFailed");
+            LogService.Error(L.Get("LogCat_Settings"), L.Get("Settings_LogLuaDirResetFailed"));
         }
     }
 
@@ -534,9 +663,9 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         if (files.Length == 0) return false;
 
         var migrate = await ShowConfirmAsync(
-            "迁移 Lua 文件",
-            $"原路径 {oldFolder} 存在 {files.Length} 个 lua 文件（含子目录），\n是否迁移到新路径 {newFolder}？",
-            "迁移", "不迁移");
+            L.Get("Settings_MigrateTitle"),
+            L.Get("Settings_MigrateBody", oldFolder, files.Length, newFolder),
+            L.Get("Settings_Migrate"), L.Get("Settings_NoMigrate"));
         if (!migrate) return false;
 
         var copied = 0;
@@ -564,17 +693,17 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
                 }
                 catch (Exception ex2)
                 {
-                    LogService.Warn("设置", $"迁移 {file} 失败: {ex2.Message}");
+                    LogService.Warn(L.Get("LogCat_Settings"), L.Get("Settings_LogMigrateFailed", file, ex2.Message));
                 }
             }
         }
-        StatusMessage = $"已迁移 {copied}/{files.Length} 个 lua 文件";
-        LogService.Info("设置", $"已迁移 {copied}/{files.Length} 个 lua 文件到 {newFolder}");
+        StatusMessage = L.Get("Settings_Migrated", copied, files.Length);
+        LogService.Info(L.Get("LogCat_Settings"), L.Get("Settings_LogMigrated", copied, files.Length, newFolder));
         return true;
     }
 
-    private Task<bool> ShowConfirmAsync(string title, string message, string primaryText = "确定", string closeText = "取消")
-        => _dialogService.ShowConfirmAsync(title, message, primaryText, closeText);
+    private Task<bool> ShowConfirmAsync(string title, string message, string? primaryText = null, string? closeText = null)
+        => _dialogService.ShowConfirmAsync(title, message, primaryText ?? L.Get("Common_Confirm"), closeText ?? L.Get("Common_Cancel"));
 
     [RelayCommand]
     private void OpenSteamFolder()
@@ -584,8 +713,8 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             Process.Start(new ProcessStartInfo { FileName = steamDir, UseShellExecute = true });
         else
         {
-            StatusMessage = "Steam路径不存在或未设置";
-            LogService.Warn("设置", "Steam路径不存在或未设置");
+            StatusMessage = L.Get("Settings_SteamPathMissing");
+            LogService.Warn(L.Get("LogCat_Settings"), StatusMessage);
         }
     }
 
@@ -595,8 +724,8 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         var steamDir = SteamPath;
         if (string.IsNullOrEmpty(steamDir) || !Directory.Exists(steamDir))
         {
-            StatusMessage = "Steam路径不存在或未设置";
-            LogService.Warn("设置", "Steam路径不存在或未设置");
+            StatusMessage = L.Get("Settings_SteamPathMissing");
+            LogService.Warn(L.Get("LogCat_Settings"), StatusMessage);
             return;
         }
         var statsDir = Path.Combine(steamDir, "appcache", "stats");
@@ -610,8 +739,8 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         var steamDir = SteamPath;
         if (string.IsNullOrEmpty(steamDir) || !Directory.Exists(steamDir))
         {
-            StatusMessage = "Steam路径不存在或未设置";
-            LogService.Warn("设置", "Steam路径不存在或未设置");
+            StatusMessage = L.Get("Settings_SteamPathMissing");
+            LogService.Warn(L.Get("LogCat_Settings"), StatusMessage);
             return;
         }
         var manifestDir = Path.Combine(steamDir, "depotcache");
@@ -636,7 +765,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         SpeedTestResults.Clear();
         SpeedTestTotal = CdnEndpoint.Defaults.Count;
         SpeedTestProgress = 0;
-        StatusMessage = "正在测试所有CDN节点...";
+        StatusMessage = L.Get("Settings_TestingCdn");
 
         try
         {
@@ -656,19 +785,19 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             var best = SpeedTestResults.Where(r => r.IsSuccess).OrderBy(r => r.LatencyMs).FirstOrDefault();
             if (best != null)
             {
-                StatusMessage = $"测速完成，最快节点: {best.Name} ({best.LatencyMs}ms)";
-                LogService.Info("设置", $"CDN 测速完成，最快节点: {best.Name} ({best.LatencyMs}ms)");
+                StatusMessage = L.Get("Settings_CdnBest", best.Name, best.LatencyMs);
+                LogService.Info(L.Get("LogCat_Settings"), L.Get("Settings_LogCdnBest", best.Name, best.LatencyMs));
             }
             else
             {
-                StatusMessage = "所有节点均不可达";
-                LogService.Warn("设置", "CDN 测速完成，所有节点均不可达");
+                StatusMessage = L.Get("Settings_AllCdnDown");
+                LogService.Warn(L.Get("LogCat_Settings"), L.Get("Settings_LogAllCdnDown"));
             }
         }
         catch (Exception ex)
         {
-            StatusMessage = $"测速失败: {ex.Message}";
-            LogService.Error("设置", $"CDN 测速失败: {ex}");
+            StatusMessage = L.Get("Settings_SpeedFailed", ex.Message);
+            LogService.Error(L.Get("LogCat_Settings"), L.Get("Settings_LogCdnFailed", ex));
         }
         finally
         {
@@ -684,7 +813,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         MirrorSpeedTestResults.Clear();
         MirrorSpeedTestTotal = GitHubMirror.ReleaseAssetMirrorPrefixes.Length + 1;
         MirrorSpeedTestProgress = 0;
-        StatusMessage = "正在测试所有镜像源...";
+        StatusMessage = L.Get("Settings_TestingMirror");
 
         try
         {
@@ -704,19 +833,19 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             var best = MirrorSpeedTestResults.Where(r => r.IsSuccess).OrderBy(r => r.LatencyMs).FirstOrDefault();
             if (best != null)
             {
-                StatusMessage = $"测速完成，最快镜像源: {best.Name} ({best.LatencyMs}ms)，可在上方下拉框中切换";
-                LogService.Info("设置", $"镜像源测速完成，最快: {best.Name} ({best.LatencyMs}ms)");
+                StatusMessage = L.Get("Settings_MirrorBest", best.Name, best.LatencyMs);
+                LogService.Info(L.Get("LogCat_Settings"), L.Get("Settings_LogMirrorBest", best.Name, best.LatencyMs));
             }
             else
             {
-                StatusMessage = "所有镜像源均不可达";
-                LogService.Warn("设置", "镜像源测速完成，所有源均不可达");
+                StatusMessage = L.Get("Settings_AllMirrorDown");
+                LogService.Warn(L.Get("LogCat_Settings"), L.Get("Settings_LogAllMirrorDown"));
             }
         }
         catch (Exception ex)
         {
-            StatusMessage = $"测速失败: {ex.Message}";
-            LogService.Error("设置", $"镜像源测速失败: {ex}");
+            StatusMessage = L.Get("Settings_SpeedFailed", ex.Message);
+            LogService.Error(L.Get("LogCat_Settings"), L.Get("Settings_LogMirrorFailed", ex));
         }
         finally
         {
@@ -743,6 +872,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     private bool _autoRefreshKeyCache = true;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SelectedThemeOption))]
     private string _selectedTheme = "System";
 
     [ObservableProperty]
@@ -775,11 +905,11 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             _syncingFriendBroadcast = true;
             try { FriendBroadcastEnabled = !value; }
             finally { _syncingFriendBroadcast = false; }
-            StatusMessage = "写入 opensteamtool.toml 失败，请检查文件权限";
+            StatusMessage = L.Get("Settings_TomlWriteFailed");
             return;
         }
-        StatusMessage = value ? "好友游玩状态广播已开启" : "好友游玩状态广播已关闭";
-        LogService.Info("设置", StatusMessage);
+        StatusMessage = value ? L.Get("Settings_BroadcastOn") : L.Get("Settings_BroadcastOff");
+        LogService.Info(L.Get("LogCat_Settings"), StatusMessage);
     }
 
     private void RefreshFriendBroadcastToggle()
@@ -833,7 +963,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     public record ManifestTestResult(string Id, string DisplayName, bool IsReachable, long LatencyMs, int StatusCode, string FailReason = "")
     {
         // 行内状态与接口设置测速保持一致：可用带延迟，不可用给原因（状态码/超时/连接失败）
-        public string StatusText => IsReachable ? $"可用 {LatencyMs}ms" : $"不可用 ({FailReason})";
+        public string StatusText => IsReachable ? L.Get("Settings_ManifestRowOk", LatencyMs) : L.Get("Settings_ManifestRowDown", FailReason);
 
         // 只用红绿两色表达连通结论，不按延迟分色，避免延迟色干扰可用性判断
         public string ColorCode => IsReachable ? "#4CAF50" : "#F44336";
@@ -849,11 +979,11 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             _syncingManifestSource = true;
             try { SelectedManifestSource = _steamPathService.GetManifestSource(); }
             finally { _syncingManifestSource = false; }
-            StatusMessage = "写入 opensteamtool.toml 失败，请检查文件权限";
+            StatusMessage = L.Get("Settings_TomlWriteFailed");
             return;
         }
-        StatusMessage = $"上游清单源已切换为 {value}";
-        LogService.Info("设置", StatusMessage);
+        StatusMessage = L.Get("Settings_ManifestSwitched", value);
+        LogService.Info(L.Get("LogCat_Settings"), StatusMessage);
     }
 
     private void RefreshManifestSource()
@@ -880,11 +1010,11 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             _syncingManifestFailover = true;
             try { ManifestFailoverEnabled = !value; }
             finally { _syncingManifestFailover = false; }
-            StatusMessage = "写入 opensteamtool.toml 失败，请检查文件权限";
+            StatusMessage = L.Get("Settings_TomlWriteFailed");
             return;
         }
-        StatusMessage = value ? "失败时自动切换清单请求源已开启" : "失败时自动切换清单请求源已关闭";
-        LogService.Info("设置", StatusMessage);
+        StatusMessage = value ? L.Get("Settings_FailoverOn") : L.Get("Settings_FailoverOff");
+        LogService.Info(L.Get("LogCat_Settings"), StatusMessage);
     }
 
     private void RefreshManifestFailoverToggle()
@@ -907,7 +1037,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         ManifestTestResults.Clear();
         ManifestTestTotal = ManifestSourceOptions.Count;
         ManifestTestProgress = 0;
-        StatusMessage = "正在测试上游清单源连通性...";
+        StatusMessage = L.Get("Settings_TestingManifest");
 
         try
         {
@@ -922,8 +1052,8 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
             var results = await Task.WhenAll(tasks);
 
             var reachable = results.Count(r => r.IsReachable);
-            StatusMessage = $"连通性测试完成：{reachable}/{results.Length} 个可用";
-            LogService.Info("设置", $"上游清单源连通性测试：{string.Join(", ", results.Select(r => $"{r.DisplayName}={(r.IsReachable ? r.StatusCode.ToString() : r.FailReason)}({r.LatencyMs}ms)"))}");
+            StatusMessage = L.Get("Settings_ManifestTestDone", reachable, results.Length);
+            LogService.Info(L.Get("LogCat_Settings"), L.Get("Settings_LogManifestTest", string.Join(", ", results.Select(r => $"{r.DisplayName}={(r.IsReachable ? r.StatusCode.ToString() : r.FailReason)}({r.LatencyMs}ms)"))));
         }
         finally
         {
@@ -972,12 +1102,12 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         catch (TaskCanceledException)
         {
             sw.Stop();
-            result = new ManifestTestResult(opt.Id, opt.DisplayName, false, sw.ElapsedMilliseconds, 0, "超时");
+            result = new ManifestTestResult(opt.Id, opt.DisplayName, false, sw.ElapsedMilliseconds, 0, L.Get("Settings_FailTimeout"));
         }
         catch (Exception)
         {
             sw.Stop();
-            result = new ManifestTestResult(opt.Id, opt.DisplayName, false, sw.ElapsedMilliseconds, 0, "连接失败");
+            result = new ManifestTestResult(opt.Id, opt.DisplayName, false, sw.ElapsedMilliseconds, 0, L.Get("Settings_FailConn"));
         }
         progress.Report(result);
         return result;
@@ -1009,32 +1139,32 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         _settings.EnableLogging = value;
         _settingsService.Save(_settings);
         LogService.SetEnabled(value);
-        StatusMessage = value ? "日志记录已开启，将输出到软件目录的 app.log" : "日志记录已关闭";
-        LogService.Info("设置", value ? "日志记录已开启，将输出到软件目录的 app.log" : "日志记录已关闭");
+        StatusMessage = value ? L.Get("Settings_LoggingOn") : L.Get("Settings_LoggingOff");
+        LogService.Info(L.Get("LogCat_Settings"), StatusMessage);
     }
 
     partial void OnIsShowCopyLogButtonChanged(bool value)
     {
         _settings.ShowCopyLogButton = value;
         _settingsService.Save(_settings);
-        StatusMessage = value ? "日志复制按钮已显示" : "日志复制按钮已隐藏";
-        LogService.Info("设置", value ? "日志复制按钮已显示" : "日志复制按钮已隐藏");
+        StatusMessage = value ? L.Get("Settings_CopyLogShown") : L.Get("Settings_CopyLogHidden");
+        LogService.Info(L.Get("LogCat_Settings"), StatusMessage);
     }
 
     partial void OnIsShowTrainerSectionsChanged(bool value)
     {
         _settings.ShowTrainerSections = value;
         _settingsService.Save(_settings);
-        StatusMessage = value ? "修改器推荐栏目已显示" : "修改器推荐栏目已隐藏";
-        LogService.Info("设置", value ? "修改器推荐栏目已显示" : "修改器推荐栏目已隐藏");
+        StatusMessage = value ? L.Get("Settings_TrainerShown") : L.Get("Settings_TrainerHidden");
+        LogService.Info(L.Get("LogCat_Settings"), StatusMessage);
     }
 
     partial void OnShowRankingChanged(bool value)
     {
         _settings.ShowRanking = value;
         _settingsService.Save(_settings);
-        StatusMessage = value ? "入库热门榜单已显示" : "入库热门榜单已隐藏";
-        LogService.Info("设置", value ? "入库热门榜单已显示" : "入库热门榜单已隐藏");
+        StatusMessage = value ? L.Get("Settings_RankingShown") : L.Get("Settings_RankingHidden");
+        LogService.Info(L.Get("LogCat_Settings"), StatusMessage);
     }
 
     [ObservableProperty]
@@ -1049,20 +1179,20 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         _settingsService.Save(_settings);
         StatusMessage = value switch
         {
-            "Remote" => "已切换为远程清单仓库",
-            "DepotKey" => "已切换为本地缓存仓库",
+            "Remote" => L.Get("Settings_ModeRemote"),
+            "DepotKey" => L.Get("Settings_ModeLocal"),
             _ => ""
         };
         if (!string.IsNullOrEmpty(StatusMessage))
-            LogService.Info("设置", StatusMessage);
+            LogService.Info(L.Get("LogCat_Settings"), StatusMessage);
     }
 
     partial void OnManifestMirrorChanged(string value)
     {
         _settings.ManifestMirror = value;
         _settingsService.Save(_settings);
-        StatusMessage = value == "direct" ? "镜像加速源已切换为直连" : $"镜像加速源已切换为 {value}（直连最后尝试）";
-        LogService.Info("设置", StatusMessage);
+        StatusMessage = value == "direct" ? L.Get("Settings_MirrorDirect") : L.Get("Settings_MirrorTo", value);
+        LogService.Info(L.Get("LogCat_Settings"), StatusMessage);
     }
 
     partial void OnKeyFolderPathChanged(string value)
@@ -1077,7 +1207,7 @@ public class SpeedTestItem
     public string Name { get; set; } = string.Empty;
     public long LatencyMs { get; set; }
     public bool IsSuccess { get; set; }
-    public string StatusText => IsSuccess ? $"{LatencyMs}ms" : "失败";
+    public string StatusText => IsSuccess ? $"{LatencyMs}ms" : L.Get("Settings_SpeedItemFailed");
     // 镜像加速源与封面 CDN 共用：延迟分三档着色；
     // 上游清单源（ManifestTestResult）是独立的红绿两色，不走这里
     public string ColorCode => IsSuccess ? LatencyMs switch

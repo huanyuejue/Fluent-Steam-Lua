@@ -78,12 +78,12 @@ public class SteamPathService : ISteamPathService
         {
             File.Move(example, primary);
             _cachedConfigFile = null;
-            LogService.Info("Steam路径", $"已将 {ExampleConfigFileName} 重命名为 {ConfigFileName}（正式配置生效）");
+            LogService.Info(L.Get("LogCat_SteamPath"), L.Get("Svc_CfgRenamed", ExampleConfigFileName, ConfigFileName));
             return primary;
         }
         catch (Exception ex)
         {
-            LogService.Warn("Steam路径", $"重命名 {ExampleConfigFileName} 为 {ConfigFileName} 失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_SteamPath"), L.Get("Svc_CfgRenameFailed", ExampleConfigFileName, ConfigFileName, ex.Message));
             return example;
         }
     }
@@ -118,13 +118,13 @@ public class SteamPathService : ISteamPathService
                 _cachedLuaPaths = list;
                 if (list.Count > 0)
                 {
-                    LogService.Info("Steam路径", $"从 {configFile} 读取到自定义 Lua 目录: {string.Join(", ", list)}");
+                    LogService.Info(L.Get("LogCat_SteamPath"), L.Get("Svc_LuaDirRead", configFile, string.Join(", ", list)));
                 }
             }
         }
         catch (Exception ex)
         {
-            LogService.Warn("Steam路径", $"读取 Lua 目录配置失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_SteamPath"), L.Get("Svc_LuaDirReadFailed", ex.Message));
         }
 
         return _cachedLuaPaths;
@@ -155,7 +155,7 @@ public class SteamPathService : ISteamPathService
         if (!Directory.Exists(luaPath))
         {
             try { Directory.CreateDirectory(luaPath); }
-            catch (Exception ex) { LogService.Warn("Steam路径", $"创建 Lua 目录失败: {ex.Message}"); return null; }
+            catch (Exception ex) { LogService.Warn(L.Get("LogCat_SteamPath"), L.Get("Svc_LuaDirCreateFailed", ex.Message)); return null; }
         }
         return luaPath;
     }
@@ -223,12 +223,12 @@ public class SteamPathService : ISteamPathService
 
             File.WriteAllLines(configFile, lines);
             _cachedConfigFile = null;
-            LogService.Info("Steam路径", $"已将 Lua 目录写入 {configFile}: {path}");
+            LogService.Info(L.Get("LogCat_SteamPath"), L.Get("Svc_LuaDirWritten", configFile, path));
             return true;
         }
         catch (Exception ex)
         {
-            LogService.Error("Steam路径", $"写入 Lua 目录配置失败: {ex}");
+            LogService.Error(L.Get("LogCat_SteamPath"), L.Get("Svc_LuaDirWriteCfgFailed", ex));
             return false;
         }
     }
@@ -278,12 +278,12 @@ public class SteamPathService : ISteamPathService
 
             File.WriteAllLines(configFile, lines);
             _cachedConfigFile = null;
-            LogService.Info("Steam路径", $"已重置 Lua 目录配置（删除 {configFile} 中的 [lua] paths）");
+            LogService.Info(L.Get("LogCat_SteamPath"), L.Get("Svc_LuaDirCleared", configFile));
             return true;
         }
         catch (Exception ex)
         {
-            LogService.Error("Steam路径", $"重置 Lua 目录配置失败: {ex}");
+            LogService.Error(L.Get("LogCat_SteamPath"), L.Get("Svc_LuaDirClearFailed", ex));
             return false;
         }
     }
@@ -314,7 +314,7 @@ public class SteamPathService : ISteamPathService
         }
         catch (Exception ex)
         {
-            LogService.Warn("Steam路径", $"读取好友广播配置失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_SteamPath"), L.Get("Svc_BroadcastReadFailed", ex.Message));
             return true;
         }
     }
@@ -332,7 +332,7 @@ public class SteamPathService : ISteamPathService
 
             if (!File.Exists(configFile))
             {
-                File.WriteAllLines(configFile, ["# 由 Fluent Steam Lua 写入，内核热加载即时生效", "", "[presence]", newLine]);
+                File.WriteAllLines(configFile, [L.Get("Svc_TomlHeader"), "", "[presence]", newLine]);
             }
             else
             {
@@ -368,12 +368,12 @@ public class SteamPathService : ISteamPathService
             }
 
             _cachedConfigFile = null;
-            LogService.Info("Steam路径", $"好友游玩状态广播已{(enabled ? "开启" : "关闭")}（{configFile}）");
+            LogService.Info(L.Get("LogCat_SteamPath"), L.Get("Svc_BroadcastWritten", enabled ? L.Get("Common_Enabled") : L.Get("Common_Disabled"), configFile));
             return true;
         }
         catch (Exception ex)
         {
-            LogService.Error("Steam路径", $"写入好友广播配置失败: {ex}");
+            LogService.Error(L.Get("LogCat_SteamPath"), L.Get("Svc_BroadcastWriteFailed", ex));
             return false;
         }
     }
@@ -473,7 +473,7 @@ public class SteamPathService : ISteamPathService
         }
         catch (Exception ex)
         {
-            LogService.Warn("Steam路径", $"读取上游清单源配置失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_SteamPath"), L.Get("Svc_ManifestReadFailed", ex.Message));
             return "20770407";
         }
     }
@@ -491,7 +491,7 @@ public class SteamPathService : ISteamPathService
 
             if (!File.Exists(configFile))
             {
-                File.WriteAllLines(configFile, ["# 由 Fluent Steam Lua 写入，内核热加载即时生效", "", "[manifest]", newLine]);
+                File.WriteAllLines(configFile, [L.Get("Svc_TomlHeader"), "", "[manifest]", newLine]);
             }
             else
             {
@@ -526,12 +526,12 @@ public class SteamPathService : ISteamPathService
             }
 
             _cachedConfigFile = null;
-            LogService.Info("Steam路径", $"上游清单源已切换为 {source}（{configFile}）");
+            LogService.Info(L.Get("LogCat_SteamPath"), L.Get("Svc_ManifestSwitched", source, configFile));
             return true;
         }
         catch (Exception ex)
         {
-            LogService.Error("Steam路径", $"写入上游清单源配置失败: {ex}");
+            LogService.Error(L.Get("LogCat_SteamPath"), L.Get("Svc_ManifestWriteFailed", ex));
             return false;
         }
     }
@@ -560,7 +560,7 @@ public class SteamPathService : ISteamPathService
         }
         catch (Exception ex)
         {
-            LogService.Warn("Steam路径", $"读取清单失败顺位配置失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_SteamPath"), L.Get("Svc_FailoverReadFailed", ex.Message));
             return true;
         }
     }
@@ -579,7 +579,7 @@ public class SteamPathService : ISteamPathService
 
             if (!File.Exists(configFile))
             {
-                lines = ["# 由 Fluent Steam Lua 写入，内核热加载即时生效", "", "[manifest]", newLine];
+                lines = [L.Get("Svc_TomlHeader"), "", "[manifest]", newLine];
             }
             else
             {
@@ -621,12 +621,12 @@ public class SteamPathService : ISteamPathService
             File.Move(tmp, configFile, overwrite: true);
 
             _cachedConfigFile = null;
-            LogService.Info("Steam路径", $"清单失败自动顺位已{(enabled ? "开启" : "关闭")}（{configFile}）");
+            LogService.Info(L.Get("LogCat_SteamPath"), L.Get("Svc_FailoverWritten", enabled ? L.Get("Common_Enabled") : L.Get("Common_Disabled"), configFile));
             return true;
         }
         catch (Exception ex)
         {
-            LogService.Error("Steam路径", $"写入清单失败顺位配置失败: {ex}");
+            LogService.Error(L.Get("LogCat_SteamPath"), L.Get("Svc_FailoverWriteFailed", ex));
             return false;
         }
     }
@@ -658,7 +658,7 @@ public class SteamPathService : ISteamPathService
         }
         catch (Exception ex)
         {
-            LogService.Warn("Steam路径", $"读取云存档开关失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_SteamPath"), L.Get("Svc_CloudCfgReadFailed", ex.Message));
             return false;
         }
     }
@@ -677,7 +677,7 @@ public class SteamPathService : ISteamPathService
 
             if (!File.Exists(configFile))
             {
-                lines = ["# 由 Fluent Steam Lua 写入，云存档开关变更需重启 Steam 生效", "", "[cloud]", newLine];
+                lines = [L.Get("Svc_TomlHeaderCloud"), "", "[cloud]", newLine];
             }
             else
             {
@@ -719,12 +719,12 @@ public class SteamPathService : ISteamPathService
             File.Move(tmp, configFile, overwrite: true);
 
             _cachedConfigFile = null;
-            LogService.Info("Steam路径", $"云存档已{(enabled ? "开启" : "关闭")}（{configFile}）");
+            LogService.Info(L.Get("LogCat_SteamPath"), L.Get("Svc_CloudWritten", enabled ? L.Get("Common_Enabled") : L.Get("Common_Disabled"), configFile));
             return true;
         }
         catch (Exception ex)
         {
-            LogService.Error("Steam路径", $"写入云存档开关失败: {ex}");
+            LogService.Error(L.Get("LogCat_SteamPath"), L.Get("Svc_CloudWriteFailed", ex));
             return false;
         }
     }
@@ -753,7 +753,7 @@ public class SteamPathService : ISteamPathService
         }
         catch (Exception ex)
         {
-            LogService.Warn("Steam路径", $"读取云存档库路径失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_SteamPath"), L.Get("Svc_CloudLibReadFailed", ex.Message));
             return null;
         }
     }
@@ -826,7 +826,7 @@ public class SteamPathService : ISteamPathService
                 }
             }
         }
-        catch (Exception ex) { LogService.Warn("Steam路径", $"解析 libraryfolders.vdf 失败: {ex.Message}"); }
+        catch (Exception ex) { LogService.Warn(L.Get("LogCat_SteamPath"), L.Get("Svc_LibVdfReadFailed", ex.Message)); }
 
         return paths;
     }

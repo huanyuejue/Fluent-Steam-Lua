@@ -23,11 +23,47 @@ public partial class CloudSaveViewModel : ObservableObject
 
     public ObservableCollection<GameInfo> RedirectedGames { get; } = new();
 
-    public System.Collections.Generic.List<string> SortOptions { get; } =
-        new() { "按存档时间降序", "按存档时间升序", "按AppID升序", "按AppID降序" };
+    // 选项列表永不重建：显示名每次按当前语言计算，切语言只通知刷新文本
+    public sealed class SortOptionItem : System.ComponentModel.INotifyPropertyChanged
+    {
+        private readonly string _displayKey;
+        public string Code { get; }
 
-    [ObservableProperty]
-    private string _selectedSortOption = "按存档时间降序";
+        public SortOptionItem(string displayKey, string code)
+        {
+            _displayKey = displayKey;
+            Code = code;
+        }
+
+        public string Display => L.Get(_displayKey);
+
+        public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
+
+        public void RefreshDisplay() =>
+            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(Display)));
+    }
+
+    public System.Collections.Generic.List<SortOptionItem> SortOptions { get; } = new()
+    {
+        new("Cloud_SortTimeDesc", "TimeDesc"),
+        new("Cloud_SortTimeAsc", "TimeAsc"),
+        new("Cloud_SortAppIdAsc", "AppIdAsc"),
+        new("Cloud_SortAppIdDesc", "AppIdDesc"),
+    };
+
+    private string _sortCode = "TimeDesc";
+
+    public SortOptionItem? SelectedSortOptionItem
+    {
+        get => SortOptions.FirstOrDefault(o => o.Code == _sortCode);
+        set
+        {
+            if (value is null || value.Code == _sortCode) return;
+            _sortCode = value.Code;
+            ApplySorting();
+            OnPropertyChanged();
+        }
+    }
 
     [ObservableProperty]
     private bool _isCloudEnabled;
@@ -35,13 +71,17 @@ public partial class CloudSaveViewModel : ObservableObject
     [ObservableProperty]
     private bool _isBusy;
 
-    [ObservableProperty]
-    private string _syncPathText = "未配置";
+    private string _syncPathText = "";
+    public string SyncPathText
+    {
+        get => string.IsNullOrEmpty(_syncPathText) ? L.Get("Cloud_NotConfigured") : _syncPathText;
+        set => SetProperty(ref _syncPathText, value == L.Get("Cloud_NotConfigured") ? "" : value);
+    }
 
     // 列表区状态行：闲置显示默认提示，连接/读取/删除中与失败时替换显示；
     // 本页所有操作反馈统一走这里，顶部不再保留任何输出
     [ObservableProperty]
-    private string _listStatusText = "暂无已重定向游戏：启用云存档后进游戏存一次档即会出现在列表";
+    private string _listStatusText = L.Get("Cloud_IdleFolderHint");
 
     [ObservableProperty]
     private bool _isListHintVisible = true;
@@ -60,7 +100,20 @@ public partial class CloudSaveViewModel : ObservableObject
         _dialogService = dialogService;
         _steamApiService = steamApiService;
         _luaFileManager = luaFileManager;
-        CloudProviders = new System.Collections.Generic.List<CloudProviderOption>(_cloudService.ProviderOptions);
+        // 存储服务选项列表只构建一次，切语言靠刷新显示名而非重建列表
+        CloudProviders = _cloudService.ProviderOptions.Select(o => new ProviderChoice(o)).ToList();
+        LocalizationService.Instance.PropertyChanged += OnLanguageChanged;
+    }
+
+    private void OnLanguageChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        // 选项列表保持同一实例，只刷新显示名；列表不重建，选择器选中项不受影响
+        foreach (var o in SortOptions) o.RefreshDisplay();
+        foreach (var o in CloudProviders) o.RefreshDisplay();
+        OnPropertyChanged(nameof(SyncPathText));
+        RefreshProviderStatus();
+        SetIdleListHint();
+        foreach (var g in RedirectedGames) g.RefreshLocalizedTexts();
     }
 
     public void OnNavigatedTo() => _ = RefreshAsync();
@@ -86,8 +139,8 @@ public partial class CloudSaveViewModel : ObservableObject
             if (timeout.IsCancellationRequested)
             {
                 IsListHintVisible = true;
-                ListStatusText = "读取超时，请检查网络后重试";
-                LogService.Warn("云存档", "刷新云端名单超时");
+                ListStatusText = L.Get("Cloud_ReadTimeout");
+                LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogRefreshTimeout"));
             }
         }
         finally
@@ -105,7 +158,7 @@ public partial class CloudSaveViewModel : ObservableObject
             _syncingCloudEnabled = true;
             try { IsCloudEnabled = st.CloudEnabled; }
             finally { _syncingCloudEnabled = false; }
-            SyncPathText = string.IsNullOrEmpty(st.SyncPath) ? "未配置" : st.SyncPath;
+            SyncPathText = st.SyncPath ?? "";
             RefreshProviderBlock();
             SetIdleListHint();
             RefreshProviderStatus();
@@ -139,7 +192,7 @@ public partial class CloudSaveViewModel : ObservableObject
                     // 连接看门狗：25 秒内无任何进度回报视为连接阶段卡死（DNS/代理黑洞），
                     // 有进度则放行到 90 秒总预算；本地目录扫描快，不走看门狗
                     _listProgressSeen = false;
-                    ListStatusText = "正在连接云端…";
+                    ListStatusText = L.Get("Cloud_Connecting");
                     IsListHintVisible = true;
                     var listTask = _cloudService.GetRedirectedAppsAsync(progress, ct);
                     var winner = await Task.WhenAny(listTask, Task.Delay(TimeSpan.FromSeconds(25), ct));
@@ -147,7 +200,7 @@ public partial class CloudSaveViewModel : ObservableObject
                     {
                         ct.ThrowIfCancellationRequested();
                         _refreshCts?.Cancel();
-                        throw new TimeoutException("连接云端超时（25 秒无响应），请检查网络或代理后重试");
+                        throw new TimeoutException(L.Get("Cloud_ConnectTimeout"));
                     }
                     scanned = await listTask;
                 }
@@ -162,8 +215,8 @@ public partial class CloudSaveViewModel : ObservableObject
                 _saveDirs.Clear();
                 RedirectedGames.Clear();
                 IsListHintVisible = true;
-                ListStatusText = ex is TimeoutException ? ex.Message : $"刷新名单失败：{ex.Message}";
-                LogService.Warn("云存档", $"刷新名单失败: {ex.Message}");
+                ListStatusText = ex is TimeoutException ? ex.Message : L.Get("Cloud_RefreshListFailed", ex.Message);
+                LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogRefreshListFailed", ex.Message));
                 return;
             }
             var luaById = new Dictionary<int, GameInfo>();
@@ -174,7 +227,7 @@ public partial class CloudSaveViewModel : ObservableObject
             }
             catch (Exception ex)
             {
-                LogService.Warn("云存档", $"读取 Lua 游戏列表失败: {ex.Message}");
+                LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_ReadLuaFailed", ex.Message));
             }
             _saveDirs.Clear();
             var list = new List<GameInfo>();
@@ -200,12 +253,12 @@ public partial class CloudSaveViewModel : ObservableObject
             {
                 var shown = listFails.Count <= 3
                     ? string.Join("，", listFails)
-                    : string.Join("，", listFails.Take(3)) + $"等{listFails.Count}个";
+                    : string.Join("，", listFails.Take(3)) + L.Get("Cloud_EtAl", listFails.Count);
                 ListStatusText = RedirectedGames.Count == 0
-                    ? $"{listFails.Count} 个游戏读取失败，已跳过：{shown}"
-                    : $"部分游戏读取失败，已跳过：{shown}；其余 {RedirectedGames.Count} 个正常";
+                    ? L.Get("Cloud_SkippedEmpty", listFails.Count, shown)
+                    : L.Get("Cloud_SkippedPartial", shown, RedirectedGames.Count);
                 IsListHintVisible = true;
-                LogService.Warn("云存档", $"云端名单读取跳过 {listFails.Count} 个：{string.Join("；", listFails)}");
+                LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogSkipped", listFails.Count, string.Join("；", listFails)));
             }
             else
             {
@@ -221,8 +274,8 @@ public partial class CloudSaveViewModel : ObservableObject
         catch (Exception ex)
         {
             IsListHintVisible = true;
-            ListStatusText = $"刷新失败：{ex.Message}";
-            LogService.Warn("云存档", $"刷新状态失败: {ex.Message}");
+            ListStatusText = L.Get("Cloud_RefreshFailed", ex.Message);
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogRefreshFailed2", ex.Message));
         }
     }
 
@@ -230,8 +283,8 @@ public partial class CloudSaveViewModel : ObservableObject
     private void SetIdleListHint()
     {
         ListStatusText = SelectedProvider == "folder"
-            ? "暂无已重定向游戏：启用云存档后进游戏存一次档即会出现在列表"
-            : "暂无云端存档：该源下尚未同步过，或登录/凭证未配置";
+            ? L.Get("Cloud_IdleFolderHint")
+            : L.Get("Cloud_IdleCloudHint");
         IsListHintVisible = true;
     }
 
@@ -242,19 +295,17 @@ public partial class CloudSaveViewModel : ObservableObject
         IsListHintVisible = true;
     }
 
-    partial void OnSelectedSortOptionChanged(string value) => ApplySorting();
-
     // 名单排序：默认存档时间倒序（无时间沉底），切换只重排不重拉
     private void ApplySorting()
     {
         if (RedirectedGames.Count == 0) return;
-        var sorted = SelectedSortOption switch
+        var sorted = _sortCode switch
         {
-            "按存档时间升序" => RedirectedGames
+            "TimeAsc" => RedirectedGames
                 .OrderBy(g => g.LastSaveTime ?? DateTime.MaxValue)
                 .ThenBy(g => g.AppId).ToList(),
-            "按AppID升序" => RedirectedGames.OrderBy(g => g.AppId).ToList(),
-            "按AppID降序" => RedirectedGames.OrderByDescending(g => g.AppId).ToList(),
+            "AppIdAsc" => RedirectedGames.OrderBy(g => g.AppId).ToList(),
+            "AppIdDesc" => RedirectedGames.OrderByDescending(g => g.AppId).ToList(),
             _ => RedirectedGames
                 .OrderByDescending(g => g.LastSaveTime ?? DateTime.MinValue)
                 .ThenBy(g => g.AppId).ToList(),
@@ -275,7 +326,7 @@ public partial class CloudSaveViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            LogService.Warn("云存档", $"补齐游戏信息失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_InfoFillFailed", ex.Message));
         }
     }
 
@@ -290,7 +341,7 @@ public partial class CloudSaveViewModel : ObservableObject
                 var url = _cloudService.GetCloudConsoleUrl(appId);
                 if (string.IsNullOrEmpty(url))
                 {
-                    SetListStatus("无法定位云端目录，请先刷新名单");
+                    SetListStatus(L.Get("Cloud_CantLocateCloud"));
                     return;
                 }
                 Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true });
@@ -298,15 +349,15 @@ public partial class CloudSaveViewModel : ObservableObject
             }
             if (!_saveDirs.TryGetValue(appId, out var dir) || !Directory.Exists(dir))
             {
-                SetListStatus("存档目录不存在");
+                SetListStatus(L.Get("Cloud_NoSaveDir"));
                 return;
             }
             Process.Start(new ProcessStartInfo { FileName = dir, UseShellExecute = true });
         }
         catch (Exception ex)
         {
-            SetListStatus("打开存档目录失败");
-            LogService.Warn("云存档", $"打开存档目录失败: {ex.Message}");
+            SetListStatus(L.Get("Cloud_OpenSaveFailed"));
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogOpenSaveFailed", ex.Message));
         }
     }
 
@@ -316,9 +367,9 @@ public partial class CloudSaveViewModel : ObservableObject
         if (IsBusy || game == null) return;
         if (SteamProcess.IsSteamRunning())
         {
-            SetListStatus("请先退出 Steam 再删除存档");
-            await _dialogService.ShowAlertAsync("Steam 正在运行",
-                "删除存档前请先完全退出 Steam，否则残留缓存可能把已删文件复活。");
+            SetListStatus(L.Get("Cloud_ExitSteamFirst"));
+            await _dialogService.ShowAlertAsync(L.Get("Cloud_SteamRunningDeleteTitle"),
+                L.Get("Cloud_SteamRunningDeleteBody"));
             return;
         }
 
@@ -333,18 +384,18 @@ public partial class CloudSaveViewModel : ObservableObject
         catch (Exception ex)
         {
             SetListStatus(ex.Message);
-            LogService.Warn("云存档", $"统计待删存档失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogPreviewFailed", ex.Message));
             return;
         }
         if (preview.Targets.Count == 0)
         {
-            SetListStatus("没有可删除的存档");
+            SetListStatus(L.Get("Cloud_NoDeletable"));
             return;
         }
 
         var displayName = string.IsNullOrEmpty(game.GameName) ? game.AppId.ToString() : game.GameName;
         var confirmNote = isCloud
-            ? "注：云端源下将删除远端存档（本地 DLL 缓存与 Steam 用户数据一并清理），删除前自动下载备份到本地。"
+            ? L.Get("Cloud_CloudDeleteNote")
             : null;
         if (!await _dialogService.ShowDeleteSavesConfirmAsync(displayName, game.AppId, preview.Targets, preview.BackupDir, confirmNote))
         {
@@ -358,15 +409,15 @@ public partial class CloudSaveViewModel : ObservableObject
             var progress = new Progress<string>(msg => SetListStatus(msg));
             await _cloudService.DeleteAppSavesAsync(preview, progress);
             await RefreshCoreAsync();
-            await _dialogService.ShowAlertAsync("删除完成",
+            await _dialogService.ShowAlertAsync(L.Get("Cloud_DeletedTitle"),
                 isCloud
-                    ? $"已删除《{displayName}》的全部存档（含云端远端）。\n\n备份位于：\n{preview.BackupDir}\n恢复需手动上传回云端对应目录。"
-                    : $"已删除《{displayName}》的全部存档。\n\n备份位于：\n{preview.BackupDir}\n恢复需手动拷回对应目录。");
+                    ? L.Get("Cloud_DeletedCloudBody", displayName, preview.BackupDir)
+                    : L.Get("Cloud_DeletedLocalBody", displayName, preview.BackupDir));
         }
         catch (Exception ex)
         {
             SetListStatus(ex.Message);
-            LogService.Warn("云存档", $"删除存档失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogDeleteFailed", ex.Message));
         }
         finally
         {
@@ -420,32 +471,32 @@ public partial class CloudSaveViewModel : ObservableObject
                         if (!result.Ok)
                         {
                             SetListStatus(result.Message);
-                            LogService.Warn("云存档", $"重启 Steam 失败: {result.Message}");
+                            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogRestartFailed", result.Message));
                         }
                     }
                     else
                     {
-                        SetListStatus("云存档已启用，重启 Steam 后生效");
+                        SetListStatus(L.Get("Cloud_EnabledNoRestart"));
                     }
                 }
                 else
                 {
                     var progress = new Progress<string>(msg => SetListStatus(msg));
                     await _cloudService.EnableAsync(null, progress);
-                    await PromptRestartSteamAsync("云存档已启用");
+                    await PromptRestartSteamAsync(L.Get("Cloud_EnabledShort"));
                 }
             }
             else
             {
                 await _cloudService.DisableAsync();
-                await PromptRestartSteamAsync("云存档已关闭");
+                await PromptRestartSteamAsync(L.Get("Cloud_DisabledShort"));
             }
             await RefreshCoreAsync();
         }
         catch (Exception ex)
         {
             SetListStatus(ex.Message);
-            LogService.Warn("云存档", $"切换开关失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogToggleFailed", ex.Message));
             RevertToggle(!value);
         }
         finally
@@ -458,15 +509,15 @@ public partial class CloudSaveViewModel : ObservableObject
     private async Task PromptRestartSteamAsync(string doneMessage)
     {
         var restart = await _dialogService.ShowConfirmAsync(
-            "需要重启 Steam",
-            $"{doneMessage}，需重启 Steam 后生效。\n\n是否立即重启 Steam？",
-            "立即重启", "暂不重启");
+            L.Get("Cloud_RestartTitle"),
+            L.Get("Cloud_RestartBody", doneMessage),
+            L.Get("Cloud_RestartNow"), L.Get("Cloud_RestartLater"));
         if (!restart) return;
         var result = SteamProcess.RestartSteam(_steamPathService);
         if (!result.Ok)
         {
             SetListStatus(result.Message);
-            LogService.Warn("云存档", $"重启 Steam 失败: {result.Message}");
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogRestartFailed", result.Message));
         }
     }
 
@@ -482,12 +533,12 @@ public partial class CloudSaveViewModel : ObservableObject
                 ? IntPtr.Zero
                 : new System.Windows.Interop.WindowInteropHelper(mainWindow).Handle;
             dir = FolderPicker.PickFolder(
-                SyncPathText == "未配置" ? null : SyncPathText, owner);
+                string.IsNullOrEmpty(_syncPathText) ? null : _syncPathText, owner);
         }
         catch (Exception ex)
         {
-            SetListStatus("打开目录选择失败，请重试");
-            LogService.Error("云存档", $"选择本地目录失败: {ex}");
+            SetListStatus(L.Get("Cloud_BrowseFailed"));
+            LogService.Error(L.Get("LogCat_Cloud"), L.Get("Cloud_LogBrowseFailed", ex));
             return;
         }
         if (string.IsNullOrEmpty(dir)) return;
@@ -500,8 +551,8 @@ public partial class CloudSaveViewModel : ObservableObject
         var def = _cloudService.GetDefaultSyncPath();
         if (string.IsNullOrEmpty(def))
         {
-            SetListStatus("未检测到 Steam 路径");
-            LogService.Warn("云存档", "重置目录失败：未检测到 Steam 路径");
+            SetListStatus(L.Get("Cloud_NoSteamPath"));
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogResetDirFailed"));
             return;
         }
         await ApplyNewSyncPathAsync(def);
@@ -509,10 +560,34 @@ public partial class CloudSaveViewModel : ObservableObject
 
     // ========== 云端提供商（与上游 companion 同契约，唯一真相在 config.json） ==========
 
-    public System.Collections.Generic.List<CloudProviderOption> CloudProviders { get; }
+    // 存储服务选项：显示名按当前语言实时取值（本地/s3 需本地化，品牌名恒定）
+    public sealed class ProviderChoice : System.ComponentModel.INotifyPropertyChanged
+    {
+        private readonly CloudProviderOption _option;
+
+        public ProviderChoice(CloudProviderOption option) => _option = option;
+
+        public string Id => _option.Id;
+
+        public string DisplayName => _option.DisplayKey is { } key ? L.Get(key) : _option.DisplayName;
+
+        public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
+
+        public void RefreshDisplay() =>
+            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(DisplayName)));
+    }
+
+    public System.Collections.Generic.List<ProviderChoice> CloudProviders { get; private set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SelectedProviderOption))]
     private string _selectedProvider = "folder";
+
+    public ProviderChoice? SelectedProviderOption
+    {
+        get => CloudProviders.FirstOrDefault(o => o.Id == SelectedProvider);
+        set { if (value != null) SelectedProvider = value.Id; }
+    }
 
     [ObservableProperty]
     private bool _isCloudProvider;
@@ -563,12 +638,12 @@ public partial class CloudSaveViewModel : ObservableObject
         try
         {
             _cloudService.SetCloudProvider(value);
-            LogService.Info("云存档", $"云端提供商已切换为{ProviderDisplayName(value)}，重启 Steam 后生效");
+            LogService.Info(L.Get("LogCat_Cloud"), L.Get("Cloud_ProviderSwitchedLog", ProviderDisplayName(value)));
         }
         catch (Exception ex)
         {
             SetListStatus(ex.Message);
-            LogService.Warn("云存档", $"切换提供商失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogProviderSwitchFailed", ex.Message));
             RefreshProviderStatus();
             return;
         }
@@ -590,7 +665,7 @@ public partial class CloudSaveViewModel : ObservableObject
         try
         {
             // 连点切换只弹一次，弹窗时用最后一次切换的源名，避免新旧对不上
-            await PromptRestartSteamAsync($"云端提供商已切换为{ProviderDisplayName(_pendingRestartProviderName)}");
+            await PromptRestartSteamAsync(L.Get("Cloud_ProviderSwitched", ProviderDisplayName(_pendingRestartProviderName)));
         }
         finally { _restartPromptShowing = false; }
     }
@@ -603,8 +678,8 @@ public partial class CloudSaveViewModel : ObservableObject
             await Task.Delay(100);
         if (IsBusy)
         {
-            SetListStatus("切换排队中：上一次刷新尚未结束，可稍后手动刷新");
-            LogService.Warn("云存档", "切源后等待刷新让路超时（5 秒），已放弃自动刷新");
+            SetListStatus(L.Get("Cloud_SwitchQueued"));
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogSwitchWaitTimeout"));
             return;
         }
         await RefreshAsync();
@@ -631,7 +706,7 @@ public partial class CloudSaveViewModel : ObservableObject
         try
         {
             var root = _cloudService.GetEffectiveRemoteRoot();
-            _remoteRootPart = string.IsNullOrEmpty(root) ? "" : $"远端根目录：{root}";
+            _remoteRootPart = string.IsNullOrEmpty(root) ? "" : L.Get("Cloud_RemoteRoot", root);
         }
         catch
         {
@@ -665,7 +740,7 @@ public partial class CloudSaveViewModel : ObservableObject
         catch (Exception ex)
         {
             IsProviderSignedIn = false;
-            LogService.Warn("云存档", $"读取登录态失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_SignedInReadFailed", ex.Message));
         }
     }
 
@@ -680,7 +755,7 @@ public partial class CloudSaveViewModel : ObservableObject
             {
                 case "gdrive" or "onedrive":
                     var (ok, msg) = _cloudService.CheckOAuthToken(SelectedProvider);
-                    _authStatusPart = ok ? $"已登录：{msg}" : $"未登录：{msg}";
+                    _authStatusPart = ok ? L.Get("Cloud_SignedIn", msg) : L.Get("Cloud_NotSignedIn", msg);
                     break;
                 case "r2":
                 case "s3":
@@ -695,8 +770,8 @@ public partial class CloudSaveViewModel : ObservableObject
         catch (Exception ex)
         {
             IsProviderSignedIn = false;
-            _authStatusPart = $"状态读取失败：{ex.Message}";
-            LogService.Warn("云存档", $"读取提供商状态失败: {ex.Message}");
+            _authStatusPart = L.Get("Cloud_StatusReadFailed", ex.Message);
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogProviderStatusFailed", ex.Message));
         }
         UpdateProviderStatusLine();
     }
@@ -732,7 +807,7 @@ public partial class CloudSaveViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            LogService.Warn("云存档", $"预填凭证表单失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogPrefillFailed", ex.Message));
         }
     }
 
@@ -756,15 +831,15 @@ public partial class CloudSaveViewModel : ObservableObject
             using var oauth = new CloudOAuthService();
             var tokenPath = _cloudService.GetTokenPath(SelectedProvider);
             var ok = await oauth.AuthorizeAsync(SelectedProvider, tokenPath, Log, _signInCts.Token);
-            SetListStatus(ok ? "登录成功，重启 Steam 后生效" : "登录未完成");
+            SetListStatus(ok ? L.Get("Cloud_LoginOkStatus") : L.Get("Cloud_LoginIncomplete"));
             if (ok) ScheduleAuthLogAutoClear();
             UpdateSignedInFlag();
-            LogService.Info("云存档", $"OAuth 登录{(ok ? "成功" : "未完成")}：{SelectedProvider}");
+            LogService.Info(L.Get("LogCat_Cloud"), L.Get("Cloud_OAuthResultLog", ok ? L.Get("Cloud_OAuthOk") : L.Get("Cloud_OAuthNo"), SelectedProvider));
         }
         catch (Exception ex)
         {
-            SetListStatus($"登录异常：{ex.Message}");
-            LogService.Warn("云存档", $"OAuth 登录异常: {ex.Message}");
+            SetListStatus(L.Get("Cloud_LoginError", ex.Message));
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogOAuthError", ex.Message));
         }
         finally
         {
@@ -814,7 +889,7 @@ public partial class CloudSaveViewModel : ObservableObject
         var provider = _cloudService.GetCloudProvider();
         if (provider == "folder")
         {
-            ListStatusText = "本地目录模式无需连接测试";
+            ListStatusText = L.Get("Cloud_FolderModeNoTest");
             IsListHintVisible = true;
             return;
         }
@@ -828,7 +903,7 @@ public partial class CloudSaveViewModel : ObservableObject
         };
         if (!signedIn)
         {
-            ListStatusText = $"尚未登录{ProviderDisplayName(provider)}，请先在上方登录后再测试连接";
+            ListStatusText = L.Get("Cloud_NotLoggedInTest", ProviderDisplayName(provider));
             IsListHintVisible = true;
             return;
         }
@@ -837,40 +912,40 @@ public partial class CloudSaveViewModel : ObservableObject
         try
         {
             IsBusy = true;
-            ListStatusText = "正在测试远端连接…";
+            ListStatusText = L.Get("Cloud_Testing");
             IsListHintVisible = true;
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
             var r = await _cloudService.TestCloudConnectionAsync(cts.Token);
             if (!string.IsNullOrEmpty(r.Error))
             {
-                ListStatusText = $"连接测试失败：{r.Error}";
+                ListStatusText = L.Get("Cloud_TestFailedStatus", r.Error);
                 IsListHintVisible = true;
-                LogService.Warn("云存档", $"连接测试失败：{provider} {r.Error}");
-                await _dialogService.ShowAlertAsync("连接测试失败",
-                    $"提供商：{display}\n远端根目录：{root}\n\n错误：{r.Error}");
+                LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogTestFailed", provider, r.Error));
+                await _dialogService.ShowAlertAsync(L.Get("Cloud_TestFailedTitle"),
+                    L.Get("Cloud_TestFailedBody", display, root, r.Error));
                 return;
             }
             var detail = r.AccountCount == 0
-                ? "认证通过，但该前缀下没有任何账号目录：空号或 key_prefix/目录名不对，请核对后再试。"
+                ? L.Get("Cloud_NoAccounts")
                 : r.AppCount == 0
-                    ? $"找到账号 {r.AccountCount} 个，但首个账号下没有游戏存档：DLL 尚未同步过，进游戏存一次档后再试。"
-                    : $"账号 {r.AccountCount} 个，首个账号下游戏 {r.AppCount} 个";
-            LogService.Info("云存档", $"连接测试通过：{provider} {detail}");
+                    ? L.Get("Cloud_NoAppsUnderAccount", r.AccountCount)
+                    : L.Get("Cloud_AccountsApps", r.AccountCount, r.AppCount);
+            LogService.Info(L.Get("LogCat_Cloud"), L.Get("Cloud_LogTestPassed", provider, detail));
             RestoreIdleListHint();
-            await _dialogService.ShowAlertAsync("连接测试通过",
-                $"提供商：{display}\n远端根目录：{root}\n\n{detail}");
+            await _dialogService.ShowAlertAsync(L.Get("Cloud_TestPassedTitle"),
+                L.Get("Cloud_TestPassedBody", display, root, detail));
         }
         catch (OperationCanceledException)
         {
-            ListStatusText = "连接测试超时，请检查网络后重试";
+            ListStatusText = L.Get("Cloud_TestTimeout");
             IsListHintVisible = true;
-            LogService.Warn("云存档", "连接测试超时");
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogTestTimeout"));
         }
         catch (Exception ex)
         {
             ListStatusText = ex.Message;
             IsListHintVisible = true;
-            LogService.Warn("云存档", $"连接测试异常: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogTestError", ex.Message));
         }
         finally
         {
@@ -887,11 +962,11 @@ public partial class CloudSaveViewModel : ObservableObject
         var display = ProviderDisplayName(target);
         var isOAuth = target is "gdrive" or "onedrive";
         var confirmed = await _dialogService.ShowConfirmAsync(
-            isOAuth ? "退出登录" : "清除凭证",
+            isOAuth ? L.Get("Cloud_SignOutOAuthTitle") : L.Get("Cloud_ClearCredTitle"),
             isOAuth
-                ? $"退出{display}登录后，DLL 也无法再同步到该源（需重启 Steam 生效）。本地备份不受影响。\n\n确认退出吗？"
-                : $"清除{display}凭证后，DLL 也无法再同步到该源（需重启 Steam 生效）。本地备份不受影响。\n\n确认清除吗？",
-            isOAuth ? "退出登录" : "清除凭证", "取消");
+                ? L.Get("Cloud_SignOutOAuthBody", display)
+                : L.Get("Cloud_ClearCredBody", display),
+            isOAuth ? L.Get("Cloud_SignOutOAuthTitle") : L.Get("Cloud_ClearCredTitle"), L.Get("Common_Cancel"));
         if (!confirmed) return;
         try
         {
@@ -900,13 +975,13 @@ public partial class CloudSaveViewModel : ObservableObject
             // 退出后清空界面 secret（文件已删，留着旧值误导人）；其他表单项保持原样
             if (target == "r2") R2SecretKey = "";
             if (target == "s3") S3SecretKey = "";
-            SetListStatus(isOAuth ? "已退出登录" : "凭证已清除");
-            LogService.Info("云存档", isOAuth ? "已退出登录" : "凭证已清除");
+            SetListStatus(isOAuth ? L.Get("Cloud_SignedOut") : L.Get("Cloud_CredCleared"));
+            LogService.Info(L.Get("LogCat_Cloud"), isOAuth ? L.Get("Cloud_SignedOut") : L.Get("Cloud_CredCleared"));
         }
         catch (Exception ex)
         {
             SetListStatus(ex.Message);
-            LogService.Warn("云存档", $"退出登录失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogSignOutFailed", ex.Message));
             return;
         }
         finally
@@ -924,13 +999,13 @@ public partial class CloudSaveViewModel : ObservableObject
         if (IsBusy) return;
         // 必填先验：缺谁报谁，免得裸调服务端吃英文错
         var missingR2 = new List<string>();
-        if (string.IsNullOrWhiteSpace(R2AccountId)) missingR2.Add("账户 ID");
+        if (string.IsNullOrWhiteSpace(R2AccountId)) missingR2.Add(L.Get("Cloud_AccountId"));
         if (string.IsNullOrWhiteSpace(R2AccessKeyId)) missingR2.Add("Access Key");
         if (string.IsNullOrWhiteSpace(R2SecretKey)) missingR2.Add("Secret Key");
         if (string.IsNullOrWhiteSpace(R2Bucket)) missingR2.Add("Bucket");
         if (missingR2.Count > 0)
         {
-            SetListStatus($"请填写：{string.Join("、", missingR2)}");
+            SetListStatus(L.Get("Cloud_FillMissing", string.Join("、", missingR2)));
             return;
         }
         try
@@ -939,8 +1014,8 @@ public partial class CloudSaveViewModel : ObservableObject
             var path = await Task.Run(() => _cloudService.SaveR2Credentials(new R2Credentials(
                 R2AccountId.Trim(), R2AccessKeyId.Trim(), R2SecretKey,
                 R2Bucket.Trim(), R2KeyPrefix.Trim(), R2Endpoint.Trim())));
-            SetListStatus($"R2 凭证已保存，重启 Steam 后生效");
-            LogService.Info("云存档", $"R2 凭证已保存：{path}");
+            SetListStatus(L.Get("Cloud_R2Saved"));
+            LogService.Info(L.Get("LogCat_Cloud"), L.Get("Cloud_LogR2Saved", path));
             SyncProviderSelection("r2");
             RefreshEffectiveRoot();
             UpdateSignedInFlag();
@@ -948,7 +1023,7 @@ public partial class CloudSaveViewModel : ObservableObject
         catch (Exception ex)
         {
             SetListStatus(ex.Message);
-            LogService.Warn("云存档", $"保存 R2 凭证失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogR2SaveFailed", ex.Message));
         }
         finally { IsBusy = false; }
     }
@@ -965,7 +1040,7 @@ public partial class CloudSaveViewModel : ObservableObject
         if (string.IsNullOrWhiteSpace(S3Region)) missingS3.Add("Region");
         if (missingS3.Count > 0)
         {
-            SetListStatus($"请填写：{string.Join("、", missingS3)}");
+            SetListStatus(L.Get("Cloud_FillMissing", string.Join("、", missingS3)));
             return;
         }
         try
@@ -974,14 +1049,12 @@ public partial class CloudSaveViewModel : ObservableObject
             // 明文 HTTP 或跳过 TLS 校验会让密钥在传输中可被截获，保存前必须让用户知情确认
             if (S3AllowInsecureHttp || S3AllowInsecureTls)
             {
-                var ok = await _dialogService.ShowConfirmAsync("安全警告",
-                    "你勾选了不安全的连接选项（明文 HTTP / 跳过证书校验），" +
-                    "同一网络下的攻击者可以直接截获你的访问密钥并完全控制该存储桶。\n\n" +
-                    "仅在内网自建存储等可信环境下继续，确定保存吗？",
-                    "仍要保存", "取消");
+                var ok = await _dialogService.ShowConfirmAsync(L.Get("Cloud_InsecureTitle"),
+                    L.Get("Cloud_InsecureBody"),
+                    L.Get("Cloud_KeepSaving"), L.Get("Common_Cancel"));
                 if (!ok)
                 {
-                    SetListStatus("已取消保存 S3 凭证");
+                    SetListStatus(L.Get("Cloud_S3SaveCancelled"));
                     return;
                 }
             }
@@ -989,8 +1062,8 @@ public partial class CloudSaveViewModel : ObservableObject
                 S3AccessKeyId.Trim(), S3SecretKey, S3Bucket.Trim(),
                 S3Endpoint.Trim(), S3Region.Trim(), S3KeyPrefix.Trim(),
                 S3SignPayload, S3AllowInsecureHttp, S3AllowInsecureTls, S3CaCertPath.Trim())));
-            SetListStatus($"S3 凭证已保存，重启 Steam 后生效");
-            LogService.Info("云存档", $"S3 凭证已保存：{path}");
+            SetListStatus(L.Get("Cloud_S3Saved"));
+            LogService.Info(L.Get("LogCat_Cloud"), L.Get("Cloud_LogS3Saved", path));
             SyncProviderSelection("s3");
             RefreshEffectiveRoot();
             UpdateSignedInFlag();
@@ -998,7 +1071,7 @@ public partial class CloudSaveViewModel : ObservableObject
         catch (Exception ex)
         {
             SetListStatus(ex.Message);
-            LogService.Warn("云存档", $"保存 S3 凭证失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogS3SaveFailed", ex.Message));
         }
         finally { IsBusy = false; }
     }
@@ -1010,8 +1083,8 @@ public partial class CloudSaveViewModel : ObservableObject
         {
             var dialog = new Microsoft.Win32.OpenFileDialog
             {
-                Title = "选择 CA 证书",
-                Filter = "PEM 文件|*.pem|证书文件|*.crt;*.cer|所有文件|*.*",
+                Title = L.Get("Cloud_CaTitle"),
+                Filter = L.Get("Cloud_CaFilter"),
                 CheckFileExists = true,
             };
             if (!string.IsNullOrEmpty(S3CaCertPath) && System.IO.File.Exists(S3CaCertPath))
@@ -1021,8 +1094,8 @@ public partial class CloudSaveViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            SetListStatus("打开文件选择失败，请重试");
-            LogService.Warn("云存档", $"选择 CA 证书失败: {ex.Message}");
+            SetListStatus(L.Get("Cloud_CaBrowseFailed"));
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogCaFailed", ex.Message));
         }
     }
 
@@ -1042,7 +1115,7 @@ public partial class CloudSaveViewModel : ObservableObject
         try
         {
             IsBusy = true;
-            var current = SyncPathText == "未配置" ? null : SyncPathText;
+            var current = string.IsNullOrEmpty(_syncPathText) ? null : _syncPathText;
             if (!string.IsNullOrEmpty(current) && string.Equals(
                     current.TrimEnd(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar),
                     dir.TrimEnd(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar),
@@ -1057,17 +1130,17 @@ public partial class CloudSaveViewModel : ObservableObject
                 var m = await _cloudService.MigrateSavesAsync(current, dir, migrateProgress);
                 if (m.FailedFiles.Count > 0)
                 {
-                    LogService.Warn("云存档", $"迁移失败文件: {string.Join(", ", m.FailedFiles)}");
-                    migrateFailure = $"已迁移 {m.MovedFiles} 个文件，{m.FailedFiles.Count} 个失败（可能被 Steam 占用），重启 Steam 后可手动复制剩余文件";
+                    LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogMigrateFailed", string.Join(", ", m.FailedFiles)));
+                    migrateFailure = L.Get("Cloud_MigratePartial", m.MovedFiles, m.FailedFiles.Count);
                     SetListStatus(migrateFailure);
                 }
                 else if (m.MovedFiles > 0)
                 {
-                    SetListStatus($"已迁移 {m.MovedFiles} 个文件");
+                    SetListStatus(L.Get("Cloud_Migrated", m.MovedFiles));
                 }
             }
             await _cloudService.SetSyncPathAsync(dir);
-            await PromptRestartSteamAsync("重定向目录已更新");
+            await PromptRestartSteamAsync(L.Get("Cloud_SyncDirUpdated"));
             await RefreshCoreAsync();
             // 刷新会清空状态行，失败摘要需要保留
             if (migrateFailure != null)
@@ -1076,7 +1149,7 @@ public partial class CloudSaveViewModel : ObservableObject
         catch (Exception ex)
         {
             SetListStatus(ex.Message);
-            LogService.Warn("云存档", $"切换目录失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogChdirFailed", ex.Message));
         }
         finally
         {

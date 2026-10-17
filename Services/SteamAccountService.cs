@@ -76,15 +76,15 @@ public class SteamAccountService : ISteamAccountService
             username = settings.SavedAccountName;
             var encrypted = settings.EncryptedRefreshToken;
             if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(encrypted))
-                return new SteamLoginResult(false, "无缓存登录凭证");
+                return new SteamLoginResult(false, L.Get("Svc_NoCachedCred"));
             var decrypted = SecureTokenStorage.Unprotect(encrypted, TokenEntropyPrefix + username);
             if (string.IsNullOrEmpty(decrypted))
-                return new SteamLoginResult(false, "缓存凭证已损坏，请重新登录");
+                return new SteamLoginResult(false, L.Get("Svc_CachedCredBroken"));
             refreshToken = decrypted;
         }
         catch (Exception ex)
         {
-            return new SteamLoginResult(false, $"读取缓存凭证失败：{ex.Message}");
+            return new SteamLoginResult(false, L.Get("Svc_ReadCachedCredFailed", ex.Message));
         }
         return await LoginWithRefreshTokenAsync(username, refreshToken, ct).ConfigureAwait(false);
     }
@@ -126,7 +126,7 @@ public class SteamAccountService : ISteamAccountService
     private void RaiseSessionChanged()
     {
         try { SessionChanged?.Invoke(); }
-        catch (Exception ex) { LogService.Warn("账号", $"会话状态通知异常: {ex.Message}"); }
+        catch (Exception ex) { LogService.Warn(L.Get("LogCat_Account"), L.Get("Svc_SessionNotifyFailed", ex.Message)); }
     }
 
     public IReadOnlyList<LocalSteamAccount> ListLocalUsers()
@@ -152,7 +152,7 @@ public class SteamAccountService : ISteamAccountService
                 list.Add(new LocalSteamAccount(steamId, account, pn as string ?? account, timestamp));
             }
         }
-        catch (Exception ex) { LogService.Warn("账号", $"读取本机账号列表失败: {ex.Message}"); }
+        catch (Exception ex) { LogService.Warn(L.Get("LogCat_Account"), L.Get("Svc_ReadLocalUsersFailed", ex.Message)); }
         return list.OrderByDescending(u => u.Timestamp).ToList();
     }
 
@@ -172,10 +172,10 @@ public class SteamAccountService : ISteamAccountService
     {
         var token = ExtractLocalToken(accountName);
         if (string.IsNullOrEmpty(token))
-            return new SteamLoginResult(false, $"本机无账号 {accountName} 的记住凭证（请在 Steam 客户端登录一次并勾选记住我）");
+            return new SteamLoginResult(false, L.Get("Svc_NoLocalCred", accountName));
         var result = await LoginWithRefreshTokenAsync(accountName, token, ct);
         if (result.Success)
-            LogService.Info("账号", $"本机凭证登录成功：{accountName}");
+            LogService.Info(L.Get("LogCat_Account"), L.Get("Svc_LocalLoginOk", accountName));
         return result;
     }
 
@@ -185,16 +185,16 @@ public class SteamAccountService : ISteamAccountService
         try
         {
             if (IsLoggedOn && string.Equals(CurrentAccountName, username, StringComparison.OrdinalIgnoreCase))
-                return new SteamLoginResult(true, "已登录");
+                return new SteamLoginResult(true, L.Get("Svc_AlreadyLoggedIn"));
 
             var (ok, refused) = await AttemptLogonAsync(username, refreshToken, ct).ConfigureAwait(false);
             if (!ok && refused == null)
             {
                 // 超时/断开而非明确拒绝：冷连接偶发无响应，重建连接重试一次
-                LogService.Info("账号", "首次登录无响应，重建连接后重试...");
+                LogService.Info(L.Get("LogCat_Account"), L.Get("Svc_ReloginNoResponse"));
                 Reconnect();
                 try { await Task.Delay(1500, ct).ConfigureAwait(false); }
-                catch (OperationCanceledException) { return new SteamLoginResult(false, "登录已取消"); }
+                catch (OperationCanceledException) { return new SteamLoginResult(false, L.Get("Svc_LoginCancelled")); }
                 (ok, refused) = await AttemptLogonAsync(username, refreshToken, ct).ConfigureAwait(false);
             }
             if (!ok)
@@ -205,13 +205,13 @@ public class SteamAccountService : ISteamAccountService
             }
             await TryRenewTokenAsync(username, refreshToken).ConfigureAwait(false);
             SaveToken(username, refreshToken, guardData: null);
-            return new SteamLoginResult(true, $"登录成功：{username}");
+            return new SteamLoginResult(true, L.Get("Svc_LoginOk", username));
         }
-        catch (OperationCanceledException) { return new SteamLoginResult(false, "登录已取消"); }
+        catch (OperationCanceledException) { return new SteamLoginResult(false, L.Get("Svc_LoginCancelled")); }
         catch (Exception ex)
         {
-            LogService.Warn("账号", $"token 登录异常: {ex.Message}");
-            return new SteamLoginResult(false, $"登录异常：{ex.Message}");
+            LogService.Warn(L.Get("LogCat_Account"), L.Get("Svc_TokenLoginError", ex.Message));
+            return new SteamLoginResult(false, L.Get("Svc_LoginError", ex.Message));
         }
         finally { _gate.Release(); }
     }
@@ -238,9 +238,9 @@ public class SteamAccountService : ISteamAccountService
     private static string DescribeRefusal(EResult? refused) => refused switch
     {
         EResult.InvalidPassword or EResult.Expired or EResult.Revoked or EResult.AccountNotFound
-            => "token 无效或已过期，请在 Steam 客户端重新登录一次后重试",
-        EResult e => $"登录被拒绝：{e}",
-        null => "登录超时或连接不稳定，请重试",
+            => L.Get("Svc_TokenInvalid"),
+        EResult e => L.Get("Svc_LoginRefused", e),
+        null => L.Get("Svc_LoginTimeout"),
     };
 
     private void Reconnect()
@@ -255,7 +255,7 @@ public class SteamAccountService : ISteamAccountService
         try
         {
             if (!await EnsureConnectedAsync(ct).ConfigureAwait(false))
-                return new SteamLoginResult(false, "连接 Steam 服务器失败");
+                return new SteamLoginResult(false, L.Get("Svc_ConnectFailed"));
 
             string? guardData = LoadGuardData(username);
             AuthSession session;
@@ -272,7 +272,7 @@ public class SteamAccountService : ISteamAccountService
             }
             catch (Exception ex)
             {
-                return new SteamLoginResult(false, $"认证发起失败：{ex.Message}");
+                return new SteamLoginResult(false, L.Get("Svc_AuthStartFailed", ex.Message));
             }
 
             AuthPollResult poll;
@@ -280,19 +280,19 @@ public class SteamAccountService : ISteamAccountService
             {
                 poll = await session.PollingWaitForResultAsync(ct).ConfigureAwait(false);
             }
-            catch (OperationCanceledException) { return new SteamLoginResult(false, "登录已取消"); }
+            catch (OperationCanceledException) { return new SteamLoginResult(false, L.Get("Svc_LoginCancelled")); }
             catch (Exception ex)
             {
-                return new SteamLoginResult(false, $"认证失败：{ex.Message}");
+                return new SteamLoginResult(false, L.Get("Svc_AuthFailed", ex.Message));
             }
 
             var (ok, refused) = await AttemptLogonAsync(poll.AccountName, poll.RefreshToken, ct).ConfigureAwait(false);
             if (!ok && refused == null)
             {
-                LogService.Info("账号", "登录无响应，重建连接后重试...");
+                LogService.Info(L.Get("LogCat_Account"), L.Get("Svc_ReloginRetry"));
                 Reconnect();
                 try { await Task.Delay(1500, ct).ConfigureAwait(false); }
-                catch (OperationCanceledException) { return new SteamLoginResult(false, "登录已取消"); }
+                catch (OperationCanceledException) { return new SteamLoginResult(false, L.Get("Svc_LoginCancelled")); }
                 (ok, refused) = await AttemptLogonAsync(poll.AccountName, poll.RefreshToken, ct).ConfigureAwait(false);
             }
             if (!ok)
@@ -302,14 +302,14 @@ public class SteamAccountService : ISteamAccountService
                 return new SteamLoginResult(false, DescribeRefusal(refused));
             }
             SaveToken(poll.AccountName, poll.RefreshToken, poll.NewGuardData);
-            LogService.Info("账号", $"账号密码登录成功：{poll.AccountName}");
-            return new SteamLoginResult(true, $"登录成功：{poll.AccountName}");
+            LogService.Info(L.Get("LogCat_Account"), L.Get("Svc_PasswordLoginOk", poll.AccountName));
+            return new SteamLoginResult(true, L.Get("Svc_LoginOk", poll.AccountName));
         }
-        catch (OperationCanceledException) { return new SteamLoginResult(false, "登录已取消"); }
+        catch (OperationCanceledException) { return new SteamLoginResult(false, L.Get("Svc_LoginCancelled")); }
         catch (Exception ex)
         {
-            LogService.Warn("账号", $"密码登录异常: {ex.Message}");
-            return new SteamLoginResult(false, $"登录异常：{ex.Message}");
+            LogService.Warn(L.Get("LogCat_Account"), L.Get("Svc_PasswordLoginError", ex.Message));
+            return new SteamLoginResult(false, L.Get("Svc_LoginError", ex.Message));
         }
         finally { _gate.Release(); }
     }
@@ -317,7 +317,7 @@ public class SteamAccountService : ISteamAccountService
     public async Task<Dictionary<uint, byte[]>> GetDepotKeysAsync(IEnumerable<(uint DepotId, uint AppId)> targets, CancellationToken ct = default)
     {
         var result = new Dictionary<uint, byte[]>();
-        if (!IsLoggedOn) throw new InvalidOperationException("账号未登录，无法获取 depot 密钥");
+        if (!IsLoggedOn) throw new InvalidOperationException(L.Get("Svc_NotLoggedOnKeys"));
         // 单连接多 AsyncJob 并行下发，限流 6（串行 60+ 个 depot 太慢，见 Titanfall 2 这类 DLC 大户）
         var list = targets.Distinct().ToList();
         using var throttle = new SemaphoreSlim(6);
@@ -328,7 +328,7 @@ public class SteamAccountService : ISteamAccountService
             if (key != null)
                 result[id] = key;
             else
-                LogService.Info("账号", $"depot {id} 密钥获取失败 ({error})，可能无该内容权限");
+                LogService.Info(L.Get("LogCat_Account"), L.Get("Svc_DepotKeyFailed", id, error));
         }
         return result;
     }
@@ -347,7 +347,7 @@ public class SteamAccountService : ISteamAccountService
         }
         catch (Exception ex)
         {
-            LogService.Warn("账号", $"depot {depotId} 密钥请求异常: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Account"), L.Get("Svc_DepotKeyError", depotId, ex.Message));
             return (depotId, null, ex.Message);
         }
         finally { gate.Release(); }
@@ -355,15 +355,15 @@ public class SteamAccountService : ISteamAccountService
 
     public async Task<ManifestDownloadResult> DownloadManifestAsync(uint appId, uint depotId, ulong manifestGid, byte[]? depotKey, string destDir, CancellationToken ct = default)
     {
-        if (!IsLoggedOn) return new ManifestDownloadResult(false, null, "账号未登录");
-        if (manifestGid == 0) return new ManifestDownloadResult(false, null, "无 public manifest 版本号");
+        if (!IsLoggedOn) return new ManifestDownloadResult(false, null, L.Get("Svc_NotLoggedOnManifest"));
+        if (manifestGid == 0) return new ManifestDownloadResult(false, null, L.Get("Svc_NoPublicManifest"));
         try
         {
             var server = await PickCdnServerAsync().ConfigureAwait(false);
-            if (server == null) return new ManifestDownloadResult(false, null, "无可用 CDN 服务器");
+            if (server == null) return new ManifestDownloadResult(false, null, L.Get("Svc_NoCdnServer"));
 
             var code = await _content.GetManifestRequestCode(depotId, appId, manifestGid, "public", null).ConfigureAwait(false);
-            if (code == 0) return new ManifestDownloadResult(false, null, "无权访问该 manifest（账号无对应内容权限）");
+            if (code == 0) return new ManifestDownloadResult(false, null, L.Get("Svc_NoManifestAccess"));
 
             using var cdn = new CdnClient(_client);
             var key = depotKey ?? new byte[32];
@@ -377,7 +377,7 @@ public class SteamAccountService : ISteamAccountService
                 // 403 时申请 CDN 授权 token 重试一次，demo 里验证过这招对公开 depot 有效
                 string? cdnToken = null;
                 try { cdnToken = (await _content.GetCDNAuthToken(appId, depotId, server.Host ?? "")).Token; }
-                catch (Exception ex2) { LogService.Warn("账号", $"depot {depotId} 申请 CDN 授权失败: {ex2.Message}"); }
+                catch (Exception ex2) { LogService.Warn(L.Get("LogCat_Account"), L.Get("Svc_CdnAuthFailed", depotId, ex2.Message)); }
                 manifest = await cdn.DownloadManifestAsync(depotId, manifestGid, code, server, key, null, cdnToken).ConfigureAwait(false);
             }
             if (depotKey != null) manifest.DecryptFilenames(depotKey);
@@ -385,12 +385,12 @@ public class SteamAccountService : ISteamAccountService
             if (!Directory.Exists(destDir)) Directory.CreateDirectory(destDir);
             var savePath = Path.Combine(destDir, $"{depotId}_{manifestGid}.manifest");
             manifest.SaveToFile(savePath);
-            return new ManifestDownloadResult(true, savePath, $"已保存（{manifest.Files?.Count ?? 0} 个文件索引，未下载游戏数据）");
+            return new ManifestDownloadResult(true, savePath, L.Get("Svc_ManifestSaved", manifest.Files?.Count ?? 0));
         }
         catch (Exception ex)
         {
-            LogService.Warn("账号", $"depot {depotId} manifest 下载失败: {ex.Message}");
-            return new ManifestDownloadResult(false, null, $"下载失败：{ex.Message}");
+            LogService.Warn(L.Get("LogCat_Account"), L.Get("Svc_ManifestDownloadFailed", depotId, ex.Message));
+            return new ManifestDownloadResult(false, null, L.Get("Svc_DownloadFailed", ex.Message));
         }
     }
 
@@ -411,7 +411,7 @@ public class SteamAccountService : ISteamAccountService
             settings.EncryptedGuardData = string.Empty;
             _settingsService.Save(settings);
         }
-        catch (Exception ex) { LogService.Warn("账号", $"清除缓存凭证失败: {ex.Message}"); }
+        catch (Exception ex) { LogService.Warn(L.Get("LogCat_Account"), L.Get("Svc_ClearCredFailed", ex.Message)); }
         RaiseSessionChanged();
     }
 
@@ -471,7 +471,7 @@ public class SteamAccountService : ISteamAccountService
             catch (OperationCanceledException) { break; }
             catch (Exception ex)
             {
-                LogService.Warn("账号", $"Steam 回调循环异常: {ex.Message}");
+                LogService.Warn(L.Get("LogCat_Account"), L.Get("Svc_CallbackLoopError", ex.Message));
                 try { Task.Delay(500, ct).Wait(ct); } catch { break; }
             }
         }
@@ -486,7 +486,7 @@ public class SteamAccountService : ISteamAccountService
         }
         catch (Exception ex)
         {
-            LogService.Warn("账号", $"获取 CDN 服务器失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Account"), L.Get("Svc_CdnServersFailed", ex.Message));
             return null;
         }
     }
@@ -509,11 +509,11 @@ public class SteamAccountService : ISteamAccountService
             if (!string.IsNullOrEmpty(renewed.RefreshToken))
             {
                 SaveToken(username, renewed.RefreshToken, guardData: null);
-                LogService.Info("账号", "refresh token 已续期");
+                LogService.Info(L.Get("LogCat_Account"), L.Get("Svc_TokenRenewed"));
             }
         }
-        catch (OperationCanceledException) { LogService.Warn("账号", "token 续期超时（15 秒），不影响本次使用"); }
-        catch (Exception ex) { LogService.Warn("账号", $"token 续期失败（不影响本次使用）: {ex.Message}"); }
+        catch (OperationCanceledException) { LogService.Warn(L.Get("LogCat_Account"), L.Get("Svc_TokenRenewTimeout")); }
+        catch (Exception ex) { LogService.Warn(L.Get("LogCat_Account"), L.Get("Svc_TokenRenewFailed", ex.Message)); }
     }
 
     private void SaveToken(string username, string refreshToken, string? guardData)
@@ -527,7 +527,7 @@ public class SteamAccountService : ISteamAccountService
                 settings.EncryptedGuardData = SecureTokenStorage.Protect(guardData, TokenEntropyPrefix + username) ?? "";
             _settingsService.Save(settings);
         }
-        catch (Exception ex) { LogService.Warn("账号", $"保存登录凭证失败: {ex.Message}"); }
+        catch (Exception ex) { LogService.Warn(L.Get("LogCat_Account"), L.Get("Svc_SaveCredFailed", ex.Message)); }
     }
 
     private string? LoadGuardData(string username)
@@ -570,7 +570,7 @@ public class SteamAccountService : ISteamAccountService
                 if (token.StartsWith("eyA", StringComparison.Ordinal)) return token;
             }
         }
-        catch (Exception ex) { LogService.Warn("账号", $"解密本机凭证失败: {ex.Message}"); }
+        catch (Exception ex) { LogService.Warn(L.Get("LogCat_Account"), L.Get("Svc_DecryptLocalFailed", ex.Message)); }
         return null;
     }
 

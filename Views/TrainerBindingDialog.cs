@@ -39,7 +39,7 @@ public class TrainerBindingDialog : Window
         _trainers = trainers;
         EditingBinding = existing;
 
-        Title = existing != null ? "编辑游戏绑定" : "添加游戏绑定";
+        Title = existing != null ? L.Get("Trainer_BindEditTitle") : L.Get("Trainer_BindAddTitle");
         Width = 860;
         Height = 740;
         MinWidth = 640;
@@ -160,7 +160,7 @@ public class TrainerBindingDialog : Window
         // Title
         var titleBlock = new TextBlock
         {
-            Text = EditingBinding != null ? "编辑游戏绑定" : "添加游戏绑定",
+            Text = EditingBinding != null ? L.Get("Trainer_BindEditTitle") : L.Get("Trainer_BindAddTitle"),
             FontSize = 20,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 20)
@@ -174,7 +174,7 @@ public class TrainerBindingDialog : Window
         var formPanel = new StackPanel { Margin = new Thickness(0, 0, 6, 0) };
 
         // --- Trainer selector ---
-        formPanel.Children.Add(MakeLabel("修改器"));
+        formPanel.Children.Add(MakeLabel(L.Get("Trainer_Title")));
         _trainerCombo = new ComboBox
         {
             Margin = new Thickness(0, 0, 0, 14),
@@ -190,7 +190,7 @@ public class TrainerBindingDialog : Window
         formPanel.Children.Add(_trainerCombo);
 
         // --- Game exe path ---
-        formPanel.Children.Add(MakeLabel("游戏可执行文件路径"));
+        formPanel.Children.Add(MakeLabel(L.Get("Trainer_BindLabelExe")));
 
         var exeRow = new Grid { Margin = new Thickness(0, 0, 0, 14) };
         exeRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -211,7 +211,7 @@ public class TrainerBindingDialog : Window
 
         var browseBtn = new Button
         {
-            Content = "浏览...",
+            Content = L.Get("Common_Browse"),
             Height = 34,
             Padding = new Thickness(12, 0, 12, 0),
             FontSize = 13,
@@ -224,7 +224,7 @@ public class TrainerBindingDialog : Window
         formPanel.Children.Add(exeRow);
 
         // --- Game name ---
-        formPanel.Children.Add(MakeLabel("游戏名称"));
+        formPanel.Children.Add(MakeLabel(L.Get("Trainer_BindLabelName")));
         _gameNameBox = new TextBox
         {
             Height = 34,
@@ -247,10 +247,10 @@ public class TrainerBindingDialog : Window
 
         // --- Cheat options panel ---
         _cheatOptionsPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
-        _cheatOptionsPanel.Children.Add(MakeLabel("修改器功能选项 (勾选后启动修改器时自动激活对应功能)"));
+        _cheatOptionsPanel.Children.Add(MakeLabel(L.Get("Trainer_BindCheatLabel")));
         var hintText = new TextBlock
         {
-            Text = "该功能需要安装后台服务才能实现",
+            Text = L.Get("Trainer_BindCheatHint"),
             FontSize = 11,
             Margin = new Thickness(4, 0, 0, 6)
         };
@@ -303,7 +303,7 @@ public class TrainerBindingDialog : Window
 
         var cancelBtn = new Button
         {
-            Content = "取消",
+            Content = L.Get("Common_Cancel"),
             Height = 34,
             Padding = new Thickness(16, 0, 16, 0),
             FontSize = 13,
@@ -316,7 +316,7 @@ public class TrainerBindingDialog : Window
 
         var okBtn = new Button
         {
-            Content = "确定",
+            Content = L.Get("Common_Confirm"),
             Height = 34,
             Padding = new Thickness(16, 0, 16, 0),
             FontSize = 13,
@@ -349,8 +349,8 @@ public class TrainerBindingDialog : Window
     {
         var dialog = new OpenFileDialog
         {
-            Filter = "可执行文件 (*.exe)|*.exe|所有文件 (*.*)|*.*",
-            Title = "选择游戏可执行文件"
+            Filter = L.Get("Trainer_BindExeFilter"),
+            Title = L.Get("Trainer_BindPickExe")
         };
         if (dialog.ShowDialog() == true)
         {
@@ -384,17 +384,17 @@ public class TrainerBindingDialog : Window
     {
         if (_trainerCombo.SelectedItem is not DownloadedTrainerItem trainerItem)
         {
-            ShowError("请选择一个修改器");
+            ShowError(L.Get("Trainer_BindErrNoTrainer"));
             return;
         }
         if (string.IsNullOrWhiteSpace(_gameExePathBox.Text))
         {
-            ShowError("请选择游戏可执行文件路径");
+            ShowError(L.Get("Trainer_BindErrNoExe"));
             return;
         }
         if (!File.Exists(_gameExePathBox.Text))
         {
-            ShowError("游戏可执行文件不存在");
+            ShowError(L.Get("Trainer_BindErrExeMissing"));
             return;
         }
 
@@ -422,21 +422,21 @@ public class TrainerBindingDialog : Window
         {
             var dialog = new ContentDialog
             {
-                Title = "输入有误",
+                Title = L.Get("Trainer_BindErrTitle"),
                 Content = new TextBlock
                 {
                     Text = message,
                     TextWrapping = TextWrapping.Wrap,
                     MaxWidth = 360
                 },
-                CloseButtonText = "确定",
+                CloseButtonText = L.Get("Common_Confirm"),
                 DefaultButton = ContentDialogButton.Close
             };
             await dialog.ShowAsync();
         }
         catch (Exception ex)
         {
-            LogService.Warn("修改器", $"错误提示框显示失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Trainer"), L.Get("Trainer_LogErrorDlgFailed", ex.Message));
         }
     }
 }

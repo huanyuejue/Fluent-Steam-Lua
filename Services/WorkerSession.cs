@@ -79,7 +79,7 @@ public sealed class WorkerSession : IDisposable
         }
         catch (Exception ex)
         {
-            LogService.Error("Worker", $"启动 worker 进程失败 (appId {appId}): {ex.Message}");
+            LogService.Error(L.Get("LogCat_Worker"), L.Get("Svc_WsStartFailed", appId, ex.Message));
             try { process?.Kill(); } catch { }
             try { process?.Dispose(); } catch { }
             return null;
@@ -92,7 +92,7 @@ public sealed class WorkerSession : IDisposable
         if (response is { Ok: true, Load: not null }) return response.Load;
         if (response != null)
         {
-            LastError = string.IsNullOrEmpty(response.Error) ? "worker 返回失败" : response.Error;
+            LastError = string.IsNullOrEmpty(response.Error) ? L.Get("Svc_WsReturnFailed") : response.Error;
         }
         return null;
     }
@@ -102,7 +102,7 @@ public sealed class WorkerSession : IDisposable
         var response = await SendAsync(new WorkerServeRequest { Cmd = "save", Payload = request });
         if (response == null)
         {
-            LastError = "会话无响应";
+            LastError = L.Get("Svc_WsNoResponse");
             return null;
         }
         if (response.Ok == false && string.IsNullOrEmpty(response.Error) == false)
@@ -119,7 +119,7 @@ public sealed class WorkerSession : IDisposable
         {
             if (_disposed || _process.HasExited)
             {
-                LastError = "worker 进程已退出";
+                LastError = L.Get("Svc_WsExited");
                 return null;
             }
 
@@ -135,7 +135,7 @@ public sealed class WorkerSession : IDisposable
                     .WaitAsync(TimeSpan.FromSeconds(60));
                 if (line == null)
                 {
-                    LastError = "worker 无响应（stdin 已关闭）";
+                    LastError = L.Get("Svc_WsStdinClosed");
                     return null;
                 }
             } while (!TryParseServeResponse(line, out response));
@@ -144,7 +144,7 @@ public sealed class WorkerSession : IDisposable
         }
         catch (TimeoutException)
         {
-            LastError = "worker 响应超时";
+            LastError = L.Get("Svc_WsTimeout");
             return null;
         }
         catch (Exception ex)

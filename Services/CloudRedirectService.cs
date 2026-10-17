@@ -24,7 +24,8 @@ public sealed record DeleteTarget(
 
 public sealed record DeletePreview(int AppId, List<DeleteTarget> Targets, string BackupDir);
 
-public sealed record CloudProviderOption(string Id, string DisplayName);
+    // DisplayKey 非空表示显示名需要跟语言走，由消费侧按当前语言实时取值
+    public sealed record CloudProviderOption(string Id, string DisplayName, string? DisplayKey = null);
 
 public sealed record R2Credentials(
     string AccountId, string AccessKeyId, string SecretAccessKey,
@@ -121,7 +122,7 @@ public class CloudRedirectService : ICloudRedirectService
         }
         catch (Exception ex)
         {
-            LogService.Warn("云存档", $"读取重定向目录失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogReadDirFailed", ex.Message));
             return string.Empty;
         }
     }
@@ -138,7 +139,7 @@ public class CloudRedirectService : ICloudRedirectService
         ct.ThrowIfCancellationRequested();
         var steamPath = ResolveSteamPath();
         if (string.IsNullOrEmpty(steamPath))
-            throw new InvalidOperationException("未检测到 Steam 路径，无法启用云存档");
+            throw new InvalidOperationException(L.Get("Cloud_EnableNoPath"));
         // 未显式传路径时优先沿用 config.json 里已有的，不存在才回默认；
         // 否则每次开关都会把用户自定义目录洗成默认目录
         if (string.IsNullOrWhiteSpace(syncPath))
@@ -146,28 +147,28 @@ public class CloudRedirectService : ICloudRedirectService
         if (string.IsNullOrWhiteSpace(syncPath))
             syncPath = DefaultSyncPath(steamPath);
 
-        status?.Report("正在准备本地目录...");
+        status?.Report(L.Get("Cloud_PreparingDir"));
         try
         {
             Directory.CreateDirectory(syncPath);
         }
         catch (Exception ex)
         {
-            throw new InvalidOperationException($"本地目录不可用：{ex.Message}", ex);
+            throw new InvalidOperationException(L.Get("Cloud_DirUnavailable", ex.Message), ex);
         }
 
-        status?.Report("正在部署云存档 DLL...");
+        status?.Report(L.Get("Cloud_DeployingDll"));
         EnsureDllDeployed(steamPath);
 
-        status?.Report("正在写入内核开关...");
+        status?.Report(L.Get("Cloud_WritingKernelSwitch"));
         if (!_steamPathService.SetCloudEnabled(true))
-            throw new InvalidOperationException("写入 opensteamtool.toml 失败，请检查文件权限");
+            throw new InvalidOperationException(L.Get("Settings_TomlWriteFailed"));
 
-        status?.Report("正在写入重定向配置...");
+        status?.Report(L.Get("Cloud_WritingRedirectCfg"));
         WriteRedirectConfig(syncPath);
         SyncPinConfigCloudEnabled(steamPath, true);
 
-        LogService.Info("云存档", $"云存档已启用（{syncPath}）");
+        LogService.Info(L.Get("LogCat_Cloud"), L.Get("Cloud_LogEnabledWithPath", syncPath));
         return Task.CompletedTask;
     }
 
@@ -175,12 +176,12 @@ public class CloudRedirectService : ICloudRedirectService
     {
         var steamPath = ResolveSteamPath();
         if (string.IsNullOrEmpty(steamPath))
-            throw new InvalidOperationException("未检测到 Steam 路径");
+            throw new InvalidOperationException(L.Get("Cloud_NoSteamPath"));
         // DLL 与配置文件保留，仅关闭开关，下次启用无需重新部署
         if (!_steamPathService.SetCloudEnabled(false))
-            throw new InvalidOperationException("写入 opensteamtool.toml 失败，请检查文件权限");
+            throw new InvalidOperationException(L.Get("Settings_TomlWriteFailed"));
         SyncPinConfigCloudEnabled(steamPath, false);
-        LogService.Info("云存档", "云存档已关闭");
+        LogService.Info(L.Get("LogCat_Cloud"), L.Get("Cloud_LogCloudDisabled"));
         return Task.CompletedTask;
     }
 
@@ -200,18 +201,18 @@ public class CloudRedirectService : ICloudRedirectService
             }
             catch
             {
-                LogService.Warn("云存档", "DLL 开关配置解析失败，原样保留未同步");
+                LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogPinParseFailed"));
                 return;
             }
             if (root["cloud_redirect"]?.GetValue<bool>() == enabled) return;
             root["cloud_redirect"] = enabled;
             CloudCredentialStore.AtomicWriteAllText(pinPath,
                 root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
-            LogService.Info("云存档", $"DLL 云开关已同步为{(enabled ? "开" : "关")}");
+            LogService.Info(L.Get("LogCat_Cloud"), L.Get("Cloud_PinSynced", enabled ? L.Get("Cloud_PinOn") : L.Get("Cloud_PinOff")));
         }
         catch (Exception ex)
         {
-            LogService.Warn("云存档", $"同步 DLL 云开关失败（不影响主流程）: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogPinSyncFailed", ex.Message));
         }
     }
 
@@ -230,7 +231,7 @@ public class CloudRedirectService : ICloudRedirectService
         }
         catch (Exception ex)
         {
-            throw new InvalidOperationException($"读取旧目录失败：{ex.Message}", ex);
+            throw new InvalidOperationException(L.Get("Cloud_ReadOldDirFailed", ex.Message), ex);
         }
         if (allFiles.Count == 0)
             return new MigrateResult(0, 0, failed);
@@ -240,7 +241,7 @@ public class CloudRedirectService : ICloudRedirectService
         var newRoot = Path.GetFullPath(newPath).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
         if (newRoot.StartsWith(oldRoot, StringComparison.OrdinalIgnoreCase)
             || oldRoot.StartsWith(newRoot, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("新旧目录存在嵌套关系，无法迁移");
+            throw new InvalidOperationException(L.Get("Cloud_NestedDirs"));
 
         Directory.CreateDirectory(newPath);
         var done = 0;
@@ -263,7 +264,7 @@ public class CloudRedirectService : ICloudRedirectService
             }
             done++;
             if (done % 25 == 0 || done == allFiles.Count)
-                status?.Report($"正在迁移旧存档... ({done}/{allFiles.Count})");
+                status?.Report(L.Get("Cloud_Migrating", done, allFiles.Count));
         }
 
         if (failed.Count == 0)
@@ -272,7 +273,7 @@ public class CloudRedirectService : ICloudRedirectService
             catch (Exception ex)
             {
                 // 删源失败不算迁移失败：文件已就位，残留由用户手动清理
-                LogService.Warn("云存档", $"旧目录清理失败，已保留：{ex.Message}");
+                LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogCleanOldFailed", ex.Message));
             }
         }
         return new MigrateResult(movedFiles, movedBytes, failed);
@@ -287,17 +288,17 @@ public class CloudRedirectService : ICloudRedirectService
     public Task SetSyncPathAsync(string path)
     {
         if (string.IsNullOrWhiteSpace(path))
-            throw new InvalidOperationException("请选择本地重定向目录");
+            throw new InvalidOperationException(L.Get("Cloud_PickLocalDir"));
         try
         {
             Directory.CreateDirectory(path);
         }
         catch (Exception ex)
         {
-            throw new InvalidOperationException($"本地目录不可用：{ex.Message}", ex);
+            throw new InvalidOperationException(L.Get("Cloud_DirUnavailable", ex.Message), ex);
         }
         WriteRedirectConfig(path);
-        LogService.Info("云存档", $"本地重定向目录已切换为 {path}");
+        LogService.Info(L.Get("LogCat_Cloud"), L.Get("Cloud_LogSyncDirSwitched", path));
         return Task.CompletedTask;
     }
 
@@ -313,7 +314,7 @@ public class CloudRedirectService : ICloudRedirectService
                 using var stream = assembly.GetManifestResourceStream(EmbeddedResourceName);
                 if (stream == null)
                 {
-                    LogService.Warn("云存档", "内嵌云存档 DLL 缺失");
+                    LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_EmbeddedDllMissing"));
                     return null;
                 }
                 using var zip = new ZipArchive(stream);
@@ -321,7 +322,7 @@ public class CloudRedirectService : ICloudRedirectService
                     string.Equals(Path.GetFileName(e.FullName), DllFileName, StringComparison.OrdinalIgnoreCase));
                 if (entry == null)
                 {
-                    LogService.Warn("云存档", "内嵌包中未找到云存档 DLL");
+                    LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_EmbeddedEntryMissing"));
                     return null;
                 }
                 using var entryStream = entry.Open();
@@ -332,7 +333,7 @@ public class CloudRedirectService : ICloudRedirectService
             }
             catch (Exception ex)
             {
-                LogService.Warn("云存档", $"读取内嵌云存档 DLL 失败: {ex.Message}");
+                LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogReadEmbeddedFailed", ex.Message));
                 return null;
             }
         }
@@ -352,7 +353,7 @@ public class CloudRedirectService : ICloudRedirectService
     {
         var embedded = GetEmbeddedDllBytes();
         if (embedded == null || embedded.Length == 0)
-            throw new InvalidOperationException("内嵌云存档 DLL 缺失，请重新安装本软件");
+            throw new InvalidOperationException(L.Get("Cloud_EmbeddedReinstall"));
 
         var target = ResolveLibraryTarget(steamPath);
         if (File.Exists(target))
@@ -376,7 +377,7 @@ public class CloudRedirectService : ICloudRedirectService
             }
             catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
             {
-                throw new InvalidOperationException($"无法写入 {DllFileName}，文件正被占用，请关闭 Steam 后重试", ex);
+                throw new InvalidOperationException(L.Get("Cloud_DllLocked", DllFileName), ex);
             }
         }
 
@@ -393,14 +394,14 @@ public class CloudRedirectService : ICloudRedirectService
         }
         catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
         {
-            throw new InvalidOperationException($"部署云存档 DLL 失败：{ex.Message}，请关闭 Steam 后重试", ex);
+            throw new InvalidOperationException(L.Get("Cloud_DeployDllFailed", ex.Message), ex);
         }
         finally
         {
             try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
             try { if (File.Exists(target + ".new")) File.Delete(target + ".new"); } catch { }
         }
-        LogService.Info("云存档", $"云存档 DLL 已部署到 {target}");
+        LogService.Info(L.Get("LogCat_Cloud"), L.Get("Cloud_LogDllDeployed", target));
     }
 
     private void WriteRedirectConfig(string syncPath, string? provider = null)
@@ -440,19 +441,21 @@ public class CloudRedirectService : ICloudRedirectService
         }
         catch (Exception ex)
         {
-            throw new InvalidOperationException($"写入重定向配置失败：{ex.Message}", ex);
+            throw new InvalidOperationException(L.Get("Cloud_WriteRedirectCfgFailed", ex.Message), ex);
         }
     }
 
     // ---- 云端提供商 ----
 
-    public IReadOnlyList<CloudProviderOption> ProviderOptions { get; } = new List<CloudProviderOption>
+    public IReadOnlyList<CloudProviderOption> ProviderOptions => BuildProviderOptions();
+
+    private static IReadOnlyList<CloudProviderOption> BuildProviderOptions() => new List<CloudProviderOption>
     {
-        new("folder", "本地目录"),
+        new("folder", L.Get("Cloud_ProviderLocal"), "Cloud_ProviderLocal"),
         new("gdrive", "Google Drive"),
         new("onedrive", "OneDrive"),
         new("r2", "Cloudflare R2"),
-        new("s3", "S3 兼容存储"),
+        new("s3", L.Get("Cloud_ProviderS3"), "Cloud_ProviderS3"),
     }.AsReadOnly();
 
     private static bool IsKnownProvider(string? id) =>
@@ -473,7 +476,7 @@ public class CloudRedirectService : ICloudRedirectService
         }
         catch (Exception ex)
         {
-            LogService.Warn("云存档", $"读取提供商配置失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogReadProviderFailed", ex.Message));
         }
         return "folder";
     }
@@ -483,7 +486,7 @@ public class CloudRedirectService : ICloudRedirectService
     public void SetCloudProvider(string provider)
     {
         if (!IsKnownProvider(provider))
-            throw new InvalidOperationException($"未知的云端提供商：{provider}");
+            throw new InvalidOperationException(L.Get("Cloud_UnknownProvider", provider));
         try
         {
             Directory.CreateDirectory(ConfigDir);
@@ -526,11 +529,11 @@ public class CloudRedirectService : ICloudRedirectService
             var tmp = configPath + ".new";
             File.WriteAllText(tmp, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
             File.Move(tmp, configPath, overwrite: true);
-            LogService.Info("云存档", $"云端提供商已切换为 {provider}");
+            LogService.Info(L.Get("LogCat_Cloud"), L.Get("Cloud_LogProviderSet", provider));
         }
         catch (Exception ex)
         {
-            throw new InvalidOperationException($"切换云端提供商失败：{ex.Message}", ex);
+            throw new InvalidOperationException(L.Get("Cloud_SwitchProviderFailed", ex.Message), ex);
         }
     }
 
@@ -553,7 +556,7 @@ public class CloudRedirectService : ICloudRedirectService
         }
         catch (Exception ex)
         {
-            LogService.Warn("云存档", $"读取 token 路径注册表失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogTokenRegFailed", ex.Message));
         }
         return provider switch
         {
@@ -569,7 +572,7 @@ public class CloudRedirectService : ICloudRedirectService
     public (bool Ok, string Message) CheckOAuthToken(string provider)
     {
         if (provider is not ("gdrive" or "onedrive"))
-            return (false, "该源无需 OAuth 登录");
+            return (false, L.Get("Cloud_NoOAuthNeeded"));
         return CloudOAuthService.CheckTokenStatus(GetTokenPath(provider)) switch
         {
             (true, var msg) => (true, msg),
@@ -591,17 +594,17 @@ public class CloudRedirectService : ICloudRedirectService
             };
             if (string.IsNullOrEmpty(path)) return (false, "");
             if (!File.Exists(path))
-                return (false, $"未配置 {label} 凭证，请填写后保存");
+                return (false, L.Get("Cloud_CredNotConfigured", label));
             if (string.IsNullOrEmpty(CloudCredentialStore.ReadJson(path)))
-                return (false, "凭证文件存在但无法解密（可能从其他机器复制），请重新填写并保存");
+                return (false, L.Get("Cloud_CredUndecryptable"));
             var complete = provider == "r2" ? LoadR2Credentials() != null : LoadS3Credentials() != null;
             if (!complete)
-                return (false, "凭证文件不完整，请重新填写并保存");
-            return (true, $"{label} 凭证已配置");
+                return (false, L.Get("Cloud_CredIncomplete"));
+            return (true, L.Get("Cloud_CredConfigured", label));
         }
         catch (Exception ex)
         {
-            return (false, $"状态读取失败：{ex.Message}");
+            return (false, L.Get("Cloud_StatusReadFailed", ex.Message));
         }
     }
 
@@ -631,7 +634,7 @@ public class CloudRedirectService : ICloudRedirectService
     {
         var provider = GetCloudProvider();
         if (provider == "folder")
-            throw new InvalidOperationException("本地目录模式无需连接测试");
+            throw new InvalidOperationException(L.Get("Cloud_FolderModeNoTest"));
         return _store.ProbeAsync(provider, ct);
     }
 
@@ -643,18 +646,18 @@ public class CloudRedirectService : ICloudRedirectService
             "gdrive" or "onedrive" => GetTokenPath(provider),
             "r2" => Path.Combine(ConfigDir, "r2_credentials.json"),
             "s3" => Path.Combine(ConfigDir, "s3_credentials.json"),
-            _ => throw new InvalidOperationException("本地目录无需退出登录"),
+            _ => throw new InvalidOperationException(L.Get("Cloud_FolderNoSignOut")),
         };
         if (string.IsNullOrEmpty(path) || !File.Exists(path))
-            throw new InvalidOperationException("该源当前未登录，无需退出");
+            throw new InvalidOperationException(L.Get("Cloud_NotSignedInSrc"));
         try
         {
             File.Delete(path);
-            LogService.Info("云存档", $"已退出登录：{provider}");
+            LogService.Info(L.Get("LogCat_Cloud"), L.Get("Cloud_LogSignedOutSrc", provider));
         }
         catch (Exception ex)
         {
-            throw new InvalidOperationException($"退出登录失败：{ex.Message}", ex);
+            throw new InvalidOperationException(L.Get("Cloud_SignOutFailed", ex.Message), ex);
         }
     }
 
@@ -662,7 +665,7 @@ public class CloudRedirectService : ICloudRedirectService
     {
         if (string.IsNullOrWhiteSpace(cred.AccountId) || string.IsNullOrWhiteSpace(cred.AccessKeyId) ||
             string.IsNullOrWhiteSpace(cred.SecretAccessKey) || string.IsNullOrWhiteSpace(cred.Bucket))
-            throw new InvalidOperationException("R2 缺必填项：account_id / access_key_id / secret_access_key / bucket");
+            throw new InvalidOperationException(L.Get("Cloud_R2Missing"));
         var obj = new JsonObject
         {
             ["account_id"] = cred.AccountId.Trim(),
@@ -674,9 +677,9 @@ public class CloudRedirectService : ICloudRedirectService
         if (!string.IsNullOrWhiteSpace(cred.Endpoint)) obj["endpoint"] = cred.Endpoint.Trim();
         var path = Path.Combine(ConfigDir, "r2_credentials.json");
         if (!CloudCredentialStore.WriteJson(path, obj.ToJsonString(new JsonSerializerOptions { WriteIndented = true })))
-            throw new InvalidOperationException("R2 凭证保存失败，请检查目录写入权限");
+            throw new InvalidOperationException(L.Get("Cloud_R2WriteFailed"));
         SetCloudProvider("r2");
-        LogService.Info("云存档", "R2 凭证已保存并切换提供商");
+        LogService.Info(L.Get("LogCat_Cloud"), L.Get("Cloud_R2SavedSwitched"));
         return path;
     }
 
@@ -697,7 +700,7 @@ public class CloudRedirectService : ICloudRedirectService
         }
         catch (Exception ex)
         {
-            LogService.Warn("云存档", $"读取 R2 凭证失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogReadR2Failed", ex.Message));
             return null;
         }
     }
@@ -707,7 +710,7 @@ public class CloudRedirectService : ICloudRedirectService
         if (string.IsNullOrWhiteSpace(cred.AccessKeyId) || string.IsNullOrWhiteSpace(cred.SecretAccessKey) ||
             string.IsNullOrWhiteSpace(cred.Bucket) || string.IsNullOrWhiteSpace(cred.Endpoint) ||
             string.IsNullOrWhiteSpace(cred.Region))
-            throw new InvalidOperationException("S3 缺必填项：access_key_id / secret_access_key / bucket / endpoint / region");
+            throw new InvalidOperationException(L.Get("Cloud_S3Missing"));
         var obj = new JsonObject
         {
             ["access_key_id"] = cred.AccessKeyId.Trim(),
@@ -723,9 +726,9 @@ public class CloudRedirectService : ICloudRedirectService
         if (!string.IsNullOrWhiteSpace(cred.CaCertPath)) obj["ca_cert_path"] = cred.CaCertPath.Trim();
         var path = Path.Combine(ConfigDir, "s3_credentials.json");
         if (!CloudCredentialStore.WriteJson(path, obj.ToJsonString(new JsonSerializerOptions { WriteIndented = true })))
-            throw new InvalidOperationException("S3 凭证保存失败，请检查目录写入权限");
+            throw new InvalidOperationException(L.Get("Cloud_S3WriteFailed"));
         SetCloudProvider("s3");
-        LogService.Info("云存档", "S3 凭证已保存并切换提供商");
+        LogService.Info(L.Get("LogCat_Cloud"), L.Get("Cloud_S3SavedSwitched"));
         return path;
     }
 
@@ -750,7 +753,7 @@ public class CloudRedirectService : ICloudRedirectService
         }
         catch (Exception ex)
         {
-            LogService.Warn("云存档", $"读取 S3 凭证失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogReadS3Failed", ex.Message));
             return null;
         }
     }
@@ -781,9 +784,9 @@ public class CloudRedirectService : ICloudRedirectService
         }
         catch (Exception ex)
         {
-            LogService.Warn("云存档", $"扫描已重定向游戏失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogScanLocalFailed", ex.Message));
         }
-        LogService.Info("云存档", $"本地名单：{found.Count} 个");
+        LogService.Info(L.Get("LogCat_Cloud"), L.Get("Cloud_LogLocalList", found.Count));
         return found.OrderBy(kv => kv.Key).Select(kv => kv.Value).ToList();
     }
 
@@ -802,8 +805,8 @@ public class CloudRedirectService : ICloudRedirectService
         }
         catch (Exception ex)
         {
-            LogService.Warn("云存档", $"读取云端名单失败: {ex.Message}");
-            throw new InvalidOperationException($"读取云端名单失败：{ex.Message}", ex);
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogReadCloudListFailed", ex.Message));
+            throw new InvalidOperationException(L.Get("Cloud_ReadCloudListFailed", ex.Message), ex);
         }
         var found = new Dictionary<int, RedirectedApp>();
         lock (_cloudLock)
@@ -819,7 +822,7 @@ public class CloudRedirectService : ICloudRedirectService
                     e.AppId, string.Empty, e.LastSaveTime, e.AccountId, e.RemoteId, e.WebUrl));
             }
         }
-        LogService.Info("云存档", $"云端名单：{provider} 下 {found.Count} 个");
+        LogService.Info(L.Get("LogCat_Cloud"), L.Get("Cloud_LogCloudList", provider, found.Count));
         return found.OrderBy(kv => kv.Key).Select(kv => kv.Value).ToList();
     }
 
@@ -884,9 +887,9 @@ public class CloudRedirectService : ICloudRedirectService
     {
         var steamPath = ResolveSteamPath();
         if (string.IsNullOrEmpty(steamPath))
-            throw new InvalidOperationException("未检测到 Steam 路径");
+            throw new InvalidOperationException(L.Get("Cloud_NoSteamPath"));
 
-        progress?.Report("正在读取本地存档信息…");
+        progress?.Report(L.Get("Cloud_ReadingLocalSaves"));
         var accountIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var targets = new List<DeleteTarget>();
         var syncPath = ResolveSyncPath();
@@ -932,7 +935,7 @@ public class CloudRedirectService : ICloudRedirectService
         var provider = GetCloudProvider();
         if (provider != "folder")
         {
-            progress?.Report("正在读取云端存档信息…");
+            progress?.Report(L.Get("Cloud_ReadingCloudSaves"));
             List<CloudAppEntry>? cached;
             lock (_cloudLock) { _cloudEntries.TryGetValue(appId, out cached); cached = cached?.ToList(); }
             if (cached == null || cached.Count == 0)
@@ -944,7 +947,7 @@ public class CloudRedirectService : ICloudRedirectService
                 }
                 catch (Exception ex)
                 {
-                    throw new InvalidOperationException($"读取云端存档信息失败：{ex.Message}", ex);
+                    throw new InvalidOperationException(L.Get("Cloud_ReadCloudSavesFailed", ex.Message), ex);
                 }
                 lock (_cloudLock)
                 {
@@ -966,7 +969,7 @@ public class CloudRedirectService : ICloudRedirectService
                 }
                 catch (Exception ex)
                 {
-                    throw new InvalidOperationException($"读取云端存档信息失败：{ex.Message}", ex);
+                    throw new InvalidOperationException(L.Get("Cloud_ReadCloudSavesFailed", ex.Message), ex);
                 }
                 return (Entry: e, Stats: stats);
             }).ToList();
@@ -1038,17 +1041,17 @@ public class CloudRedirectService : ICloudRedirectService
             {
                 var t = preview.Targets[i];
                 ct.ThrowIfCancellationRequested();
-                status?.Report($"正在备份 {KindLabel(t.Kind)}…");
+                status?.Report(L.Get("Cloud_BackingUp", KindLabel(t.Kind)));
                 var dest = Path.Combine(preview.BackupDir, t.AccountId, $"{t.Kind}_{i}");
                 if (t.Kind == "cloud")
                 {
                     if (string.IsNullOrEmpty(t.Provider))
-                        throw new InvalidOperationException("云端删除目标缺提供商信息，已中止删除，原件未动");
+                        throw new InvalidOperationException(L.Get("Cloud_DeleteNoProvider"));
                     var fresh = await _store.GetAppStatsAsync(t.Provider, t.AccountId, preview.AppId, ct);
                     var downloaded = await _store.DownloadAppAsync(t.Provider, t.AccountId, preview.AppId, dest, status, ct);
                     if (downloaded != fresh.FileCount)
                         throw new InvalidOperationException(
-                            $"备份不完整（{KindLabel(t.Kind)}：远端 {fresh.FileCount} 个，实备 {downloaded} 个），已中止删除，原件未动");
+                            L.Get("Cloud_BackupIncompleteRemote", KindLabel(t.Kind), fresh.FileCount, downloaded));
                     copied.Add((new DeleteTarget(t.Kind, t.AccountId, t.Path, downloaded, fresh.TotalBytes, t.Provider), dest));
                 }
                 else
@@ -1056,7 +1059,7 @@ public class CloudRedirectService : ICloudRedirectService
                     CopyDirectory(t.Path, dest, ct);
                     var backed = CountTarget(t.Kind, t.AccountId, dest);
                     if (backed.FileCount != t.FileCount)
-                        throw new InvalidOperationException($"备份不完整（{KindLabel(t.Kind)}：应备 {t.FileCount} 个，实备 {backed.FileCount} 个），已中止删除，原件未动");
+                        throw new InvalidOperationException(L.Get("Cloud_BackupIncompleteCount", KindLabel(t.Kind), t.FileCount, backed.FileCount));
                     copied.Add((t, dest));
                 }
             }
@@ -1067,8 +1070,8 @@ public class CloudRedirectService : ICloudRedirectService
                 ["appId"] = preview.AppId,
                 ["timestamp"] = DateTime.Now.ToString("o"),
                 ["note"] = hasCloud
-                    ? "云端存档删除前自动备份（已下载到本地）；恢复需手动上传回云端对应目录，暂无一键恢复"
-                    : "删除存档前自动备份；恢复需手动拷回对应目录，暂无一键恢复",
+                    ? L.Get("Cloud_BackupNoteCloud")
+                    : L.Get("Cloud_BackupNoteLocal"),
                 ["targets"] = new JsonArray(copied.Select(c =>
                     new JsonObject
                     {
@@ -1086,14 +1089,14 @@ public class CloudRedirectService : ICloudRedirectService
             foreach (var (t, _) in copied)
             {
                 ct.ThrowIfCancellationRequested();
-                status?.Report($"正在删除 {KindLabel(t.Kind)}…");
+                status?.Report(L.Get("Cloud_Deleting", KindLabel(t.Kind)));
                 try
                 {
                     if (t.Kind == "cloud")
                     {
                         var r = await _store.DeleteAppAsync(t.Provider!, t.AccountId, preview.AppId, status, ct);
                         if (!string.IsNullOrEmpty(r.Error))
-                            errors.Add($"{KindLabel(t.Kind)}：{r.Error}");
+                            errors.Add(L.Get("Cloud_LabelErrorGeneric", KindLabel(t.Kind), r.Error));
                     }
                     else if (Directory.Exists(t.Path))
                     {
@@ -1102,20 +1105,20 @@ public class CloudRedirectService : ICloudRedirectService
                 }
                 catch (Exception ex)
                 {
-                    errors.Add($"{KindLabel(t.Kind)}：{ex.Message}");
+                    errors.Add(L.Get("Cloud_LabelErrorGeneric", KindLabel(t.Kind), ex.Message));
                 }
             }
             if (errors.Count > 0)
-                throw new InvalidOperationException($"部分删除失败：\n{string.Join("\n", errors)}\n备份位于 {preview.BackupDir}");
+                throw new InvalidOperationException(L.Get("Cloud_DeletePartialFailed", string.Join("\n", errors), preview.BackupDir));
         }, ct);
     }
 
     private static string KindLabel(string kind) => kind switch
     {
-        "sync" => "重定向存档",
-        "cache" => "DLL 本地缓存",
-        "userdata" => "Steam 用户数据",
-        "cloud" => "云端存档",
+        "sync" => L.Get("Cloud_KindSync"),
+        "cache" => L.Get("Cloud_KindCache"),
+        "userdata" => L.Get("Cloud_KindUserdata"),
+        "cloud" => L.Get("Cloud_KindCloud"),
         _ => kind
     };
 

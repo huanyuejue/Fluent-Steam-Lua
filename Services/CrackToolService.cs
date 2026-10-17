@@ -174,7 +174,7 @@ public sealed class CrackToolService : ICrackToolService, IDisposable
         }
         catch (Exception ex)
         {
-            LogService.Warn("免启动", $"清理 emu 下载包失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Crack"), L.Get("Svc_CrackCleanEmuFailed", ex.Message));
         }
     }
 
@@ -213,26 +213,26 @@ public sealed class CrackToolService : ICrackToolService, IDisposable
             {
                 var text = e.RenderMessage();
                 if (e.Exception != null)
-                    text += $"：{e.Exception.GetType().Name}: {e.Exception.Message}";
+                    text += L.Get("Svc_CrackExAppend", e.Exception.GetType().Name, e.Exception.Message);
                 if (e.Level is LogEventLevel.Error or LogEventLevel.Fatal)
                 {
                     owner._runHadError = true;
                     owner._activeProgress?.Report(text);
-                    LogService.Error("免启动", text);
+                    LogService.Error(L.Get("LogCat_Crack"), text);
                 }
                 else if (e.Level == LogEventLevel.Warning)
                 {
                     owner._activeProgress?.Report(text);
-                    LogService.Warn("免启动", text);
+                    LogService.Warn(L.Get("LogCat_Crack"), text);
                 }
                 else if (e.Level == LogEventLevel.Information)
                 {
                     owner._activeProgress?.Report(text);
-                    LogService.Info("免启动", text);
+                    LogService.Info(L.Get("LogCat_Crack"), text);
                 }
                 else
                 {
-                    LogService.Info("免启动", "[调试] " + text);
+                    LogService.Info(L.Get("LogCat_Crack"), L.Get("Svc_CrackDebugPrefix", text));
                 }
             }
             catch { }

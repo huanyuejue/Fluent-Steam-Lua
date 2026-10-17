@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -12,7 +13,7 @@ using SteamLuaManager.Services;
 
 namespace SteamLuaManager.Views;
 
-public partial class AboutView : UserControl
+public partial class AboutView : UserControl, INotifyPropertyChanged
 {
     private const string ProjectUrl = "https://github.com/huanyuejue/Fluent-Steam-Lua";
     private const string AfdianUrl = "https://afdian.com/a/HuanJue";
@@ -28,18 +29,21 @@ public partial class AboutView : UserControl
         public override string ToString() => Path.GetFileName(FullPath);
     }
 
-    public string VersionText { get; }
+    private readonly string? _version;
+    public string VersionText => L.Get("About_Version", _version ?? "1.0.0");
+
+    public event PropertyChangedEventHandler? PropertyChanged;
 
     private FaqWindow? _faqWindow;
 
     public AboutView()
     {
-        var version = Assembly.GetExecutingAssembly().GetName().Version;
-        VersionText = version is not null
-            ? $"版本 {version}"
-            : "版本 1.0.0";
+        _version = Assembly.GetExecutingAssembly().GetName().Version?.ToString();
         InitializeComponent();
         DataContext = this;
+        // View 常驻缓存：语言切换时重算版本行文案，其余动态弹窗在打开时按当前语言生成
+        LocalizationService.Instance.PropertyChanged += (_, _) =>
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(VersionText)));
         // 注意：切页时预创建的 View 会触发 Unloaded，不能在这里关 FAQ 窗，
         // 否则开着对照操作一切页就被关掉；窗口 Owner 已设，主窗口退出时会自动联带关闭
     }
@@ -86,11 +90,11 @@ public partial class AboutView : UserControl
             if (result.HasUpdate)
                 await App.ShowUpdateLogDialogAsync();
             else
-                await ShowDialogAsync("已是最新版本", $"当前已是最新版本：{result.CurrentVersion}");
+                await ShowDialogAsync(L.Get("About_UpdLatestTitle"), L.Get("About_UpdLatestBody", result.CurrentVersion));
         }
         catch (Exception ex)
         {
-            await ShowDialogAsync("检查更新失败", $"无法获取最新版本信息：{ex.Message}");
+            await ShowDialogAsync(L.Get("About_UpdFailTitle"), L.Get("About_UpdFailBody", ex.Message));
         }
     }
 
@@ -98,16 +102,16 @@ public partial class AboutView : UserControl
     {
         var dialog = new ContentDialog
         {
-            Title = "聊天反馈群",
+            Title = L.Get("About_QqTitle"),
             Content = new TextBlock
             {
-                Text = "要加入QQ的聊天反馈群吗？",
+                Text = L.Get("About_QqAsk"),
                 TextWrapping = TextWrapping.Wrap,
                 MaxWidth = 420
             },
-            PrimaryButtonText = "跳转群聊",
-            SecondaryButtonText = "复制群号",
-            CloseButtonText = "取消",
+            PrimaryButtonText = L.Get("About_QqJump"),
+            SecondaryButtonText = L.Get("About_QqCopy"),
+            CloseButtonText = L.Get("Common_Cancel"),
             DefaultButton = ContentDialogButton.Primary
         };
         var result = await dialog.ShowAsync();
@@ -119,7 +123,7 @@ public partial class AboutView : UserControl
             }
             catch (Exception ex)
             {
-                await ShowDialogAsync("跳转失败", $"未能打开加群链接：{ex.Message}\n可复制群号 {QqGroupNumber} 手动加群。");
+                await ShowDialogAsync(L.Get("About_QqJumpFailTitle"), L.Get("About_QqJumpFailBody", ex.Message, QqGroupNumber));
             }
         }
         else if (result == ContentDialogResult.Secondary)
@@ -135,9 +139,9 @@ public partial class AboutView : UserControl
             numberBox.Loaded += (_, _) => { numberBox.Focus(); numberBox.SelectAll(); };
             await new ContentDialog
             {
-                Title = "复制群号",
+                Title = L.Get("About_QqCopy"),
                 Content = numberBox,
-                CloseButtonText = "关闭",
+                CloseButtonText = L.Get("App_Close"),
                 DefaultButton = ContentDialogButton.Close
             }.ShowAsync();
         }
@@ -146,10 +150,10 @@ public partial class AboutView : UserControl
     private async void Feedback_Click(object sender, RoutedEventArgs e)
     {
         var stack = new StackPanel { Width = 440, MaxWidth = 440 };
-        stack.Children.Add(BuildFeedbackLabel("问题标题"));
+        stack.Children.Add(BuildFeedbackLabel(L.Get("About_FbLabelTitle")));
         var titleBox = new TextBox { Margin = new Thickness(0, 0, 0, 8) };
         stack.Children.Add(titleBox);
-        stack.Children.Add(BuildFeedbackLabel("问题描述"));
+        stack.Children.Add(BuildFeedbackLabel(L.Get("About_FbLabelBody")));
         var bodyBox = new TextBox
         {
             AcceptsReturn = true,
@@ -160,14 +164,14 @@ public partial class AboutView : UserControl
             Margin = new Thickness(0, 0, 0, 8)
         };
         stack.Children.Add(bodyBox);
-        stack.Children.Add(BuildFeedbackLabel("联系方式（可选，方便回复）"));
+        stack.Children.Add(BuildFeedbackLabel(L.Get("About_FbLabelContact")));
         var contactBox = new TextBox();
         stack.Children.Add(contactBox);
 
         var attachedFiles = new ObservableCollection<AttachedFileItem>();
         var logCheck = new CheckBox
         {
-            Content = "附带运行日志（app.log 完整文件）",
+            Content = L.Get("About_FbAttachLog"),
             Margin = new Thickness(0, 8, 0, 0)
         };
         stack.Children.Add(logCheck);
@@ -182,14 +186,14 @@ public partial class AboutView : UserControl
         stack.Children.Add(logHint);
 
         var attachRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
-        var addButton = new Button { Content = "添加附件", Padding = new Thickness(16, 6, 16, 6), Margin = new Thickness(0, 0, 8, 0) };
-        var clearButton = new Button { Content = "清空", Padding = new Thickness(16, 6, 16, 6) };
+        var addButton = new Button { Content = L.Get("About_FbAddAttach"), Padding = new Thickness(16, 6, 16, 6), Margin = new Thickness(0, 0, 8, 0) };
+        var clearButton = new Button { Content = L.Get("About_FbClear"), Padding = new Thickness(16, 6, 16, 6) };
         attachRow.Children.Add(addButton);
         attachRow.Children.Add(clearButton);
         stack.Children.Add(attachRow);
         var sizeText = new TextBlock
         {
-            Text = "未选择附件",
+            Text = L.Get("About_FbNoAttach"),
             TextWrapping = TextWrapping.Wrap,
             Opacity = 0.7,
             Margin = new Thickness(0, 4, 0, 0)
@@ -206,7 +210,7 @@ public partial class AboutView : UserControl
         stack.Children.Add(fileListScroll);
         var limitHint = new TextBlock
         {
-            Text = "附件总大小上限 40MB（Base64 编码后）",
+            Text = L.Get("About_FbLimitHint"),
             Opacity = 0.6,
             Margin = new Thickness(0, 4, 0, 0)
         };
@@ -217,7 +221,7 @@ public partial class AboutView : UserControl
             if (!LogService.IsEnabled || !File.Exists(LogService.LogFilePath))
             {
                 logCheck.IsChecked = false;
-                logHint.Text = "未找到运行日志，请先在设置中打开“日志记录”开关，复现问题后再勾选提交。";
+                logHint.Text = L.Get("About_FbNoLog");
                 logHint.Visibility = Visibility.Visible;
             }
             RefreshSizeText();
@@ -245,7 +249,7 @@ public partial class AboutView : UserControl
                 var count = attachedFiles.Count + (logCheck.IsChecked == true ? 1 : 0);
                 if (count == 0)
                 {
-                    sizeText.Text = "未选择附件";
+                    sizeText.Text = L.Get("About_FbNoAttach");
                     sizeText.FontWeight = FontWeights.Normal;
                     sizeText.ClearValue(TextBlock.ForegroundProperty);
                     return;
@@ -253,8 +257,8 @@ public partial class AboutView : UserControl
                 // 体积按 Base64 膨胀后估算，与发送时校验口径一致；超限仅提示不拦截，选择不受影响
                 var overLimit = total * 4L / 3L > FeedbackService.MaxAttachmentsBytes;
                 sizeText.Text = overLimit
-                    ? $"已选 {count} 个，共 {total / 1048576.0:F1} MB（已超出 40MB 上限，发送前请移除部分文件）"
-                    : $"已选 {count} 个，共 {total / 1048576.0:F1} MB";
+                    ? L.Get("About_FbSizeOver", count, (total / 1048576.0).ToString("F1"))
+                    : L.Get("About_FbSize", count, (total / 1048576.0).ToString("F1"));
                 if (overLimit)
                 {
                     sizeText.FontWeight = FontWeights.SemiBold;
@@ -266,7 +270,7 @@ public partial class AboutView : UserControl
                     sizeText.ClearValue(TextBlock.ForegroundProperty);
                 }
             }
-            catch { sizeText.Text = "未选择附件"; }
+            catch { sizeText.Text = L.Get("About_FbNoAttach"); }
         }
         addButton.Click += (_, _) =>
         {
@@ -274,9 +278,9 @@ public partial class AboutView : UserControl
             {
                 var dlg = new Microsoft.Win32.OpenFileDialog
                 {
-                    Title = "选择附件",
+                    Title = L.Get("About_FbPickTitle"),
                     Multiselect = true,
-                    Filter = "所有文件|*.*|图片|*.png;*.jpg;*.jpeg;*.bmp;*.gif|日志文本|*.log;*.txt"
+                    Filter = L.Get("About_FbPickFilter")
                 };
                 if (dlg.ShowDialog() != true) return;
                 foreach (var f in dlg.FileNames)
@@ -296,10 +300,10 @@ public partial class AboutView : UserControl
 
         var dialog = new ContentDialog
         {
-            Title = "问题反馈",
+            Title = L.Get("About_Feedback"),
             Content = stack,
-            PrimaryButtonText = "发送",
-            CloseButtonText = "取消",
+            PrimaryButtonText = L.Get("About_FbSend"),
+            CloseButtonText = L.Get("Common_Cancel"),
             DefaultButton = ContentDialogButton.Primary
         };
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
@@ -309,7 +313,7 @@ public partial class AboutView : UserControl
         var contact = contactBox.Text.Trim();
         if (string.IsNullOrEmpty(title) || string.IsNullOrEmpty(body))
         {
-            await ShowDialogAsync("提示", "请填写标题和问题描述");
+            await ShowDialogAsync(L.Get("Main_Tip"), L.Get("About_FbEmptyWarn"));
             return;
         }
 
@@ -320,15 +324,15 @@ public partial class AboutView : UserControl
             await feedback.SubmitAsync(title, body, contact,
                 attachLog: logCheck.IsChecked == true,
                 attachmentPaths: attachedFiles.Select(x => x.FullPath).ToList());
-            await ShowDialogAsync("发送成功", "反馈已提交，感谢！");
+            await ShowDialogAsync(L.Get("About_FbSentTitle"), L.Get("About_FbSentBody"));
         }
         catch (OperationCanceledException)
         {
-            await ShowDialogAsync("发送失败", "请求超时，请检查网络后重试。");
+            await ShowDialogAsync(L.Get("About_FbFailTitle"), L.Get("About_FbFailTimeout"));
         }
         catch (Exception ex)
         {
-            await ShowDialogAsync("发送失败", $"{ex.Message}\n可前往 GitHub 提交 Issue。");
+            await ShowDialogAsync(L.Get("About_FbFailTitle"), L.Get("About_FbFailBody", ex.Message));
         }
     }
 
@@ -355,7 +359,7 @@ public partial class AboutView : UserControl
                 TextWrapping = TextWrapping.Wrap,
                 MaxWidth = 420
             },
-            CloseButtonText = "确定",
+            CloseButtonText = L.Get("Common_Confirm"),
             DefaultButton = ContentDialogButton.Close
         };
         await dialog.ShowAsync();

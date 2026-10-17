@@ -292,10 +292,10 @@ public sealed class TrayIconManager : IDisposable
         var panel = new C.StackPanel();
 
         // 打开主界面
-        panel.Children.Add(BuildMenuItem("\uE80F", "打开主界面", textPrimary, hoverBrush, () => { CloseMenu(); RestoreRequested?.Invoke(); }));
+        panel.Children.Add(BuildMenuItem("\uE80F", L.Get("Svc_TrayOpen"), textPrimary, hoverBrush, () => { CloseMenu(); RestoreRequested?.Invoke(); }));
 
         // 设置
-        panel.Children.Add(BuildMenuItem("\uE713", "设置", textPrimary, hoverBrush, () => { CloseMenu(); OpenSettingsRequested?.Invoke(); }));
+        panel.Children.Add(BuildMenuItem("\uE713", L.Get("Settings_Title"), textPrimary, hoverBrush, () => { CloseMenu(); OpenSettingsRequested?.Invoke(); }));
 
         // 分隔线
         panel.Children.Add(new S.Rectangle
@@ -306,7 +306,7 @@ public sealed class TrayIconManager : IDisposable
         });
 
         // 退出
-        panel.Children.Add(BuildMenuItem("\uE711", "退出", FindBrush("TextFillColorDangerBrush") ?? textPrimary, hoverBrush, () => { CloseMenu(); ExitRequested?.Invoke(); }));
+        panel.Children.Add(BuildMenuItem("\uE711", L.Get("Svc_TrayExit"), FindBrush("TextFillColorDangerBrush") ?? textPrimary, hoverBrush, () => { CloseMenu(); ExitRequested?.Invoke(); }));
 
         outer.Child = panel;
         return outer;

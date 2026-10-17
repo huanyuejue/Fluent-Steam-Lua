@@ -67,10 +67,10 @@ public class ManifestMonitorService
         if (IsRunning) return Task.FromResult((true, (string?)null));
         var steamPath = _steamPathService.DetectSteamPath();
         if (string.IsNullOrEmpty(steamPath))
-            return Task.FromResult((false, (string?)"未检测到 Steam 路径"));
+            return Task.FromResult((false, (string?)L.Get("Svc_MfNoSteamPath")));
         var logPath = Path.Combine(steamPath, "logs", "content_log.txt");
         if (!File.Exists(logPath))
-            return Task.FromResult((false, (string?)"找不到 content_log.txt，请先启动 Steam（若仍没有，在 Steam 快捷方式加上 -dev -console 后重启）"));
+            return Task.FromResult((false, (string?)L.Get("Svc_MonNoLog")));
 
         _keyInvalidLatched = false;
         _noConnHinted = false;
@@ -117,7 +117,7 @@ public class ManifestMonitorService
         try
         {
             (fs, reader) = OpenTail(logPath);
-            Emit("开始实时监控 Steam 下载请求...");
+            Emit(L.Get("Svc_MonStart"));
             while (!ct.IsCancellationRequested)
             {
                 string? line;
@@ -133,7 +133,7 @@ public class ManifestMonitorService
                             reader.Dispose();
                             (fs, reader) = OpenTail(logPath);
                             fs.Seek(0, SeekOrigin.Begin);
-                            Emit("日志文件已轮转，从头继续监控");
+                            Emit(L.Get("Svc_MonRotated"));
                         }
                     }
                     catch { break; }
@@ -147,7 +147,7 @@ public class ManifestMonitorService
                     if (!_noConnHinted && line.Contains("No connection to content servers", StringComparison.Ordinal))
                     {
                         _noConnHinted = true;
-                        Emit("检测到 Steam 无法连接内容服务器：已获取的清单不受影响，恢复网络后 Steam 会自动继续，可检查代理/VPN");
+                        Emit(L.Get("Svc_MonNoConn"));
                     }
                     continue;
                 }
@@ -155,7 +155,7 @@ public class ManifestMonitorService
                 if (!int.TryParse(m.Groups[1].Value, CultureInfo.InvariantCulture, out var appId) ||
                     !int.TryParse(m.Groups[2].Value, CultureInfo.InvariantCulture, out var depotId))
                 {
-                    Emit($"忽略无法解析的清单请求行: {line.Trim()}");
+                    Emit(L.Get("Svc_MonBadLine", line.Trim()));
                     continue;
                 }
                 var req = new ManifestRequest(appId, depotId, m.Groups[3].Value);
@@ -167,21 +167,21 @@ public class ManifestMonitorService
                 }
                 if (!isNew) continue;
                 if (TrackRequest(req.AppId))
-                    Emit($"App {req.AppId} 开始获取清单，请等待全部下载完成后再重试游戏下载");
-                Emit($"发现新清单: App {req.AppId} | Depot {req.DepotId} | Manifest {req.ManifestId}");
+                    Emit(L.Get("Svc_MonAppStart", req.AppId));
+                Emit(L.Get("Svc_MonNewRequest", req.AppId, req.DepotId, req.ManifestId));
                 _ = HandleAsync(req, ct);
             }
         }
         catch (Exception ex)
         {
             if (!ct.IsCancellationRequested)
-                Emit($"监控异常停止: {ex.Message}");
+                Emit(L.Get("Svc_MonErrorStop", ex.Message));
         }
         finally
         {
             try { reader?.Dispose(); } catch { }
             if (!ct.IsCancellationRequested)
-                Emit("监控已停止");
+                Emit(L.Get("Svc_MonStopped"));
         }
     }
 
@@ -214,21 +214,21 @@ public class ManifestMonitorService
                     if (!_keyInvalidLatched)
                     {
                         _keyInvalidLatched = true;
-                        Emit("API Key 无效或已过期，后续请求将跳过，请重新获取并重启监听");
+                        Emit(L.Get("Svc_MonKeyInvalid"));
                     }
                 }
             }
             ok = r.Success;
             Emit(r.Success
-                ? $"下载成功: Depot {req.DepotId} ({req.ManifestId})"
-                : $"下载失败: Depot {req.DepotId} ({r.Error})");
+                ? L.Get("Svc_MonDlOk", req.DepotId, req.ManifestId)
+                : L.Get("Svc_MonDlFail", req.DepotId, r.Error));
             try { RequestCompleted?.Invoke(req, r.Success); } catch { }
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
             ok = false;
-            Emit($"下载异常: Depot {req.DepotId} ({ex.Message})");
+            Emit(L.Get("Svc_MonDlError", req.DepotId, ex.Message));
         }
         finally
         {
@@ -297,7 +297,7 @@ public class ManifestMonitorService
             else if (ok == false) batch.Failed++;
             if (batch.Active > 0)
             {
-                progressMessage = $"App {req.AppId} 已获取 {batch.Done} 个清单，还剩 {batch.Active} 个…";
+                progressMessage = L.Get("Svc_MonProgress", req.AppId, batch.Done, batch.Active);
             }
             else
             {
@@ -356,9 +356,9 @@ public class ManifestMonitorService
             foreach (var (appId, (done, failed)) in perApp)
             {
                 if (failed == 0)
-                    Emit($"App {appId} 清单已齐（共 {done} 个），请在 Steam 中重试下载游戏");
+                    Emit(L.Get("Svc_MonBatchDone", appId, done));
                 else
-                    Emit($"App {appId} 清单获取结束（成功 {done} / 失败 {failed}），失败的可重新触发 Steam 下载后再试");
+                    Emit(L.Get("Svc_MonBatchPartial", appId, done, failed));
             }
             return;
         }
@@ -368,12 +368,12 @@ public class ManifestMonitorService
             totalDone += done;
             totalFailed += failed;
             Emit(failed == 0
-                ? $"App {appId} 清单已齐（共 {done} 个）"
-                : $"App {appId} 清单获取结束（成功 {done} / 失败 {failed}）");
+                ? L.Get("Svc_MonBatchDoneShort", appId, done)
+                : L.Get("Svc_MonBatchPartialShort", appId, done, failed));
         }
         Emit(totalFailed == 0
-            ? $"共 {perApp.Count} 个 App、{totalDone} 个清单已齐，请在 Steam 中重试下载游戏"
-            : $"共 {perApp.Count} 个 App（成功 {totalDone} / 失败 {totalFailed}），失败的可重新触发 Steam 下载后再试");
+            ? L.Get("Svc_MonAllDone", perApp.Count, totalDone)
+            : L.Get("Svc_MonAllPartial", perApp.Count, totalDone, totalFailed));
     }
 }
 

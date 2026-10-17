@@ -31,11 +31,11 @@ internal static class GitHubMirror
     {
         var host = url.Split(["://"], 2, StringSplitOptions.None).Last().Split('/').First();
         if (host.Equals("raw.githubusercontent.com", StringComparison.OrdinalIgnoreCase))
-            return "raw 直连";
+            return L.Get("Svc_RawDirect");
         if (host.Equals("github.com", StringComparison.OrdinalIgnoreCase)
             || host.Equals("objects.githubusercontent.com", StringComparison.OrdinalIgnoreCase)
             || host.Equals("api.github.com", StringComparison.OrdinalIgnoreCase))
-            return "GitHub 直连";
+            return L.Get("Svc_GitHubDirect");
         return host;
     }
 

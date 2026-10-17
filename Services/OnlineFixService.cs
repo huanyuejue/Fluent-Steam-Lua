@@ -69,7 +69,7 @@ public sealed class OnlineFixService : IOnlineFixService, IDisposable
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                LogService.Warn("联机", $"补丁搜索[{v}]失败: {ex.Message}");
+                LogService.Warn(L.Get("LogCat_Online"), L.Get("Svc_OfParseClassFailed", v, ex.Message));
             }
         }
         return merged.Values.ToList();
@@ -158,7 +158,7 @@ public sealed class OnlineFixService : IOnlineFixService, IDisposable
         }
         catch (Exception ex)
         {
-            LogService.Warn("联机", $"解析补丁详情失败 {articleUrl}: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Online"), L.Get("Svc_OfArticleParseFailed", articleUrl, ex.Message));
         }
         return head;
     }
@@ -252,7 +252,7 @@ public sealed class OnlineFixService : IOnlineFixService, IDisposable
         }
         catch (Exception ex)
         {
-            LogService.Warn("联机", $"读取补丁目录失败 {dirUrl}: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Online"), L.Get("Svc_OfDirFailed", dirUrl, ex.Message));
         }
         return list;
     }
@@ -274,7 +274,7 @@ public sealed class OnlineFixService : IOnlineFixService, IDisposable
         request.Headers.Referrer = new Uri(refererDirUrl);
         using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
-            throw new InvalidOperationException($"补丁下载失败（HTTP {(int)response.StatusCode}），请稍后重试");
+            throw new InvalidOperationException(L.Get("Svc_OfDownloadHttpFailed", (int)response.StatusCode));
         var total = response.Content.Headers.ContentLength ?? -1;
         var dir = Path.GetDirectoryName(destPath);
         if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);

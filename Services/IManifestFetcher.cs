@@ -29,7 +29,7 @@ public sealed class HubManifestFetcher : IManifestFetcher
     {
         var key = _keyService.LoadKey();
         if (string.IsNullOrWhiteSpace(key))
-            return new ManifestFetchResult(false, true, "未配置 API Key");
+            return new ManifestFetchResult(false, true, L.Get("Svc_MhNoApiKey"));
         var r = await _hubService.DownloadAsync(depotId, manifestId, key, ct, progress);
         return new ManifestFetchResult(r.Success, r.KeyInvalid, r.Error, r.NotFound,
             r.Success ? "ManifestHub" : null);

@@ -23,7 +23,7 @@ public partial class LoginWindow : Window
         _accountService = accountService;
         InitializeComponent();
 
-        Title = "Steam 账号登录";
+        Title = L.Get("Login_Title");
         if (!Enum.TryParse<BackdropType>(backdropType, true, out var parsedBackdrop))
             parsedBackdrop = BackdropType.Acrylic10;
 
@@ -103,7 +103,7 @@ public partial class LoginWindow : Window
         LocalLoginButton.IsEnabled = users.Count > 0;
         MethodLocalButton.IsEnabled = users.Count > 0;
         if (users.Count == 0)
-            SetStatus("本机无 Steam 登录记录，请输入账号密码登录");
+            SetStatus(L.Get("Login_StatusNoLocal"));
     }
 
     private void PasswordBox_PasswordChanged(object sender, RoutedEventArgs e)
@@ -126,7 +126,7 @@ public partial class LoginWindow : Window
         _loginCts?.Dispose();
         _loginCts = new CancellationTokenSource();
         SetBusy(true);
-        SetStatus($"正在用本机凭证登录 {acc.AccountName}...");
+        SetStatus(L.Get("Login_StatusLocalSigningIn", acc.AccountName));
         try
         {
             var result = await _accountService.LoginWithLocalAsync(acc.AccountName, _loginCts.Token);
@@ -140,7 +140,7 @@ public partial class LoginWindow : Window
                 SetStatus(result.Message);
             }
         }
-        catch (Exception ex) { SetStatus($"登录异常：{ex.Message}"); }
+        catch (Exception ex) { SetStatus(L.Get("Login_StatusError", ex.Message)); }
         finally { SetBusy(false); }
     }
 
@@ -150,14 +150,14 @@ public partial class LoginWindow : Window
         var password = PasswordBox.Password;
         if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
         {
-            SetStatus("请输入账号和密码");
+            SetStatus(L.Get("Login_StatusEnterCreds"));
             return;
         }
         _loginCts?.Dispose();
         _loginCts = new CancellationTokenSource();
         SetBusy(true);
         CredentialPanel.Visibility = Visibility.Collapsed;
-        SetStatus($"正在认证 {username}...");
+        SetStatus(L.Get("Login_StatusAuthenticating", username));
         try
         {
             var result = await _accountService.LoginWithCredentialsAsync(
@@ -176,7 +176,7 @@ public partial class LoginWindow : Window
         }
         catch (Exception ex)
         {
-            SetStatus($"登录异常：{ex.Message}");
+            SetStatus(L.Get("Login_StatusError", ex.Message));
             CredentialPanel.Visibility = Visibility.Visible;
             TwoFactorPanel.Visibility = Visibility.Collapsed;
         }
@@ -224,8 +224,8 @@ public partial class LoginWindow : Window
             var code = await owner.Dispatcher.InvokeAsync(() =>
             {
                 if (previousCodeWasIncorrect)
-                    owner.SetStatus("上次验证码不正确，请重试");
-                return owner.AskCodeAsync("请输入手机令牌验证码");
+                    owner.SetStatus(L.Get("Login_StatusCodeIncorrect"));
+                return owner.AskCodeAsync(L.Get("Login_StatusEnterMobileCode"));
             });
             var result = await code;
             return result ?? throw new OperationCanceledException();
@@ -236,8 +236,8 @@ public partial class LoginWindow : Window
             var code = await owner.Dispatcher.InvokeAsync(() =>
             {
                 if (previousCodeWasIncorrect)
-                    owner.SetStatus("上次验证码不正确，请重试");
-                return owner.AskCodeAsync($"请输入发送到 {email} 的邮箱验证码");
+                    owner.SetStatus(L.Get("Login_StatusCodeIncorrect"));
+                return owner.AskCodeAsync(L.Get("Login_StatusEnterEmailCode", email));
             });
             var result = await code;
             return result ?? throw new OperationCanceledException();
