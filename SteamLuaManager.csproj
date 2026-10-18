@@ -42,9 +42,12 @@
   </ItemGroup>
 
   <PropertyGroup>
-    <!-- CloudRedirect 原生 DLL 版本钉死：构建时自动拉取自家保留仓 Release 成品并验签，仓库内不存放源码与二进制 -->
-    <CloudRedirectVersion>v2.6.5</CloudRedirectVersion>
-    <CloudRedirectDllDir>$(ProjectDir)obj\CloudRedirectDll\$(CloudRedirectVersion)</CloudRedirectDllDir>
+    <!-- CloudRedirect 原生 DLL：构建时自动拉取自家保留仓 Release 成品并验签，仓库内不存放源码与二进制。
+         默认 latest，跟随上游最新 Release；需要复现旧构建时可固定，例如
+         dotnet build -p:CloudRedirectVersion=v2.6.5 -->
+    <CloudRedirectVersion Condition="'$(CloudRedirectVersion)' == ''">latest</CloudRedirectVersion>
+    <!-- 缓存根目录：任务内部按实际解析到的 Release tag 分子目录，最新版与固定版互不覆盖 -->
+    <CloudRedirectDllRoot>$(ProjectDir)obj\CloudRedirectDll</CloudRedirectDllRoot>
   </PropertyGroup>
 
   <ItemGroup>
@@ -107,7 +110,9 @@
   <UsingTask TaskName="FetchCloudRedirectDll" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
     <ParameterGroup>
       <Version ParameterType="System.String" Required="true" />
-      <DestDir ParameterType="System.String" Required="true" />
+      <RootDir ParameterType="System.String" Required="true" />
+      <DllPath ParameterType="System.String" Output="true" />
+      <ResolvedVersion ParameterType="System.String" Output="true" />
     </ParameterGroup>
     <Task>
       <Using Namespace="System" />
@@ -117,48 +122,150 @@
       <Code Type="Fragment" Language="cs">
         <![CDATA[
         var dllName = "cloud_redirect.dll";
-        var marker = Path.Combine(DestDir, ".fetch-ok");
-        var cached = File.Exists(marker) && File.ReadAllText(marker).Trim() == Version && File.Exists(Path.Combine(DestDir, dllName));
-        if (cached)
+        var repo = "https://github.com/huanyuejue/CloudRedirect";
+        var spec = (Version ?? "").Trim();
+        var wantLatest = spec.Length == 0 || spec.Equals("latest", StringComparison.OrdinalIgnoreCase);
+
+        // latest 时先把"最新"解析成具体 tag：缓存按 tag 分目录、日志可读，
+        // 且用 /releases/latest 的 302 目标解析，不消耗 GitHub API 配额。
+        string tag = wantLatest ? null : spec;
+        Exception resolveError = null;
+        if (wantLatest)
         {
-            Log.LogMessage(MessageImportance.High, $"cloud_redirect.dll {Version} 已缓存，跳过下载。");
-        }
-        else
-        {
-            var baseUrl = $"https://github.com/huanyuejue/CloudRedirect/releases/download/{Version}";
-            var tmpRoot = Path.Combine(Path.GetTempPath(), "cloudredirect_" + Guid.NewGuid().ToString("N"));
             try
             {
-                Directory.CreateDirectory(tmpRoot);
-                Log.LogMessage(MessageImportance.High, $"正在下载 cloud_redirect.dll {Version} ...");
-                using var http = new HttpClient();
-                var dllBytes = http.GetByteArrayAsync($"{baseUrl}/{dllName}").GetAwaiter().GetResult();
-                var shaText = http.GetStringAsync($"{baseUrl}/{dllName}.sha256").GetAwaiter().GetResult();
-                var expected = shaText.Split((char[])null, StringSplitOptions.RemoveEmptyEntries)[0].Trim().ToUpperInvariant();
-                using var sha = SHA256.Create();
-                var actual = BitConverter.ToString(sha.ComputeHash(dllBytes)).Replace("-", "").ToUpperInvariant();
-                if (expected != actual)
-                {
-                    Log.LogError($"SHA256 校验失败（期望 {expected}，实得 {actual}）");
-                }
-                else
-                {
-                    if (Directory.Exists(DestDir)) Directory.Delete(DestDir, true);
-                    Directory.CreateDirectory(DestDir);
-                    File.WriteAllBytes(Path.Combine(DestDir, dllName), dllBytes);
-                    File.WriteAllText(marker, Version);
-                    Log.LogMessage(MessageImportance.High, $"cloud_redirect.dll {Version} 已就绪（SHA256 已验证）。");
-                }
+                tag = ResolveLatestTag(repo);
             }
             catch (Exception ex)
             {
-                Log.LogError($"拉取 cloud_redirect.dll 失败：{ex.Message}，请检查网络后重试。");
-            }
-            finally
-            {
-                try { if (Directory.Exists(tmpRoot)) Directory.Delete(tmpRoot, true); } catch { }
+                resolveError = ex;
             }
         }
+
+        if (tag == null)
+        {
+            // 解析不出最新版本（离线/被墙/上游改动）：优先沿用本地已缓存的成品，别把构建卡死在网络上
+            var reason = resolveError == null ? "未知原因" : resolveError.Message;
+            var cachedDir = NewestCachedDir(RootDir, dllName);
+            if (cachedDir == null)
+            {
+                Log.LogError($"解析 CloudRedirect 最新 Release 失败：{reason}；本地也没有可复用的缓存，请检查网络后重试。");
+            }
+            else
+            {
+                ResolvedVersion = Path.GetFileName(cachedDir);
+                DllPath = Path.Combine(cachedDir, dllName);
+                Log.LogWarning($"解析 CloudRedirect 最新 Release 失败（{reason}），本次构建沿用本地缓存 {ResolvedVersion}。");
+            }
+        }
+        else
+        {
+            ResolvedVersion = tag;
+            var destDir = Path.Combine(RootDir, tag);
+            var marker = Path.Combine(destDir, ".fetch-ok");
+            var dllFile = Path.Combine(destDir, dllName);
+            var baseUrl = wantLatest
+                ? $"{repo}/releases/latest/download"
+                : $"{repo}/releases/download/{tag}";
+
+            string expected = null;
+            try
+            {
+                using var http = new HttpClient();
+                http.Timeout = TimeSpan.FromSeconds(60);
+                http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "SteamLuaManager-Build");
+
+                // 先取远端 .sha256（几十字节）与本地缓存比对：内容一致说明上游没发新版，直接跳过下载
+                var shaText = http.GetStringAsync($"{baseUrl}/{dllName}.sha256").GetAwaiter().GetResult();
+                expected = shaText.Split((char[])null, StringSplitOptions.RemoveEmptyEntries)[0].Trim().ToUpperInvariant();
+
+                var cacheOk = File.Exists(marker) && File.Exists(dllFile)
+                              && File.ReadAllText(marker).Trim().ToUpperInvariant() == expected
+                              && HashFile(dllFile) == expected;
+                if (cacheOk)
+                {
+                    Log.LogMessage(MessageImportance.High, $"cloud_redirect.dll {tag} 已是最新，跳过下载。");
+                }
+                else
+                {
+                    Log.LogMessage(MessageImportance.High, $"正在下载 cloud_redirect.dll {tag} ...");
+                    var dllBytes = http.GetByteArrayAsync($"{baseUrl}/{dllName}").GetAwaiter().GetResult();
+                    using var sha = SHA256.Create();
+                    var actual = BitConverter.ToString(sha.ComputeHash(dllBytes)).Replace("-", "").ToUpperInvariant();
+                    if (expected != actual)
+                    {
+                        Log.LogError($"SHA256 校验失败（期望 {expected}，实得 {actual}）");
+                    }
+                    else
+                    {
+                        if (Directory.Exists(destDir)) Directory.Delete(destDir, true);
+                        Directory.CreateDirectory(destDir);
+                        File.WriteAllBytes(dllFile, dllBytes);
+                        File.WriteAllText(marker, expected);
+                        Log.LogMessage(MessageImportance.High, $"cloud_redirect.dll {tag} 已就绪（SHA256 已验证）。");
+                    }
+                }
+                DllPath = dllFile;
+            }
+            catch (Exception ex)
+            {
+                // 网络异常时，只要本地有成品就继续构建（缓存里通常是上次成功拉到的同一 tag）
+                if (File.Exists(dllFile))
+                {
+                    DllPath = dllFile;
+                    Log.LogWarning($"联网拉取 cloud_redirect.dll {tag} 失败（{ex.Message}），本次构建沿用本地缓存。");
+                }
+                else
+                {
+                    Log.LogError($"拉取 cloud_redirect.dll 失败：{ex.Message}，请检查网络后重试。");
+                }
+            }
+        }
+
+        string ResolveLatestTag(string repoUrl)
+        {
+            using var handler = new HttpClientHandler { AllowAutoRedirect = false };
+            using var http = new HttpClient(handler);
+            http.Timeout = TimeSpan.FromSeconds(30);
+            http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "SteamLuaManager-Build");
+            using var resp = http.GetAsync($"{repoUrl}/releases/latest").GetAwaiter().GetResult();
+            var location = resp.Headers.Location == null ? "" : resp.Headers.Location.ToString();
+            var idx = location.IndexOf("/tag/", StringComparison.OrdinalIgnoreCase);
+            if (idx >= 0)
+            {
+                var parsed = location.Substring(idx + 5).Trim('/');
+                var cut = parsed.IndexOfAny(new[] { '?', '#' });
+                if (cut >= 0) parsed = parsed.Substring(0, cut);
+                if (parsed.Length > 0) return parsed;
+            }
+            throw new InvalidOperationException($"未能从 {repoUrl}/releases/latest 解析出版本号（HTTP {(int)resp.StatusCode}）");
+        }
+
+        string NewestCachedDir(string root, string file)
+        {
+            if (!Directory.Exists(root)) return null;
+            string best = null;
+            var bestStamp = DateTime.MinValue;
+            foreach (var dir in Directory.GetDirectories(root))
+            {
+                var candidate = Path.Combine(dir, file);
+                if (!File.Exists(candidate)) continue;
+                var stamp = File.GetLastWriteTimeUtc(candidate);
+                if (best == null || stamp > bestStamp)
+                {
+                    best = dir;
+                    bestStamp = stamp;
+                }
+            }
+            return best;
+        }
+
+        string HashFile(string path)
+        {
+            using var sha = SHA256.Create();
+            return BitConverter.ToString(sha.ComputeHash(File.ReadAllBytes(path))).Replace("-", "").ToUpperInvariant();
+        }
+
         // 无显式 return：收尾的 return !Log.HasLoggedErrors 由任务工厂自动追加，
         // 成功只记 Message（返回 true），失败已记 Error（返回 false）；显式 return 会让它变死代码报 CS0162
         ]]>
@@ -167,8 +274,11 @@
   </UsingTask>
 
   <Target Name="FetchCloudRedirectDll" BeforeTargets="BeforeBuild">
-    <FetchCloudRedirectDll Version="$(CloudRedirectVersion)" DestDir="$(CloudRedirectDllDir)" />
-    <Copy SourceFiles="$(CloudRedirectDllDir)\cloud_redirect.dll" DestinationFolder="$(ProjectDir)Resources\CloudRedirectDllPublish" />
+    <FetchCloudRedirectDll Version="$(CloudRedirectVersion)" RootDir="$(CloudRedirectDllRoot)">
+      <Output TaskParameter="DllPath" PropertyName="CloudRedirectDllPath" />
+      <Output TaskParameter="ResolvedVersion" PropertyName="CloudRedirectResolvedVersion" />
+    </FetchCloudRedirectDll>
+    <Copy SourceFiles="$(CloudRedirectDllPath)" DestinationFolder="$(ProjectDir)Resources\CloudRedirectDllPublish" />
     <ZipDirectory SourceDirectory="$(ProjectDir)Resources\CloudRedirectDllPublish"
                   DestinationFile="$(ProjectDir)Resources\CloudRedirectDll.zip"
                   Overwrite="true" />

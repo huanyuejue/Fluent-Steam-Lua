@@ -89,7 +89,7 @@
 
 ## 构建方法
 
-前置要求：[.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)，构建时自动拉取 CloudRedirect 原生 DLL（版本钉在 csproj 的 CloudRedirectVersion，需联网，带 SHA256 校验）。
+前置要求：[.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)，构建时自动拉取 CloudRedirect 原生 DLL（默认跟随保留仓最新 Release，需联网，带 SHA256 校验）。要复现旧构建可固定版本：`dotnet build -p:CloudRedirectVersion=v2.6.5`。
 
 发布为单文件可执行程序：
 
