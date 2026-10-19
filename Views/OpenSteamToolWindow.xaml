@@ -111,18 +111,22 @@
                         <Border Grid.Column="5" Width="1" Margin="0,14"
                                 Background="{DynamicResource DividerStrokeColorDefaultBrush}"/>
 
-                        <StackPanel Grid.Column="6" Orientation="Horizontal" Margin="16,14">
-                            <ui:FontIcon Glyph="&#xE8B7;" FontSize="20" VerticalAlignment="Top" Margin="0,3,12,0"
+                        <Grid Grid.Column="6" Margin="16,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <ui:FontIcon Grid.Column="0" Glyph="&#xE8B7;" FontSize="20" VerticalAlignment="Top" Margin="0,3,12,0"
                                          Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                            <StackPanel>
+                            <StackPanel Grid.Column="1">
                                 <TextBlock Text="{l:Loc Ost_StatusSteamPath}" FontSize="12.5"
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                                 <TextBlock x:Name="SteamPathText" FontSize="14.5" FontWeight="SemiBold" Margin="0,6,0,0"
-                                           TextTrimming="CharacterEllipsis"
+                                           TextWrapping="Wrap"
                                            ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"
                                            Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
                             </StackPanel>
-                        </StackPanel>
+                        </Grid>
                     </Grid>
                 </Border>
 
