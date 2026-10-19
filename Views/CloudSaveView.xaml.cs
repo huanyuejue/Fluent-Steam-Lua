@@ -46,6 +46,9 @@ public partial class CloudSaveView : UserControl
             if ((onlyProperty == null || onlyProperty == nameof(vm.S3SecretKey)) &&
                 S3SecretBox.Password != (vm.S3SecretKey ?? ""))
                 S3SecretBox.Password = vm.S3SecretKey ?? "";
+            if ((onlyProperty == null || onlyProperty == nameof(vm.WebDavPassword)) &&
+                WebDavPasswordBox.Password != (vm.WebDavPassword ?? ""))
+                WebDavPasswordBox.Password = vm.WebDavPassword ?? "";
         }
         catch { }
     }
@@ -84,5 +87,11 @@ public partial class CloudSaveView : UserControl
     {
         if (DataContext is CloudSaveViewModel vm && sender is PasswordBox box)
             vm.S3SecretKey = box.Password;
+    }
+
+    private void WebDavPasswordBox_PasswordChanged(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is CloudSaveViewModel vm && sender is PasswordBox box)
+            vm.WebDavPassword = box.Password;
     }
 }

@@ -110,6 +110,7 @@ public partial class CloudSaveViewModel : ObservableObject
         // 选项列表保持同一实例，只刷新显示名；列表不重建，选择器选中项不受影响
         foreach (var o in SortOptions) o.RefreshDisplay();
         foreach (var o in CloudProviders) o.RefreshDisplay();
+        foreach (var a in WebDavAuthOptions) a.RefreshDisplay();
         OnPropertyChanged(nameof(SyncPathText));
         RefreshProviderStatus();
         SetIdleListHint();
@@ -626,6 +627,65 @@ public partial class CloudSaveViewModel : ObservableObject
     [ObservableProperty] private bool _s3AllowInsecureHttp;
     [ObservableProperty] private bool _s3AllowInsecureTls;
 
+    // WebDAV 表单
+    [ObservableProperty] private string _webDavUrl = "";
+    [ObservableProperty] private string _webDavUsername = "";
+    [ObservableProperty] private string _webDavPassword = "";
+    [ObservableProperty] private string _webDavBearerToken = "";
+    [ObservableProperty] private string _webDavKeyPrefix = "";
+    [ObservableProperty] private string _webDavTimeout = "0";
+    [ObservableProperty] private string _webDavExtraHeaders = "";
+    [ObservableProperty] private bool _webDavAllowInsecureHttp;
+    [ObservableProperty] private bool _webDavAllowInsecureTls;
+
+    // 三个云存储配置卡片默认展开；折叠状态只作用于当前界面，不写入配置文件。
+    [ObservableProperty] private bool _isR2ConfigExpanded = true;
+    [ObservableProperty] private bool _isS3ConfigExpanded = true;
+    [ObservableProperty] private bool _isWebDavConfigExpanded = true;
+
+    public sealed class WebDavAuthChoice : System.ComponentModel.INotifyPropertyChanged
+    {
+        private readonly string _displayKey;
+        public string Id { get; }
+
+        public WebDavAuthChoice(string id, string displayKey)
+        {
+            Id = id;
+            _displayKey = displayKey;
+        }
+
+        public string Display => L.Get(_displayKey);
+
+        public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
+
+        public void RefreshDisplay() =>
+            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(Display)));
+    }
+
+    public System.Collections.Generic.List<WebDavAuthChoice> WebDavAuthOptions { get; } = new()
+    {
+        new("basic", "Cloud_WebDavAuthBasic"),
+        new("auto", "Cloud_WebDavAuthAuto"),
+        new("digest", "Cloud_WebDavAuthDigest"),
+        new("ntlm", "Cloud_WebDavAuthNtlm"),
+        new("negotiate", "Cloud_WebDavAuthNegotiate"),
+        new("bearer", "Cloud_WebDavAuthBearer"),
+        new("none", "Cloud_WebDavAuthNone"),
+    };
+
+    private string _webDavAuth = "basic";
+
+    public WebDavAuthChoice? SelectedWebDavAuth
+    {
+        get => WebDavAuthOptions.FirstOrDefault(o => o.Id == _webDavAuth);
+        set
+        {
+            if (value == null || value.Id == _webDavAuth) return;
+            _webDavAuth = value.Id;
+            OnPropertyChanged();
+        }
+    }
+
     private bool _syncingProvider;
     private CancellationTokenSource? _signInCts;
     private CancellationTokenSource? _refreshCts;
@@ -734,6 +794,7 @@ public partial class CloudSaveViewModel : ObservableObject
                 "gdrive" or "onedrive" => _cloudService.CheckOAuthToken(SelectedProvider).Ok,
                 "r2" => _cloudService.LoadR2Credentials() != null,
                 "s3" => _cloudService.LoadS3Credentials() != null,
+                "webdav" => _cloudService.LoadWebDavCredentials() != null,
                 _ => false,
             };
         }
@@ -759,6 +820,7 @@ public partial class CloudSaveViewModel : ObservableObject
                     break;
                 case "r2":
                 case "s3":
+                case "webdav":
                     var (_, credMsg) = _cloudService.CheckStoredCredentials(SelectedProvider);
                     _authStatusPart = credMsg;
                     break;
@@ -803,6 +865,24 @@ public partial class CloudSaveViewModel : ObservableObject
                 S3AllowInsecureHttp = s3.AllowInsecureHttp;
                 S3AllowInsecureTls = s3.AllowInsecureTls;
                 if (!string.IsNullOrEmpty(s3.SecretAccessKey)) S3SecretKey = s3.SecretAccessKey;
+            }
+            var webdav = _cloudService.LoadWebDavCredentials();
+            if (webdav != null)
+            {
+                WebDavUrl = webdav.Url;
+                WebDavUsername = webdav.Username;
+                WebDavBearerToken = webdav.BearerToken;
+                WebDavKeyPrefix = webdav.KeyPrefix;
+                WebDavExtraHeaders = webdav.ExtraHeaders;
+                WebDavTimeout = webdav.TimeoutSec.ToString();
+                WebDavAllowInsecureHttp = webdav.AllowInsecureHttp;
+                WebDavAllowInsecureTls = webdav.AllowInsecureTls;
+                _webDavAuth = string.IsNullOrWhiteSpace(webdav.Auth)
+                    ? "basic" : webdav.Auth.Trim().ToLowerInvariant();
+                if (_webDavAuth is not ("basic" or "auto" or "digest" or "ntlm" or "negotiate" or "bearer" or "none"))
+                    _webDavAuth = "basic";
+                OnPropertyChanged(nameof(SelectedWebDavAuth));
+                if (!string.IsNullOrEmpty(webdav.Password)) WebDavPassword = webdav.Password;
             }
         }
         catch (Exception ex)
@@ -899,6 +979,7 @@ public partial class CloudSaveViewModel : ObservableObject
             "gdrive" or "onedrive" => _cloudService.CheckOAuthToken(provider).Ok,
             "r2" => _cloudService.LoadR2Credentials() != null,
             "s3" => _cloudService.LoadS3Credentials() != null,
+            "webdav" => _cloudService.LoadWebDavCredentials() != null,
             _ => false,
         };
         if (!signedIn)
@@ -975,6 +1056,11 @@ public partial class CloudSaveViewModel : ObservableObject
             // 退出后清空界面 secret（文件已删，留着旧值误导人）；其他表单项保持原样
             if (target == "r2") R2SecretKey = "";
             if (target == "s3") S3SecretKey = "";
+            if (target == "webdav")
+            {
+                WebDavPassword = "";
+                WebDavBearerToken = "";
+            }
             SetListStatus(isOAuth ? L.Get("Cloud_SignedOut") : L.Get("Cloud_CredCleared"));
             LogService.Info(L.Get("LogCat_Cloud"), isOAuth ? L.Get("Cloud_SignedOut") : L.Get("Cloud_CredCleared"));
         }
@@ -1072,6 +1158,59 @@ public partial class CloudSaveViewModel : ObservableObject
         {
             SetListStatus(ex.Message);
             LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogS3SaveFailed", ex.Message));
+        }
+        finally { IsBusy = false; }
+    }
+
+    [RelayCommand]
+    private async Task SaveWebDavAsync()
+    {
+        if (IsBusy) return;
+        var needsUser = _webDavAuth is "basic" or "auto" or "digest" or "ntlm" or "negotiate";
+        var missing = new List<string>();
+        if (string.IsNullOrWhiteSpace(WebDavUrl)) missing.Add("URL");
+        if (needsUser && string.IsNullOrWhiteSpace(WebDavUsername))
+            missing.Add(L.Get("Cloud_WebDavUser"));
+        if (_webDavAuth == "bearer" && string.IsNullOrWhiteSpace(WebDavBearerToken))
+            missing.Add(L.Get("Cloud_WebDavToken"));
+        if (missing.Count > 0)
+        {
+            SetListStatus(L.Get("Cloud_FillMissing", string.Join("、", missing)));
+            return;
+        }
+        if (!int.TryParse(WebDavTimeout.Trim(), out var timeout) || timeout < 0 || timeout > 300)
+        {
+            SetListStatus(L.Get("Cloud_WebDavTimeoutInvalid"));
+            return;
+        }
+        try
+        {
+            IsBusy = true;
+            // 明文 HTTP / 跳过证书校验会让账号密码可被截获，保存前明确告知
+            if (WebDavAllowInsecureHttp || WebDavAllowInsecureTls)
+            {
+                var ok = await _dialogService.ShowConfirmAsync(L.Get("Cloud_InsecureTitle"),
+                    L.Get("Cloud_InsecureBody"), L.Get("Cloud_KeepSaving"), L.Get("Common_Cancel"));
+                if (!ok)
+                {
+                    SetListStatus(L.Get("Cloud_WebDavSaveCancelled"));
+                    return;
+                }
+            }
+            var path = await Task.Run(() => _cloudService.SaveWebDavCredentials(new WebDavCredentials(
+                WebDavUrl.Trim(), WebDavUsername.Trim(), WebDavPassword, _webDavAuth,
+                WebDavBearerToken.Trim(), WebDavKeyPrefix.Trim(),
+                WebDavAllowInsecureHttp, WebDavAllowInsecureTls, timeout, WebDavExtraHeaders)));
+            SetListStatus(L.Get("Cloud_WebDavSaved"));
+            LogService.Info(L.Get("LogCat_Cloud"), L.Get("Cloud_LogWebDavSaved", path));
+            SyncProviderSelection("webdav");
+            RefreshEffectiveRoot();
+            UpdateSignedInFlag();
+        }
+        catch (Exception ex)
+        {
+            SetListStatus(ex.Message);
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogWebDavSaveFailed", ex.Message));
         }
         finally { IsBusy = false; }
     }

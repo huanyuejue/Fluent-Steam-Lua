@@ -9,6 +9,152 @@
         UseLayoutRounding="True"
         SnapsToDevicePixels="True">
 
+    <UserControl.Resources>
+        <!-- 折叠按钮：展开时显示向上箭头，折叠后显示向下箭头，悬停有轻量背景 -->
+        <Style x:Key="ProviderCollapseIconStyle" TargetType="ToggleButton">
+            <Setter Property="Width" Value="28"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Focusable" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="IconHost" Background="{TemplateBinding Background}" CornerRadius="6">
+                            <Grid Width="10" Height="8" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Path Data="M 0 0 L 4 4 L 8 0"
+                                      Stroke="{DynamicResource TextFillColorSecondaryBrush}"
+                                      StrokeThickness="1.6" Width="10" Height="8" Stretch="Uniform"
+                                      RenderTransformOrigin="0.5,0.5">
+                                    <Path.RenderTransform>
+                                        <RotateTransform x:Name="ChevronRotate" Angle="180"/>
+                                    </Path.RenderTransform>
+                                </Path>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="False">
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="ChevronRotate"
+                                                             Storyboard.TargetProperty="Angle"
+                                                             To="0" Duration="0:0:0.2">
+                                                <DoubleAnimation.EasingFunction>
+                                                    <QuadraticEase EasingMode="EaseIn"/>
+                                                </DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="ChevronRotate"
+                                                             Storyboard.TargetProperty="Angle"
+                                                             To="180" Duration="0:0:0.2">
+                                                <DoubleAnimation.EasingFunction>
+                                                    <QuadraticEase EasingMode="EaseOut"/>
+                                                </DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="IconHost" Property="Background"
+                                        Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="IconHost" Property="Background"
+                                        Value="{DynamicResource ControlFillColorDefaultBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 配置卡片：右上角图标控制展开，内容沿 Y 轴向上收缩；默认展开 -->
+        <Style x:Key="ProviderCardExpanderStyle" TargetType="Expander">
+            <Setter Property="IsExpanded" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Expander">
+                        <Border CornerRadius="10" Padding="16" Margin="0,0,0,8"
+                                BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1">
+                            <Border.Background>
+                                <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
+                            </Border.Background>
+                            <StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <ContentPresenter Grid.Column="0" ContentSource="Header"
+                                                      VerticalAlignment="Center"/>
+                                    <ToggleButton Grid.Column="1" x:Name="HeaderToggle"
+                                                  Margin="8,0,0,0"
+                                                  Style="{StaticResource ProviderCollapseIconStyle}"
+                                                  IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"/>
+                                </Grid>
+                                <Grid x:Name="ContentGrid" Margin="0,10,0,0">
+                                    <Grid.LayoutTransform>
+                                        <ScaleTransform x:Name="ContentScale" ScaleY="1"/>
+                                    </Grid.LayoutTransform>
+                                    <ContentPresenter x:Name="ExpandSite" ContentSource="Content" Opacity="1"
+                                                      RenderTransformOrigin="0.5,0"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsExpanded" Value="False">
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard x:Name="CollapseBS">
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="ContentScale"
+                                                             Storyboard.TargetProperty="ScaleY"
+                                                             To="0" Duration="0:0:0.2">
+                                                <DoubleAnimation.EasingFunction>
+                                                    <QuadraticEase EasingMode="EaseIn"/>
+                                                </DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                            <DoubleAnimation Storyboard.TargetName="ExpandSite"
+                                                             Storyboard.TargetProperty="Opacity"
+                                                             To="0" Duration="0:0:0.15"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                    <StopStoryboard BeginStoryboardName="ExpandBS"/>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard x:Name="ExpandBS">
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="ContentScale"
+                                                             Storyboard.TargetProperty="ScaleY"
+                                                             To="1" Duration="0:0:0.25">
+                                                <DoubleAnimation.EasingFunction>
+                                                    <QuadraticEase EasingMode="EaseOut"/>
+                                                </DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                            <DoubleAnimation Storyboard.TargetName="ExpandSite"
+                                                             Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.2"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                    <StopStoryboard BeginStoryboardName="CollapseBS"/>
+                                </Trigger.ExitActions>
+                                <!-- 折叠后禁用内容，避免零高度状态下仍被 Tab 聚焦 -->
+                                <Setter TargetName="ContentGrid" Property="IsEnabled" Value="False"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
     <controls:SmoothScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <StackPanel Margin="36,24,36,24">
 
@@ -134,12 +280,17 @@
                 </Border>
 
                 <!-- R2 凭证表单 -->
-                <Border CornerRadius="10" Padding="16" Margin="0,0,0,8"
-                        BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1"
-                        Visibility="{Binding SelectedProvider, Converter={StaticResource EqualityToVisibilityConverter}, ConverterParameter=r2}">
-                    <Border.Background>
-                        <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
-                    </Border.Background>
+                <Expander Style="{StaticResource ProviderCardExpanderStyle}"
+                          IsExpanded="{Binding IsR2ConfigExpanded, Mode=TwoWay}"
+                          Visibility="{Binding SelectedProvider, Converter={StaticResource EqualityToVisibilityConverter}, ConverterParameter=r2}">
+                    <Expander.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Cloudflare R2" FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                            <TextBlock Text="{l:Loc Cloud_ConfigSection}" FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" Margin="6,0,0,0"/>
+                        </StackPanel>
+                    </Expander.Header>
                     <StackPanel>
                         <Grid Margin="0,0,0,4">
                             <Grid.ColumnDefinitions>
@@ -154,18 +305,18 @@
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
-                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Account ID *" VerticalAlignment="Center" FontSize="12" Margin="0,4"/>
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Account ID *" VerticalAlignment="Center" FontSize="12" Margin="0,4" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
                             <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding R2AccountId, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Margin="0,4"/>
-                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Access Key ID *" VerticalAlignment="Center" FontSize="12" Margin="0,4"/>
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Access Key ID *" VerticalAlignment="Center" FontSize="12" Margin="0,4" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
                             <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding R2AccessKeyId, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Margin="0,4"/>
-                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Secret Key *" VerticalAlignment="Center" FontSize="12" Margin="0,4"/>
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Secret Key *" VerticalAlignment="Center" FontSize="12" Margin="0,4" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
                             <PasswordBox Grid.Row="2" Grid.Column="1" x:Name="R2SecretBox" Padding="8,6" Margin="0,4"
                                          PasswordChanged="R2SecretBox_PasswordChanged"/>
-                            <TextBlock Grid.Row="3" Grid.Column="0" Text="Bucket *" VerticalAlignment="Center" FontSize="12" Margin="0,4"/>
+                            <TextBlock Grid.Row="3" Grid.Column="0" Text="Bucket *" VerticalAlignment="Center" FontSize="12" Margin="0,4" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
                             <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding R2Bucket, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Margin="0,4"/>
-                            <TextBlock Grid.Row="4" Grid.Column="0" Text="Key Prefix" VerticalAlignment="Center" FontSize="12" Margin="0,4"/>
+                            <TextBlock Grid.Row="4" Grid.Column="0" Text="Key Prefix" VerticalAlignment="Center" FontSize="12" Margin="0,4" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
                             <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding R2KeyPrefix, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Margin="0,4"/>
-                            <TextBlock Grid.Row="5" Grid.Column="0" Text="Endpoint" VerticalAlignment="Center" FontSize="12" Margin="0,4"/>
+                            <TextBlock Grid.Row="5" Grid.Column="0" Text="Endpoint" VerticalAlignment="Center" FontSize="12" Margin="0,4" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
                             <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding R2Endpoint, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Margin="0,4"/>
                         </Grid>
                         <TextBlock Text="{l:Loc Cloud_R2Hint}"
@@ -183,15 +334,20 @@
                             </Button>
                         </StackPanel>
                     </StackPanel>
-                </Border>
+                </Expander>
 
                 <!-- S3 凭证表单 -->
-                <Border CornerRadius="10" Padding="16" Margin="0,0,0,8"
-                        BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1"
-                        Visibility="{Binding SelectedProvider, Converter={StaticResource EqualityToVisibilityConverter}, ConverterParameter=s3}">
-                    <Border.Background>
-                        <SolidColorBrush Color="{DynamicResource CardBackgroundFillColorDefault}" Opacity="0.45"/>
-                    </Border.Background>
+                <Expander Style="{StaticResource ProviderCardExpanderStyle}"
+                          IsExpanded="{Binding IsS3ConfigExpanded, Mode=TwoWay}"
+                          Visibility="{Binding SelectedProvider, Converter={StaticResource EqualityToVisibilityConverter}, ConverterParameter=s3}">
+                    <Expander.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{l:Loc Cloud_ProviderS3}" FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                            <TextBlock Text="{l:Loc Cloud_ConfigSection}" FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" Margin="6,0,0,0"/>
+                        </StackPanel>
+                    </Expander.Header>
                     <StackPanel>
                         <Grid Margin="0,0,0,4">
                             <Grid.ColumnDefinitions>
@@ -208,20 +364,20 @@
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
-                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Access Key ID *" VerticalAlignment="Center" FontSize="12" Margin="0,4"/>
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Access Key ID *" VerticalAlignment="Center" FontSize="12" Margin="0,4" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
                             <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding S3AccessKeyId, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Margin="0,4"/>
-                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Secret Key *" VerticalAlignment="Center" FontSize="12" Margin="0,4"/>
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Secret Key *" VerticalAlignment="Center" FontSize="12" Margin="0,4" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
                             <PasswordBox Grid.Row="1" Grid.Column="1" x:Name="S3SecretBox" Padding="8,6" Margin="0,4"
                                          PasswordChanged="S3SecretBox_PasswordChanged"/>
-                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Bucket *" VerticalAlignment="Center" FontSize="12" Margin="0,4"/>
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Bucket *" VerticalAlignment="Center" FontSize="12" Margin="0,4" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
                             <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding S3Bucket, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Margin="0,4"/>
-                            <TextBlock Grid.Row="3" Grid.Column="0" Text="Endpoint *" VerticalAlignment="Center" FontSize="12" Margin="0,4"/>
+                            <TextBlock Grid.Row="3" Grid.Column="0" Text="Endpoint *" VerticalAlignment="Center" FontSize="12" Margin="0,4" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
                             <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding S3Endpoint, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Margin="0,4"/>
-                            <TextBlock Grid.Row="4" Grid.Column="0" Text="Region *" VerticalAlignment="Center" FontSize="12" Margin="0,4"/>
+                            <TextBlock Grid.Row="4" Grid.Column="0" Text="Region *" VerticalAlignment="Center" FontSize="12" Margin="0,4" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
                             <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding S3Region, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Margin="0,4"/>
-                            <TextBlock Grid.Row="5" Grid.Column="0" Text="Key Prefix" VerticalAlignment="Center" FontSize="12" Margin="0,4"/>
+                            <TextBlock Grid.Row="5" Grid.Column="0" Text="Key Prefix" VerticalAlignment="Center" FontSize="12" Margin="0,4" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
                             <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding S3KeyPrefix, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Margin="0,4"/>
-                            <TextBlock Grid.Row="6" Grid.Column="0" Text="{l:Loc Cloud_CaCert}" VerticalAlignment="Center" FontSize="12" Margin="0,4"/>
+                            <TextBlock Grid.Row="6" Grid.Column="0" Text="{l:Loc Cloud_CaCert}" VerticalAlignment="Center" FontSize="12" Margin="0,4" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
                             <StackPanel Grid.Row="6" Grid.Column="1" Orientation="Horizontal" Margin="0,4">
                                 <TextBox Text="{Binding S3CaCertPath}" IsReadOnly="True" Width="220" Padding="8,6" Margin="0,0,8,0"/>
                                 <Button Content="{l:Loc Cloud_Browse}" Padding="12,6" Command="{Binding BrowseCaCertCommand}"/>
@@ -247,7 +403,79 @@
                             </Button>
                         </StackPanel>
                     </StackPanel>
-                </Border>
+                </Expander>
+
+                <!-- WebDAV 凭证表单 -->
+                <Expander Style="{StaticResource ProviderCardExpanderStyle}"
+                          IsExpanded="{Binding IsWebDavConfigExpanded, Mode=TwoWay}"
+                          Visibility="{Binding SelectedProvider, Converter={StaticResource EqualityToVisibilityConverter}, ConverterParameter=webdav}">
+                    <Expander.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="WebDAV" FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                            <TextBlock Text="{l:Loc Cloud_ConfigSection}" FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" Margin="6,0,0,0"/>
+                        </StackPanel>
+                    </Expander.Header>
+                    <StackPanel>
+                        <Grid Margin="0,0,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="130"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="URL *" VerticalAlignment="Center" FontSize="12" Margin="0,4" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                            <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding WebDavUrl, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Margin="0,4"/>
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="{l:Loc Cloud_WebDavUser}" VerticalAlignment="Center" FontSize="12" Margin="0,4" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding WebDavUsername, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Margin="0,4"/>
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="{l:Loc Cloud_WebDavPassword}" VerticalAlignment="Center" FontSize="12" Margin="0,4" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                            <PasswordBox Grid.Row="2" Grid.Column="1" x:Name="WebDavPasswordBox" Padding="8,6" Margin="0,4"
+                                         PasswordChanged="WebDavPasswordBox_PasswordChanged"/>
+                            <TextBlock Grid.Row="3" Grid.Column="0" Text="{l:Loc Cloud_WebDavAuth}" VerticalAlignment="Center" FontSize="12" Margin="0,4" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                            <ComboBox Grid.Row="3" Grid.Column="1" ItemsSource="{Binding WebDavAuthOptions}"
+                                      SelectedItem="{Binding SelectedWebDavAuth}" DisplayMemberPath="Display"
+                                      Padding="8,6" Margin="0,4" HorizontalAlignment="Left" MinWidth="200"/>
+                            <TextBlock Grid.Row="4" Grid.Column="0" Text="{l:Loc Cloud_WebDavToken}" VerticalAlignment="Center" FontSize="12" Margin="0,4" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                            <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding WebDavBearerToken, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Margin="0,4"/>
+                            <TextBlock Grid.Row="5" Grid.Column="0" Text="{l:Loc Cloud_WebDavPrefix}" VerticalAlignment="Center" FontSize="12" Margin="0,4" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                            <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding WebDavKeyPrefix, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Margin="0,4"/>
+                            <TextBlock Grid.Row="6" Grid.Column="0" Text="{l:Loc Cloud_WebDavTimeout}" VerticalAlignment="Center" FontSize="12" Margin="0,4" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                            <TextBox Grid.Row="6" Grid.Column="1" Text="{Binding WebDavTimeout, UpdateSourceTrigger=PropertyChanged}" Padding="8,6" Margin="0,4" HorizontalAlignment="Left" Width="100"/>
+                            <TextBlock Grid.Row="7" Grid.Column="0" Text="{l:Loc Cloud_WebDavHeaders}" VerticalAlignment="Top" FontSize="12" Margin="0,8,0,4" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                            <TextBox Grid.Row="7" Grid.Column="1" Text="{Binding WebDavExtraHeaders, UpdateSourceTrigger=PropertyChanged}"
+                                     Padding="8,6" Margin="0,4" Height="56" AcceptsReturn="True" TextWrapping="Wrap"
+                                     VerticalScrollBarVisibility="Auto"/>
+                            <StackPanel Grid.Row="8" Grid.Column="1" Orientation="Horizontal" Margin="0,4">
+                                <CheckBox Content="{l:Loc Cloud_AllowHttp}" IsChecked="{Binding WebDavAllowInsecureHttp}" Margin="0,0,16,0"/>
+                                <CheckBox Content="{l:Loc Cloud_SkipTls}" IsChecked="{Binding WebDavAllowInsecureTls}"/>
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock Text="{l:Loc Cloud_WebDavHint}"
+                                   FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <Button Content="{l:Loc Cloud_SaveWebDav}" Padding="20,6" Margin="0,0,8,0"
+                                    Command="{Binding SaveWebDavCommand}"/>
+                            <Button Content="{l:Loc Cloud_ClearCred}" Padding="20,6"
+                                    Command="{Binding SignOutCommand}" CommandParameter="webdav"
+                                    Visibility="{Binding IsProviderSignedIn, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <Button.Foreground>
+                                    <SolidColorBrush Color="#E74856"/>
+                                </Button.Foreground>
+                            </Button>
+                        </StackPanel>
+                    </StackPanel>
+                </Expander>
 
             <Border CornerRadius="10" Padding="16" Margin="0,0,0,8"
                     BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1">

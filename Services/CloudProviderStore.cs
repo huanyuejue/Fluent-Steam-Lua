@@ -24,6 +24,7 @@ public sealed class CloudProviderStore
 {
     private readonly Func<R2Credentials?> _loadR2;
     private readonly Func<S3Credentials?> _loadS3;
+    private readonly Func<WebDavCredentials?> _loadWebDav;
     private readonly Func<string, string> _tokenPath;
 
     private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(30) };
@@ -34,16 +35,40 @@ public sealed class CloudProviderStore
     private const string RootFolderName = "CloudRedirect";
     private const string StatsFileName = "stats.json";
 
-    public CloudProviderStore(Func<R2Credentials?> loadR2, Func<S3Credentials?> loadS3, Func<string, string> tokenPath)
+    public CloudProviderStore(Func<R2Credentials?> loadR2, Func<S3Credentials?> loadS3,
+        Func<WebDavCredentials?> loadWebDav, Func<string, string> tokenPath)
     {
         _loadR2 = loadR2;
         _loadS3 = loadS3;
+        _loadWebDav = loadWebDav;
         _tokenPath = tokenPath;
     }
 
     // key 前缀归一化：为空即桶根目录（DLL 默认无前缀）；非空去首尾斜杠后补 trailing /
     public static string NormalizePrefix(string? keyPrefix) =>
         string.IsNullOrWhiteSpace(keyPrefix) ? "" : keyPrefix.Trim().Trim('/') + "/";
+
+    // 与其他 provider 的远端根约定一致：URL 未显式以 CloudRedirect 结尾时自动补一层，
+    // 避免账号目录直接散落在 WebDAV 根目录；已指向 CloudRedirect 时保持原样。
+    public static string ApplyDefaultWebDavRoot(string? urlOrPath)
+    {
+        var s = (urlOrPath ?? "").Trim();
+        // 完整 URL 只保留 scheme/authority/path，避免 query/fragment 被拼进目录地址；
+        // 纯路径（内部调用）保持原样。
+        var check = s;
+        if (Uri.TryCreate(s, UriKind.Absolute, out var uri) &&
+            (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+        {
+            s = $"{uri.Scheme}://{uri.Authority}{uri.AbsolutePath}";
+            check = uri.AbsolutePath;
+        }
+        try { check = Uri.UnescapeDataString(check); } catch { }
+        s = s.TrimEnd('/');
+        // 已显式写到 CloudRedirect 时不再嵌套；解码后再判断，兼容 %43loudRedirect 这类写法
+        if (!check.TrimEnd('/').EndsWith("/CloudRedirect", StringComparison.OrdinalIgnoreCase))
+            s += "/CloudRedirect";
+        return s + "/";
+    }
 
     // 远端路径展示：删除确认对话框与日志使用，不对应本地文件系统；
     // root 传有效前缀（S3/R2 可能为空即桶根），OAuth 源沿用 CloudRedirect
@@ -54,6 +79,7 @@ public sealed class CloudProviderStore
         "onedrive" => $"OneDrive:/{RootFolderName}/{accountId}/{appId}",
         "r2" => $"r2://{bucket ?? "(bucket)"}/{root ?? RootFolderName + "/"}{accountId}/{appId}",
         "s3" => $"s3://{bucket ?? "(bucket)"}/{root ?? RootFolderName + "/"}{accountId}/{appId}",
+        "webdav" => $"WebDAV:/{accountId}/{appId}",
         _ => $"{provider}:/{accountId}/{appId}",
     };
 
@@ -63,6 +89,7 @@ public sealed class CloudProviderStore
             "gdrive" => ListDriveAppsAsync(progress, ct),
             "onedrive" => ListOneDriveAppsAsync(progress, ct),
             "r2" or "s3" => ListS3AppsAsync(provider, progress, ct),
+            "webdav" => ListWebDavAppsAsync(progress, ct),
             _ => throw new InvalidOperationException(L.Get("Cloud_UnknownProvider", provider)),
         };
 
@@ -201,6 +228,7 @@ public sealed class CloudProviderStore
             "gdrive" => GetDriveAppStatsAsync(accountId, appId, ct),
             "onedrive" => GetOneDriveAppStatsAsync(accountId, appId, ct),
             "r2" or "s3" => GetS3AppStatsAsync(provider, accountId, appId, ct),
+            "webdav" => GetWebDavAppStatsAsync(accountId, appId, ct),
             _ => throw new InvalidOperationException(L.Get("Cloud_UnknownProvider", provider)),
         };
 
@@ -210,6 +238,7 @@ public sealed class CloudProviderStore
             "gdrive" => DownloadDriveAppAsync(accountId, appId, destDir, progress, ct),
             "onedrive" => DownloadOneDriveAppAsync(accountId, appId, destDir, progress, ct),
             "r2" or "s3" => DownloadS3AppAsync(provider, accountId, appId, destDir, progress, ct),
+            "webdav" => DownloadWebDavAppAsync(accountId, appId, destDir, progress, ct),
             _ => throw new InvalidOperationException(L.Get("Cloud_UnknownProvider", provider)),
         };
 
@@ -219,6 +248,7 @@ public sealed class CloudProviderStore
             "gdrive" => DeleteDriveAppAsync(accountId, appId, progress, ct),
             "onedrive" => DeleteOneDriveAppAsync(accountId, appId, progress, ct),
             "r2" or "s3" => DeleteS3AppAsync(provider, accountId, appId, progress, ct),
+            "webdav" => DeleteWebDavAppAsync(accountId, appId, progress, ct),
             _ => throw new InvalidOperationException(L.Get("Cloud_UnknownProvider", provider)),
         };
 
@@ -905,6 +935,7 @@ public sealed class CloudProviderStore
                 "gdrive" => await ProbeDriveAsync(ct),
                 "onedrive" => await ProbeOneDriveAsync(ct),
                 "r2" or "s3" => await ProbeS3Async(provider, ct),
+                "webdav" => await ProbeWebDavAsync(ct),
                 _ => throw new InvalidOperationException(L.Get("Cloud_UnknownProvider", provider)),
             };
         }
@@ -1376,5 +1407,443 @@ public sealed class CloudProviderStore
         }
         return new CloudDeleteResult(deleted, failed.Count, failed.Take(10).ToList(),
             failed.Count > 0 ? L.Get("Cloud_RemoteFilesDeleteFailed", failed.Count) : null);
+    }
+
+    // ---- WebDAV（通用协议，不依赖特定服务端；XML 按本地名匹配，兼容任意命名空间前缀） ----
+
+    private static string WebDavLastSegment(string relPath)
+    {
+        var slash = relPath.LastIndexOf('/');
+        return slash < 0 ? relPath : relPath[(slash + 1)..];
+    }
+
+    // 服务端返回的 href 不能带着 ".."、绝对路径或反斜杠跑到目标目录之外。
+    private static bool IsSafeWebDavRel(string rel)
+    {
+        if (string.IsNullOrEmpty(rel) || rel[0] == '/' || rel.Contains('\\'))
+            return false;
+        foreach (var segment in rel.Split('/'))
+        {
+            if (segment.Length == 0 || segment == "." || segment == "..")
+                return false;
+        }
+        return true;
+    }
+
+    // 路径逐段编码；WebDAV 与 SigV4 对 RFC3986 的要求一致
+    private static string WebDavEscapePath(string path) =>
+        string.Join("/", (path ?? "").Split('/').Select(S3Escape));
+
+    private sealed record WebDavEndpoint(string Scheme, string Authority, string BasePath,
+        string Prefix, string User, string Password, string Auth, string Bearer,
+        bool AllowInsecureHttp, bool AllowInsecureTls, int TimeoutSec,
+        IReadOnlyList<string> ExtraHeaders);
+
+    private WebDavEndpoint ResolveWebDavEndpoint()
+    {
+        var cred = _loadWebDav() ?? throw new InvalidOperationException(L.Get("Cloud_WebDavCredMissing"));
+        if (!Uri.TryCreate((cred.Url ?? "").Trim(), UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            throw new InvalidOperationException(L.Get("Cloud_WebDavUrlInvalid"));
+        if (!string.IsNullOrEmpty(uri.UserInfo))
+            throw new InvalidOperationException(L.Get("Cloud_WebDavUrlInvalid"));
+
+        var basePath = uri.AbsolutePath;
+        if (string.IsNullOrEmpty(basePath)) basePath = "/";
+        // 折叠重复斜杠并保证首尾 '/'，后续拼 URL 不再处理边界
+        var sb = new StringBuilder();
+        var lastSlash = false;
+        foreach (var ch in basePath)
+        {
+            if (ch == '/')
+            {
+                if (!lastSlash) sb.Append('/');
+                lastSlash = true;
+            }
+            else
+            {
+                sb.Append(ch);
+                lastSlash = false;
+            }
+        }
+        basePath = sb.ToString();
+        if (basePath.Length == 0 || basePath[0] != '/') basePath = "/" + basePath;
+        if (basePath[^1] != '/') basePath += "/";
+        // 与 DLL 使用同一根目录约定：未以 CloudRedirect 结尾时自动补一层
+        basePath = ApplyDefaultWebDavRoot(basePath);
+
+        var headers = new List<string>();
+        foreach (var line in (cred.ExtraHeaders ?? "").Replace("\r\n", "\n").Split('\n'))
+        {
+            var trimmed = line.Trim();
+            if (trimmed.Length > 0) headers.Add(trimmed);
+        }
+
+        return new WebDavEndpoint(uri.Scheme, uri.Authority, basePath,
+            WebDavEscapePath(NormalizePrefix(cred.KeyPrefix)), cred.Username ?? "", cred.Password ?? "",
+            string.IsNullOrWhiteSpace(cred.Auth) ? "basic" : cred.Auth.Trim().ToLowerInvariant(),
+            cred.BearerToken ?? "", cred.AllowInsecureHttp, cred.AllowInsecureTls,
+            cred.TimeoutSec, headers);
+    }
+
+    private static bool WebDavHasAuthorizationHeader(IReadOnlyList<string> headers)
+    {
+        foreach (var header in headers)
+        {
+            var colon = header.IndexOf(':');
+            if (colon <= 0) continue;
+            if (string.Equals(header[..colon].Trim(), "Authorization", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
+    }
+
+    private static HttpClient BuildWebDavClient(WebDavEndpoint ep)
+    {
+        var handler = new HttpClientHandler();
+        if (ep.Scheme == "http" || ep.AllowInsecureTls)
+            handler.ServerCertificateCustomValidationCallback = (_, _, _, _) => true;
+        // Basic/Bearer 走请求头预发送，协议层交给 handler；Digest/NTLM/Negotiate 走挑战。
+        // 调用方显式给了 Authorization 时以调用方为准，避免双认证头。
+        if ((ep.Auth is "auto" or "digest" or "ntlm" or "negotiate") &&
+            !WebDavHasAuthorizationHeader(ep.ExtraHeaders))
+            handler.Credentials = new NetworkCredential(ep.User, ep.Password);
+        var seconds = ep.TimeoutSec > 0 ? Math.Clamp(ep.TimeoutSec, 1, 300) : 60;
+        return new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(seconds) };
+    }
+
+    private static string WebDavUrl(WebDavEndpoint ep, string relPath, bool collection)
+    {
+        var rel = (relPath ?? "").TrimStart('/');
+        var url = $"{ep.Scheme}://{ep.Authority}{ep.BasePath}{ep.Prefix}{WebDavEscapePath(rel)}";
+        if (collection && !url.EndsWith('/')) url += "/";
+        return url;
+    }
+
+    private static void ApplyWebDavRequest(HttpRequestMessage req, WebDavEndpoint ep)
+    {
+        var hasExplicitAuth = WebDavHasAuthorizationHeader(ep.ExtraHeaders);
+        if (!hasExplicitAuth && ep.Auth == "basic" && !string.IsNullOrEmpty(ep.User))
+        {
+            var token = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{ep.User}:{ep.Password}"));
+            req.Headers.Authorization = new AuthenticationHeaderValue("Basic", token);
+        }
+        else if (!hasExplicitAuth && ep.Auth == "bearer" && !string.IsNullOrEmpty(ep.Bearer))
+        {
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", ep.Bearer);
+        }
+        foreach (var header in ep.ExtraHeaders)
+        {
+            var colon = header.IndexOf(':');
+            if (colon <= 0) continue;
+            var name = header[..colon].Trim();
+            var value = header[(colon + 1)..].Trim();
+            if (name.Length == 0) continue;
+            if (!req.Headers.TryAddWithoutValidation(name, value))
+                req.Content?.Headers.TryAddWithoutValidation(name, value);
+        }
+    }
+
+    private const string WebDavPropFindBody =
+        "<?xml version=\"1.0\" encoding=\"utf-8\"?>" +
+        "<D:propfind xmlns:D=\"DAV:\"><D:prop>" +
+        "<D:resourcetype/><D:getcontentlength/><D:getlastmodified/>" +
+        "</D:prop></D:propfind>";
+
+    private async Task<XDocument?> WebDavPropFindAsync(HttpClient http, WebDavEndpoint ep,
+        string relPath, bool collection, int depth, CancellationToken ct)
+    {
+        using var req = new HttpRequestMessage(new HttpMethod("PROPFIND"),
+            WebDavUrl(ep, relPath, collection));
+        req.Content = new StringContent(WebDavPropFindBody, Encoding.UTF8, "application/xml");
+        req.Headers.TryAddWithoutValidation("Depth", depth.ToString());
+        ApplyWebDavRequest(req, ep);
+        using var resp = await http.SendAsync(req, HttpCompletionOption.ResponseContentRead, ct);
+        // 409：父目录不存在（坚果云等），等价于目标不存在
+        if (resp.StatusCode == HttpStatusCode.NotFound ||
+            resp.StatusCode == HttpStatusCode.Conflict) return null;
+        var body = await resp.Content.ReadAsStringAsync(ct);
+        if (!resp.IsSuccessStatusCode)
+            throw new InvalidOperationException(L.Get("Cloud_WebDavOpFailed",
+                $"PROPFIND {(relPath.Length == 0 ? "/" : relPath)}：HTTP {(int)resp.StatusCode}"));
+        if (body.Length == 0) return null;
+        try { return XDocument.Parse(body); }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException(L.Get("Cloud_WebDavBadResponse",
+                $"PROPFIND {(relPath.Length == 0 ? "/" : relPath)}，HTTP {(int)resp.StatusCode}"), ex);
+        }
+    }
+
+    private static string WebDavRelFromHref(string href, WebDavEndpoint ep)
+    {
+        if (string.IsNullOrWhiteSpace(href)) return "";
+        var text = Uri.UnescapeDataString(href.Trim());
+        if (text.Contains("://", StringComparison.Ordinal) &&
+            Uri.TryCreate(text, UriKind.Absolute, out var abs))
+            text = abs.AbsolutePath;
+        var basePath = Uri.UnescapeDataString(ep.BasePath);
+        var idx = text.IndexOf(basePath, StringComparison.Ordinal);
+        if (idx >= 0) text = text[(idx + basePath.Length)..];
+        text = text.TrimStart('/');
+        if (ep.Prefix.Length > 0)
+        {
+            var prefix = Uri.UnescapeDataString(ep.Prefix);
+            if (text.StartsWith(prefix, StringComparison.Ordinal)) text = text[prefix.Length..];
+        }
+        return text;
+    }
+
+    private static IEnumerable<XElement> WebDavDesc(XElement root, string localName) =>
+        root.Descendants().Where(e => e.Name.LocalName == localName);
+
+    private sealed record WebDavEntry(string RelPath, bool IsFolder, long Size, DateTime? Modified);
+
+    private static List<WebDavEntry> ParseWebDavMultiStatus(XDocument doc, WebDavEndpoint ep,
+        string selfRel)
+    {
+        var entries = new List<WebDavEntry>();
+        var self = (selfRel ?? "").Trim('/');
+        foreach (var response in doc.Descendants().Where(e => e.Name.LocalName == "response"))
+        {
+            var href = WebDavDesc(response, "href").FirstOrDefault()?.Value ?? "";
+            var rel = WebDavRelFromHref(href, ep);
+            if (rel.Length == 0) continue;
+            var relNoSlash = rel.TrimEnd('/');
+            if (relNoSlash.Length == 0 || relNoSlash == self) continue;
+            if (!IsSafeWebDavRel(relNoSlash)) continue;
+            if (self.Length > 0 &&
+                !(relNoSlash.Length > self.Length &&
+                  relNoSlash.StartsWith(self + "/", StringComparison.Ordinal)))
+                continue;
+
+            var isFolder = WebDavDesc(response, "collection").Any() || rel.EndsWith('/');
+            long size = 0;
+            var sizeText = WebDavDesc(response, "getcontentlength").FirstOrDefault()?.Value;
+            if (!string.IsNullOrWhiteSpace(sizeText)) long.TryParse(sizeText.Trim(), out size);
+            DateTime? modified = null;
+            var modText = WebDavDesc(response, "getlastmodified").FirstOrDefault()?.Value;
+            if (!string.IsNullOrWhiteSpace(modText) &&
+                DateTimeOffset.TryParse(modText.Trim(), out var dto))
+                modified = dto.LocalDateTime;
+            entries.Add(new WebDavEntry(relNoSlash, isFolder, size, modified));
+        }
+        return entries;
+    }
+
+    private async Task<List<WebDavEntry>> ListWebDavChildrenAsync(HttpClient http,
+        WebDavEndpoint ep, string relDir, CancellationToken ct)
+    {
+        var doc = await WebDavPropFindAsync(http, ep, relDir, true, 1, ct);
+        return doc == null ? new List<WebDavEntry>() : ParseWebDavMultiStatus(doc, ep, relDir);
+    }
+
+    private async Task<List<WebDavEntry>> ListWebDavFilesAsync(HttpClient http,
+        WebDavEndpoint ep, string rootRel, CancellationToken ct, List<string>? dirs = null)
+    {
+        var files = new List<WebDavEntry>();
+        var queue = new Queue<string>();
+        queue.Enqueue((rootRel ?? "").Trim('/'));
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+        while (queue.Count > 0)
+        {
+            ct.ThrowIfCancellationRequested();
+            var dir = queue.Dequeue();
+            if (!visited.Add(dir)) continue;
+            if (visited.Count > 10000 || files.Count > 100000)
+                throw new InvalidOperationException(L.Get("Cloud_WebDavTooLarge"));
+            foreach (var entry in await ListWebDavChildrenAsync(http, ep, dir, ct))
+            {
+                if (entry.IsFolder)
+                {
+                    dirs?.Add(entry.RelPath);
+                    queue.Enqueue(entry.RelPath);
+                }
+                else files.Add(entry);
+            }
+        }
+        return files;
+    }
+
+    private async Task<(string? Content, DateTime? Modified)> WebDavGetTextAsync(HttpClient http,
+        WebDavEndpoint ep, string relPath, CancellationToken ct)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Get, WebDavUrl(ep, relPath, false));
+        ApplyWebDavRequest(req, ep);
+        using var resp = await http.SendAsync(req, ct);
+        if (resp.StatusCode != HttpStatusCode.OK) return (null, null);
+        return (await resp.Content.ReadAsStringAsync(ct),
+            resp.Content.Headers.LastModified?.LocalDateTime);
+    }
+
+    private async Task<DateTime?> GetWebDavAppTimeAsync(HttpClient http, WebDavEndpoint ep,
+        string appRel, CancellationToken ct)
+    {
+        var entries = await ListWebDavChildrenAsync(http, ep, appRel, ct);
+        var stats = entries.FirstOrDefault(e => !e.IsFolder &&
+            WebDavLastSegment(e.RelPath) == StatsFileName);
+        if (stats != null)
+        {
+            // 优先用 PROPFIND 带回的修改时间，省掉每个 app 一次 stats.json 下载；
+            // 服务端没给时间时才回退到解析 stats 内容。
+            if (stats.Modified.HasValue) return stats.Modified;
+            var (content, _) = await WebDavGetTextAsync(http, ep, stats.RelPath, ct);
+            var parsed = TryParseCloudTime(content);
+            if (parsed.HasValue) return parsed;
+        }
+        return entries.FirstOrDefault(e => !e.IsFolder &&
+            WebDavLastSegment(e.RelPath) == "cn.cloudredirect")?.Modified;
+    }
+
+    private async Task<List<CloudAppEntry>> ListWebDavAppsAsync(IProgress<string>? progress,
+        CancellationToken ct)
+    {
+        lock (_listFailures) _listFailures.Clear();
+        progress?.Report(L.Get("Cloud_ConnectingSource", "WebDAV"));
+        var ep = ResolveWebDavEndpoint();
+        using var http = BuildWebDavClient(ep);
+        progress?.Report(L.Get("Cloud_ReadingCloudDir"));
+        var rootEntries = await ListWebDavChildrenAsync(http, ep, "", ct);
+        var apps = new List<(string Account, int AppId, string Rel)>();
+        foreach (var account in rootEntries.Where(e => e.IsFolder))
+        {
+            var accountName = WebDavLastSegment(account.RelPath);
+            if (!uint.TryParse(accountName, out _)) continue;
+            foreach (var app in await ListWebDavChildrenAsync(http, ep, account.RelPath, ct))
+            {
+                if (!app.IsFolder) continue;
+                var appName = WebDavLastSegment(app.RelPath);
+                if (!int.TryParse(appName, out var appId) || appId == 0) continue;
+                apps.Add((accountName, appId, app.RelPath));
+            }
+        }
+        return await RunParallelListAsync(apps, a => $"AppID {a.AppId}",
+            async (a, ct) => new CloudAppEntry(a.Account, a.AppId,
+                await GetWebDavAppTimeAsync(http, ep, a.Rel, ct), null, null), progress, ct);
+    }
+
+    private async Task<CloudAppStats> GetWebDavAppStatsAsync(string accountId, int appId,
+        CancellationToken ct)
+    {
+        var ep = ResolveWebDavEndpoint();
+        using var http = BuildWebDavClient(ep);
+        var files = await ListWebDavFilesAsync(http, ep, $"{accountId}/{appId}", ct);
+        if (files.Count == 0)
+            throw new InvalidOperationException(L.Get("Cloud_NoGameDir", appId));
+        return new CloudAppStats(files.Count, files.Sum(f => f.Size),
+            DescribeRemote("webdav", accountId, appId));
+    }
+
+    private async Task<int> DownloadWebDavAppAsync(string accountId, int appId, string destDir,
+        IProgress<string>? progress, CancellationToken ct)
+    {
+        var ep = ResolveWebDavEndpoint();
+        using var http = BuildWebDavClient(ep);
+        var files = await ListWebDavFilesAsync(http, ep, $"{accountId}/{appId}", ct);
+        if (files.Count == 0)
+            throw new InvalidOperationException(L.Get("Cloud_NoGameDir", appId));
+        var rootPrefix = $"{accountId}/{appId}/";
+        return await RunParallelDownloadAsync(files,
+            async (file, ct) =>
+            {
+                var rel = file.RelPath.StartsWith(rootPrefix, StringComparison.Ordinal)
+                    ? file.RelPath[rootPrefix.Length..]
+                    : file.RelPath;
+                var root = Path.GetFullPath(destDir)
+                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                    + Path.DirectorySeparatorChar;
+                var dest = Path.GetFullPath(Path.Combine(root, rel.Replace('/', Path.DirectorySeparatorChar)));
+                if (!dest.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException(L.Get("Cloud_WebDavUnsafePath", rel));
+                Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+                using var req = new HttpRequestMessage(HttpMethod.Get,
+                    WebDavUrl(ep, file.RelPath, false));
+                ApplyWebDavRequest(req, ep);
+                using var resp = await http.SendAsync(req,
+                    HttpCompletionOption.ResponseHeadersRead, ct);
+                if (!resp.IsSuccessStatusCode)
+                    throw new InvalidOperationException(L.Get("Cloud_DownloadRemoteFailed", rel,
+                        $"HTTP {(int)resp.StatusCode}"));
+                await using var src = await resp.Content.ReadAsStreamAsync(ct);
+                await using var dst = File.Create(dest);
+                await src.CopyToAsync(dst, ct);
+            }, progress, ct);
+    }
+
+    private async Task<CloudDeleteResult> DeleteWebDavAppAsync(string accountId, int appId,
+        IProgress<string>? progress, CancellationToken ct)
+    {
+        var ep = ResolveWebDavEndpoint();
+        using var http = BuildWebDavClient(ep);
+        var dirs = new List<string>();
+        var files = await ListWebDavFilesAsync(http, ep, $"{accountId}/{appId}", ct, dirs);
+        if (files.Count == 0 && dirs.Count == 0)
+            return new CloudDeleteResult(0, 0, new List<string>(), L.Get("Cloud_NoGameDir", appId));
+        var deleted = 0;
+        var failed = new List<string>();
+        var done = 0;
+        foreach (var file in files)
+        {
+            ct.ThrowIfCancellationRequested();
+            done++;
+            progress?.Report(L.Get("Cloud_DeletingBatch", done, files.Count));
+            try
+            {
+                using var req = new HttpRequestMessage(HttpMethod.Delete,
+                    WebDavUrl(ep, file.RelPath, false));
+                ApplyWebDavRequest(req, ep);
+                using var resp = await http.SendAsync(req, ct);
+                if (resp.StatusCode is HttpStatusCode.OK or HttpStatusCode.NoContent or HttpStatusCode.NotFound)
+                    deleted++;
+                else
+                    failed.Add(file.RelPath);
+            }
+            catch
+            {
+                failed.Add(file.RelPath);
+            }
+        }
+        // 文件删完后按深度从深到浅删空目录，最后删 app 根目录；
+        // 有些服务端（含测试桩）不会对非空集合做递归 DELETE。
+        foreach (var dir in dirs.OrderByDescending(d => d.Count(c => c == '/')).ThenByDescending(d => d.Length))
+        {
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                using var req = new HttpRequestMessage(HttpMethod.Delete, WebDavUrl(ep, dir, true));
+                ApplyWebDavRequest(req, ep);
+                using var resp = await http.SendAsync(req, ct);
+                if (resp.StatusCode is not (HttpStatusCode.OK or HttpStatusCode.NoContent or HttpStatusCode.NotFound))
+                    failed.Add(dir);
+            }
+            catch { failed.Add(dir); }
+        }
+        var appRel = $"{accountId}/{appId}";
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Delete, WebDavUrl(ep, appRel, true));
+            ApplyWebDavRequest(req, ep);
+            using var resp = await http.SendAsync(req, ct);
+            if (resp.StatusCode is not (HttpStatusCode.OK or HttpStatusCode.NoContent or HttpStatusCode.NotFound))
+                failed.Add(appRel);
+        }
+        catch { failed.Add(appRel); }
+        return new CloudDeleteResult(deleted, failed.Count, failed.Take(10).ToList(),
+            failed.Count > 0 ? L.Get("Cloud_RemoteFilesDeleteFailed", failed.Count) : null);
+    }
+
+    private async Task<CloudProbeResult> ProbeWebDavAsync(CancellationToken ct)
+    {
+        var ep = ResolveWebDavEndpoint();
+        using var http = BuildWebDavClient(ep);
+        var accounts = (await ListWebDavChildrenAsync(http, ep, "", ct))
+            .Where(e => e.IsFolder && uint.TryParse(WebDavLastSegment(e.RelPath), out _)).ToList();
+        if (accounts.Count == 0) return new CloudProbeResult(0, 0, null, null);
+        var apps = (await ListWebDavChildrenAsync(http, ep, accounts[0].RelPath, ct))
+            .Where(e => e.IsFolder && IsAppDir(WebDavLastSegment(e.RelPath))).ToList();
+        var sample = apps.Count > 0
+            ? $"{WebDavLastSegment(accounts[0].RelPath)}/{WebDavLastSegment(apps[0].RelPath)}/…"
+            : null;
+        return new CloudProbeResult(accounts.Count, apps.Count, sample, null);
     }
 }

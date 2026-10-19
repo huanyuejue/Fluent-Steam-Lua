@@ -37,6 +37,14 @@ public sealed record S3Credentials(
     bool SignPayload = false, bool AllowInsecureHttp = false,
     bool AllowInsecureTls = false, string CaCertPath = "");
 
+// WebDAV 通用配置：url 指向目标集合，auth 取 basic/auto/digest/ntlm/negotiate/bearer/none；
+// extra_headers 与 DLL 一致，一行一个 "Name: value"（如 IIS 的 Translate: f）。
+public sealed record WebDavCredentials(
+    string Url, string Username, string Password, string Auth = "basic",
+    string BearerToken = "", string KeyPrefix = "",
+    bool AllowInsecureHttp = false, bool AllowInsecureTls = false,
+    int TimeoutSec = 0, string ExtraHeaders = "");
+
 public interface ICloudRedirectService
 {
     Task<CloudSaveStatus> RefreshStatusAsync(CancellationToken ct = default);
@@ -69,6 +77,8 @@ public interface ICloudRedirectService
     R2Credentials? LoadR2Credentials();
     string SaveS3Credentials(S3Credentials cred);
     S3Credentials? LoadS3Credentials();
+    string SaveWebDavCredentials(WebDavCredentials cred);
+    WebDavCredentials? LoadWebDavCredentials();
 }
 
 public class CloudRedirectService : ICloudRedirectService
@@ -87,7 +97,7 @@ public class CloudRedirectService : ICloudRedirectService
     public CloudRedirectService(ISteamPathService steamPathService)
     {
         _steamPathService = steamPathService;
-        _store = new CloudProviderStore(LoadR2Credentials, LoadS3Credentials, GetTokenPath);
+        _store = new CloudProviderStore(LoadR2Credentials, LoadS3Credentials, LoadWebDavCredentials, GetTokenPath);
     }
 
     private string ConfigDir =>
@@ -456,10 +466,11 @@ public class CloudRedirectService : ICloudRedirectService
         new("onedrive", "OneDrive"),
         new("r2", "Cloudflare R2"),
         new("s3", L.Get("Cloud_ProviderS3"), "Cloud_ProviderS3"),
+        new("webdav", "WebDAV"),
     }.AsReadOnly();
 
     private static bool IsKnownProvider(string? id) =>
-        id is "folder" or "gdrive" or "onedrive" or "r2" or "s3";
+        id is "folder" or "gdrive" or "onedrive" or "r2" or "s3" or "webdav";
 
     // 当前提供商：读不到/读到未知值一律回本地目录，保证 DLL 侧永远有确定行为
     public string GetCloudProvider()
@@ -564,6 +575,7 @@ public class CloudRedirectService : ICloudRedirectService
             "onedrive" => Path.Combine(ConfigDir, "onedrive_tokens.json"),
             "r2" => Path.Combine(ConfigDir, "r2_credentials.json"),
             "s3" => Path.Combine(ConfigDir, "s3_credentials.json"),
+            "webdav" => Path.Combine(ConfigDir, "webdav_credentials.json"),
             _ => string.Empty,
         };
     }
@@ -590,6 +602,7 @@ public class CloudRedirectService : ICloudRedirectService
             {
                 "r2" => (Path.Combine(ConfigDir, "r2_credentials.json"), "R2"),
                 "s3" => (Path.Combine(ConfigDir, "s3_credentials.json"), "S3"),
+                "webdav" => (Path.Combine(ConfigDir, "webdav_credentials.json"), "WebDAV"),
                 _ => ("", ""),
             };
             if (string.IsNullOrEmpty(path)) return (false, "");
@@ -597,7 +610,13 @@ public class CloudRedirectService : ICloudRedirectService
                 return (false, L.Get("Cloud_CredNotConfigured", label));
             if (string.IsNullOrEmpty(CloudCredentialStore.ReadJson(path)))
                 return (false, L.Get("Cloud_CredUndecryptable"));
-            var complete = provider == "r2" ? LoadR2Credentials() != null : LoadS3Credentials() != null;
+            var complete = provider switch
+            {
+                "r2" => LoadR2Credentials() != null,
+                "s3" => LoadS3Credentials() != null,
+                "webdav" => LoadWebDavCredentials() != null,
+                _ => false,
+            };
             if (!complete)
                 return (false, L.Get("Cloud_CredIncomplete"));
             return (true, L.Get("Cloud_CredConfigured", label));
@@ -621,6 +640,8 @@ public class CloudRedirectService : ICloudRedirectService
                     ? $"r2://{c.Bucket}/{CloudProviderStore.NormalizePrefix(c.KeyPrefix)}" : "",
                 "s3" => LoadS3Credentials() is { } c
                     ? $"{c.Endpoint.Trim().TrimEnd('/')}/{c.Bucket.Trim()}/{CloudProviderStore.NormalizePrefix(c.KeyPrefix)}" : "",
+                "webdav" => LoadWebDavCredentials() is { } w
+                    ? $"WebDAV: {CloudProviderStore.ApplyDefaultWebDavRoot(w.Url)}{CloudProviderStore.NormalizePrefix(w.KeyPrefix)}" : "",
                 _ => "",
             };
         }
@@ -646,6 +667,7 @@ public class CloudRedirectService : ICloudRedirectService
             "gdrive" or "onedrive" => GetTokenPath(provider),
             "r2" => Path.Combine(ConfigDir, "r2_credentials.json"),
             "s3" => Path.Combine(ConfigDir, "s3_credentials.json"),
+            "webdav" => Path.Combine(ConfigDir, "webdav_credentials.json"),
             _ => throw new InvalidOperationException(L.Get("Cloud_FolderNoSignOut")),
         };
         if (string.IsNullOrEmpty(path) || !File.Exists(path))
@@ -758,6 +780,115 @@ public class CloudRedirectService : ICloudRedirectService
         }
     }
 
+    // 额外请求头按行存储（一行一个 "Name: value"），落盘转数组，读取时还原成多行
+    private static List<string> ParseWebDavHeaderLines(string raw)
+    {
+        var list = new List<string>();
+        foreach (var line in (raw ?? "").Replace("\r\n", "\n").Split('\n'))
+        {
+            var trimmed = line.Trim();
+            if (trimmed.Length == 0) continue;
+            if (trimmed.IndexOf(':') <= 0)
+                throw new InvalidOperationException(L.Get("Cloud_WebDavHeaderInvalid", trimmed));
+            list.Add(trimmed);
+        }
+        return list;
+    }
+
+    public string SaveWebDavCredentials(WebDavCredentials cred)
+    {
+        if (string.IsNullOrWhiteSpace(cred.Url))
+            throw new InvalidOperationException(L.Get("Cloud_WebDavUrlMissing"));
+        if (!Uri.TryCreate(cred.Url.Trim(), UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            throw new InvalidOperationException(L.Get("Cloud_WebDavUrlInvalid"));
+        if (!string.IsNullOrEmpty(uri.UserInfo))
+            throw new InvalidOperationException(L.Get("Cloud_WebDavUrlInvalid"));
+        // URL 里的 query/fragment 不参与 WebDAV 路径，落盘前去掉，避免 UI 显示/打开时错位
+        var normalizedUrl = uri.GetLeftPart(UriPartial.Path);
+
+        var auth = (cred.Auth ?? "").Trim().ToLowerInvariant();
+        if (auth.Length == 0) auth = "basic";
+        if (auth is not ("basic" or "auto" or "digest" or "ntlm" or "negotiate" or "bearer" or "none"))
+            throw new InvalidOperationException(L.Get("Cloud_WebDavAuthInvalid", auth));
+        if ((auth is "basic" or "auto" or "digest" or "ntlm" or "negotiate") &&
+            string.IsNullOrWhiteSpace(cred.Username))
+            throw new InvalidOperationException(L.Get("Cloud_WebDavUserMissing"));
+        if (auth == "bearer" && string.IsNullOrWhiteSpace(cred.BearerToken))
+            throw new InvalidOperationException(L.Get("Cloud_WebDavTokenMissing"));
+        if (cred.TimeoutSec < 0 || cred.TimeoutSec > 300)
+            throw new InvalidOperationException(L.Get("Cloud_WebDavTimeoutInvalid"));
+
+        var obj = new JsonObject
+        {
+            ["url"] = normalizedUrl,
+            ["username"] = cred.Username ?? "",
+            ["password"] = cred.Password ?? "",
+            ["auth"] = auth,
+        };
+        if (!string.IsNullOrWhiteSpace(cred.BearerToken)) obj["bearer_token"] = cred.BearerToken;
+        if (!string.IsNullOrWhiteSpace(cred.KeyPrefix)) obj["key_prefix"] = cred.KeyPrefix.Trim();
+        if (cred.AllowInsecureHttp) obj["allow_insecure_http"] = true;
+        if (cred.AllowInsecureTls) obj["allow_insecure_tls"] = true;
+        if (cred.TimeoutSec > 0) obj["timeout_sec"] = cred.TimeoutSec;
+        var headers = ParseWebDavHeaderLines(cred.ExtraHeaders);
+        if (headers.Count > 0)
+        {
+            var arr = new JsonArray();
+            foreach (var h in headers) arr.Add(h);
+            obj["extra_headers"] = arr;
+        }
+
+        var path = Path.Combine(ConfigDir, "webdav_credentials.json");
+        if (!CloudCredentialStore.WriteJson(path, obj.ToJsonString(new JsonSerializerOptions { WriteIndented = true })))
+            throw new InvalidOperationException(L.Get("Cloud_WebDavWriteFailed"));
+        SetCloudProvider("webdav");
+        LogService.Info(L.Get("LogCat_Cloud"), L.Get("Cloud_WebDavSavedSwitched"));
+        return path;
+    }
+
+    public WebDavCredentials? LoadWebDavCredentials()
+    {
+        try
+        {
+            var json = CloudCredentialStore.ReadJson(Path.Combine(ConfigDir, "webdav_credentials.json"));
+            if (string.IsNullOrEmpty(json)) return null;
+            using var doc = JsonDocument.Parse(json);
+            var r = doc.RootElement;
+            string Get(string key) => r.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : "";
+            bool Flag(string key) => r.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.True;
+            var url = Get("url");
+            if (url.Length == 0) return null;
+            var timeout = 0;
+            if (r.TryGetProperty("timeout_sec", out var t))
+            {
+                if (t.ValueKind == JsonValueKind.Number && t.TryGetInt32(out var tn)) timeout = tn;
+                else if (t.ValueKind == JsonValueKind.String && int.TryParse(t.GetString(), out var ts)) timeout = ts;
+            }
+            var headers = "";
+            if (r.TryGetProperty("extra_headers", out var harr) && harr.ValueKind == JsonValueKind.Array)
+            {
+                var list = new List<string>();
+                foreach (var h in harr.EnumerateArray())
+                    if (h.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(h.GetString()))
+                        list.Add(h.GetString()!);
+                headers = string.Join("\n", list);
+            }
+            var auth = Get("auth").Trim().ToLowerInvariant();
+            if (auth.Length == 0) auth = "basic";
+            if (auth is not ("basic" or "auto" or "digest" or "ntlm" or "negotiate" or "bearer" or "none"))
+                auth = "basic";
+            return new WebDavCredentials(url, Get("username"), Get("password"), auth,
+                Get("bearer_token"), Get("key_prefix"), Flag("allow_insecure_http"),
+                Flag("allow_insecure_tls"), timeout, headers);
+        }
+        catch (Exception ex)
+        {
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogReadWebDavFailed", ex.Message));
+            return null;
+        }
+    }
+
     // 已重定向应用：本地源扫目录，云端源走远端列举；远端失败抛中文错，由调用方展示
     public async Task<List<RedirectedApp>> GetRedirectedAppsAsync(
         IProgress<string>? progress = null, CancellationToken ct = default)
@@ -845,6 +976,7 @@ public class CloudRedirectService : ICloudRedirectService
             "onedrive" => entry.WebUrl ?? "https://onedrive.live.com/",
             "r2" => $"https://dash.cloudflare.com/{entry.AccountId}/r2/overview",
             "s3" => BuildS3BrowseUrl(entry),
+            "webdav" => BuildWebDavBrowseUrl(entry),
             _ => string.Empty,
         };
     }
@@ -861,6 +993,23 @@ public class CloudRedirectService : ICloudRedirectService
                 endpoint = (cred.AllowInsecureHttp ? "http://" : "https://") + endpoint;
             var prefix = string.IsNullOrWhiteSpace(cred.KeyPrefix) ? "CloudRedirect/" : cred.KeyPrefix.Trim().Trim('/') + "/";
             return $"{endpoint}/{cred.Bucket.Trim()}/{prefix}{entry.AccountId}/{entry.AppId}/";
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    // WebDAV 没有统一控制台：直接拼出目标 app 目录的 URL，交给浏览器/资源管理器打开
+    private string BuildWebDavBrowseUrl(CloudAppEntry entry)
+    {
+        try
+        {
+            var cred = LoadWebDavCredentials();
+            if (cred == null || string.IsNullOrWhiteSpace(cred.Url)) return string.Empty;
+            var root = CloudProviderStore.ApplyDefaultWebDavRoot(cred.Url);
+            var prefix = CloudProviderStore.NormalizePrefix(cred.KeyPrefix);
+            return $"{root}{prefix}{entry.AccountId}/{entry.AppId}/";
         }
         catch
         {
