@@ -658,6 +658,19 @@ public partial class OpenSteamToolWindow : Window
         });
         fetchPanel.Children.Add(new TextBlock
         {
+            Text = L.Get("Main_TomlBuildId"),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 6, 0, 0)
+        });
+        fetchPanel.Children.Add(new TextBlock
+        {
+            Text = string.IsNullOrEmpty(info.BuildId) ? L.Get("Main_Unknown") : info.BuildId,
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = 12,
+            Foreground = secondary
+        });
+        fetchPanel.Children.Add(new TextBlock
+        {
             Text = L.Get("Main_TomlClientSha"),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 6, 0, 0)

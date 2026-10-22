@@ -54,8 +54,8 @@ public interface IOpenSteamToolService
     Task<IReadOnlyList<TomlFetchResult>> FetchTomlFilesAsync(SteamDllTomlInfo info, IProgress<string>? status = null, IProgress<int>? downloadProgress = null, CancellationToken ct = default);
 }
 
-// 当前安装 Steam 的两个 DLL 指纹：OST 解析签名文件的唯一依据（与内核 RemoteToml 同规则）
-public sealed record SteamDllTomlInfo(string ClientSha, string UiSha);
+// 当前安装 Steam 的两个 DLL 指纹与本地构建 ID：OST 解析签名文件的唯一依据（与内核 RemoteToml 同规则）
+public sealed record SteamDllTomlInfo(string ClientSha, string UiSha, string? BuildId = null);
 
 // 单个 toml 的下载结果：文件名 + 落盘路径 + 成败 + 是否上游 404（404=版本不受支持，
 // 文案让用户更新正式版；其他失败=网络问题，文案让查网络，两类 advice 不能混）
@@ -105,6 +105,9 @@ public class OpenSteamToolService : IOpenSteamToolService
         ["09d26118c7cf796cf37562c4cb965d1b213f5866c02ca04fe0fafc4c2f22b0bc"] = "v1.4.7",
     };
     private static readonly byte[] VersionMarker = [0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00];
+    // manifest 与日志的版本号格式固定，编译一次复用，避免每次打开对话框都重新解析模式串
+    private static readonly Regex ManifestVersionRegex = new("\"version\"\\s+\"(\\d+)\"", RegexOptions.Compiled);
+    private static readonly Regex ClientVersionRegex = new(@"Client version:\s*(\d+)", RegexOptions.Compiled);
 
     public OpenSteamToolService(ISteamPathService steamPathService, IHttpClientProvider httpClientProvider, ISettingsService settingsService)
     {
@@ -699,31 +702,84 @@ public class OpenSteamToolService : IOpenSteamToolService
         ("ipc", "steamclient"),
     ];
 
-    // 与内核同源：hazre/steam-monitor（自动采集 stable+beta，文件更全），
+    // 与内核同源：huanyuejue/steam-monitor（自动采集 stable+beta，文件更全），
     // 布局与 OpenSteam001 版差异：channel 是 main 下目录而非分支，分支固定 main
     // jsdelivr 对这个大仓库响应不稳定，只走镜像链 + raw 直连
     private static string GitHubTomlUrl(string channel, string component, string sha)
-        => $"https://raw.githubusercontent.com/hazre/steam-monitor/main/{channel}/{component}/{sha}.toml";
+        => $"https://raw.githubusercontent.com/huanyuejue/steam-monitor/main/{channel}/{component}/{sha}.toml";
+
+    // 构建 ID 取 package 下最新的 manifest：切通道后另一通道的旧文件可能残留，
+    // 按写入时间选才能读到当前安装的那份；manifest 缺失时退回运行日志里的 Client version
+    private static string? ReadInstalledBuildId(string steamPath)
+    {
+        var packageDir = Path.Combine(steamPath, "package");
+        var manifests = new[]
+        {
+            Path.Combine(packageDir, "steam_client_win64.manifest"),
+            Path.Combine(packageDir, "steam_client_publicbeta_win64.manifest"),
+        }
+        .Where(File.Exists)
+        .OrderByDescending(File.GetLastWriteTimeUtc);
+
+        foreach (var path in manifests)
+        {
+            try
+            {
+                using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                using var reader = new StreamReader(fs);
+                var match = ManifestVersionRegex.Match(reader.ReadToEnd());
+                if (match.Success) return match.Groups[1].Value;
+            }
+            catch
+            {
+            }
+        }
+
+        // Steam 运行时会占着日志文件，沿用上面的共享模式读，避免被独占句柄挡住
+        try
+        {
+            var logPath = Path.Combine(steamPath, "logs", "connection_log.txt");
+            if (!File.Exists(logPath)) return null;
+            string? last = null;
+            using var fs = new FileStream(logPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var reader = new StreamReader(fs);
+            while (reader.ReadLine() is { } line)
+            {
+                var match = ClientVersionRegex.Match(line);
+                if (match.Success) last = match.Groups[1].Value;
+            }
+            return last;
+        }
+        catch
+        {
+            return null;
+        }
+    }
 
     public Task<SteamDllTomlInfo?> DetectSteamDllInfoAsync()
     {
-        var steamPath = GetSteamPath();
-        if (string.IsNullOrEmpty(steamPath)) return Task.FromResult<SteamDllTomlInfo?>(null);
-        var clientPath = Path.Combine(steamPath, "steamclient64.dll");
-        var uiPath = Path.Combine(steamPath, "steamui.dll");
-        if (!File.Exists(clientPath) || !File.Exists(uiPath)) return Task.FromResult<SteamDllTomlInfo?>(null);
+        // 两个 DLL 的 SHA256 加起来几十 MB，放后台线程算，避免打开确认框前卡住界面
+        return Task.Run<SteamDllTomlInfo?>(() =>
+        {
+            var steamPath = GetSteamPath();
+            if (string.IsNullOrEmpty(steamPath)) return null;
+            var clientPath = Path.Combine(steamPath, "steamclient64.dll");
+            var uiPath = Path.Combine(steamPath, "steamui.dll");
+            if (!File.Exists(clientPath) || !File.Exists(uiPath)) return null;
 
-        try
-        {
-            var clientSha = ComputeSha256(clientPath);
-            var uiSha = ComputeSha256(uiPath);
-            return Task.FromResult<SteamDllTomlInfo?>(new SteamDllTomlInfo(clientSha, uiSha));
-        }
-        catch (Exception ex)
-        {
-            LogService.Warn(L.Get("LogCat_Kernel"), L.Get("Kernel_LogDllFingerprintFailed", ex.Message));
-            return Task.FromResult<SteamDllTomlInfo?>(null);
-        }
+            try
+            {
+                var clientSha = ComputeSha256(clientPath);
+                var uiSha = ComputeSha256(uiPath);
+                var buildId = ReadInstalledBuildId(steamPath);
+                return new SteamDllTomlInfo(clientSha, uiSha, buildId);
+            }
+            catch (Exception ex)
+            {
+                LogService.Warn(L.Get("LogCat_Kernel"), L.Get("Kernel_LogDllFingerprintFailed", ex.Message));
+                return null;
+            }
+        });
     }
 
     public async Task<IReadOnlyList<TomlFetchResult>> FetchTomlFilesAsync(SteamDllTomlInfo info, IProgress<string>? status = null, IProgress<int>? downloadProgress = null, CancellationToken ct = default)

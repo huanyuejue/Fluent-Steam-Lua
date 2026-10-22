@@ -394,6 +394,7 @@
   "Main_SteamNotFoundTitle": "未找到 Steam",
   "Main_SteamNotFoundBody": "未能定位 Steam 安装目录或 steamclient64.dll / steamui.dll 缺失。",
   "Main_TomlResult": "识别结果",
+  "Main_TomlBuildId": "Steam 构建 ID：",
   "Main_TomlClientSha": "steamclient64.dll SHA：",
   "Main_TomlUiSha": "steamui.dll SHA：",
   "Main_TomlWillFetch": "将获取文件",

@@ -394,6 +394,7 @@
   "Main_SteamNotFoundTitle": "Steam Not Found",
   "Main_SteamNotFoundBody": "Could not locate the Steam directory, or steamclient64.dll / steamui.dll is missing.",
   "Main_TomlResult": "Detection Result",
+  "Main_TomlBuildId": "Steam Build ID:",
   "Main_TomlClientSha": "steamclient64.dll SHA:",
   "Main_TomlUiSha": "steamui.dll SHA:",
   "Main_TomlWillFetch": "Files to Fetch",
