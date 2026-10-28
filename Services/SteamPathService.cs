@@ -769,9 +769,9 @@ public class SteamPathService : ISteamPathService
             return SteamToolType.OpenSteamTool;
 
         // SteamTools (闭源) — 独有标识；stplug-in 只是它存 lua 的目录，
-        // 不影响注入，残留它不算装了内核
+        // 不影响注入，残留它不算装了内核；steam.cfg 是 Steam 自身的配置，
+        // 用户常用它关自动更新，不能当内核标志
         if (File.Exists(Path.Combine(steamPath, "hid.dll")) ||
-            File.Exists(Path.Combine(steamPath, "steam.cfg")) ||
             File.Exists(Path.Combine(steamPath, "zlib1.dll")))
             return SteamToolType.SteamTools;
 

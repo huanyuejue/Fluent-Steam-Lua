@@ -589,11 +589,11 @@ public class OpenSteamToolService : IOpenSteamToolService
     }
 
     // 第三方内核指纹（相对 Steam 根目录）：只收文件，不收目录；
-    // stplug-in 只是 ST 存 lua 的目录、不影响注入，不在其中
+    // stplug-in 只是 ST 存 lua 的目录、不影响注入，不在其中；
+    // steam.cfg 是 Steam 自身的配置文件，用户常用它关自动更新，不能当内核标志
     private static readonly (string File, string Owner)[] ForeignKernelFingerprints =
     [
         ("hid.dll", "SteamTools"),
-        ("steam.cfg", "SteamTools"),
         ("zlib1.dll", "SteamTools"),
         ("User32.dll", "GreenLuma"),
     ];
