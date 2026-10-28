@@ -197,6 +197,11 @@ public sealed class SteamAppInfoService : ISteamAppInfoService, IDisposable
                     var result = new AppInfoQueryResult();
                     result.AppName = kv["common"]?["name"]?.AsString() ?? $"App {appId}";
 
+                    // depot 的 dlcappid 标记该仓库归属哪个 DLC app：listofdlc 会被服务端截断，
+                    // 两路都收再合并才完整；先攒着，等 listofdlc 读完再按固定顺序补齐
+                    var dlcFromDepots = new List<int>();
+                    var dlcFromDepotsSeen = new HashSet<int>();
+
                     var depotsNode = kv["depots"];
                     if (depotsNode != null)
                     {
@@ -220,6 +225,11 @@ public sealed class SteamAppInfoService : ISteamAppInfoService, IDisposable
                                 var gid = depot["manifests"]?["public"]?["gid"]?.AsString();
                                 if (!string.IsNullOrEmpty(gid))
                                     result.DepotManifests[id] = gid;
+                                // 同一 DLC 会挂多个 depot，先按首次出现去重，避免重复项堆在列表里
+                                var dlcAppIdText = depot["dlcappid"]?.AsString();
+                                if (!string.IsNullOrEmpty(dlcAppIdText) && int.TryParse(dlcAppIdText, out var dlcAppId)
+                                    && dlcFromDepotsSeen.Add(dlcAppId))
+                                    dlcFromDepots.Add(dlcAppId);
                             }
                         }
                     }
@@ -237,11 +247,17 @@ public sealed class SteamAppInfoService : ISteamAppInfoService, IDisposable
                             var parts = dlcText.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
                             foreach (var part in parts)
                             {
-                                if (int.TryParse(part, out var dlcId))
+                                if (int.TryParse(part, out var dlcId) && !result.DlcAppIds.Contains(dlcId))
                                     result.DlcAppIds.Add(dlcId);
                             }
                         }
                     }
+
+                    // listofdlc 被截断时，用 depot 的 dlcappid 补齐；listofdlc 原有的顺序保持不变
+                    var dlcSeen = new HashSet<int>(result.DlcAppIds);
+                    foreach (var dlcId in dlcFromDepots)
+                        if (dlcSeen.Add(dlcId))
+                            result.DlcAppIds.Add(dlcId);
 
                     if (result.DepotIds.Count == 0 && result.DlcAppIds.Count == 0 && string.IsNullOrEmpty(result.AppName))
                         return null;

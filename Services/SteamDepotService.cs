@@ -280,6 +280,10 @@ public class SteamDepotService : ISteamDepotService
             if (app.TryGetProperty("common", out var common) && common.TryGetProperty("name", out var name))
                 result.AppName = name.GetString() ?? $"App {appId}";
 
+            // depot 上的 dlcappid 标记该仓库属于哪个 DLC app：Steam 的 extended.listofdlc
+            // 会被服务端截断，DLC 多的游戏会缺失，两路都收再合并才完整
+            var dlcFromDepots = new List<int>();
+            var dlcFromDepotsSeen = new HashSet<int>();
             if (app.TryGetProperty("depots", out var depots))
             {
                 foreach (var depotProp in depots.EnumerateObject())
@@ -289,6 +293,16 @@ public class SteamDepotService : ISteamDepotService
 
                     var depot = depotProp.Value;
                     if (depot.TryGetProperty("depotfromapp", out _)) continue;
+
+                    // 同一 DLC 会挂多个 depot，先按首次出现去重，避免重复项堆在列表里
+                    if (depot.TryGetProperty("dlcappid", out var dlcAppIdProp))
+                    {
+                        var dlcText = dlcAppIdProp.ValueKind == JsonValueKind.Number
+                            ? dlcAppIdProp.GetRawText()
+                            : dlcAppIdProp.GetString();
+                        if (int.TryParse(dlcText, out var dlcAppId) && dlcFromDepotsSeen.Add(dlcAppId))
+                            dlcFromDepots.Add(dlcAppId);
+                    }
 
                     var dki = new DepotKeyInfo { DepotId = depotId };
 
@@ -305,11 +319,15 @@ public class SteamDepotService : ISteamDepotService
 
             if (app.TryGetProperty("extended", out var ext) && ext.TryGetProperty("listofdlc", out var dlcList))
             {
+                // 两种写法都按文本取号：数组元素可能是数字，直接 GetString 会抛异常
                 if (dlcList.ValueKind == JsonValueKind.Array)
                 {
                     foreach (var dlcIdStr in dlcList.EnumerateArray())
                     {
-                        if (int.TryParse(dlcIdStr.GetString(), out var dlcId))
+                        var text = dlcIdStr.ValueKind == JsonValueKind.Number
+                            ? dlcIdStr.GetRawText()
+                            : dlcIdStr.GetString();
+                        if (int.TryParse(text, out var dlcId) && !result.DlcAppIds.Contains(dlcId))
                             result.DlcAppIds.Add(dlcId);
                     }
                 }
@@ -317,11 +335,18 @@ public class SteamDepotService : ISteamDepotService
                 {
                     foreach (var idStr in dlcList.GetString()!.Split(',', StringSplitOptions.RemoveEmptyEntries))
                     {
-                        if (int.TryParse(idStr.Trim(), out var dlcId))
+                        if (int.TryParse(idStr.Trim(), out var dlcId) && !result.DlcAppIds.Contains(dlcId))
                             result.DlcAppIds.Add(dlcId);
                     }
                 }
             }
+
+            // listofdlc 被服务端截断时，靠 depot 的 dlcappid 把余下的 DLC 补齐；
+            // listofdlc 原有的顺序保持不变，新增项按 depot 出现顺序追加
+            var dlcSeen = new HashSet<int>(result.DlcAppIds);
+            foreach (var dlcId in dlcFromDepots)
+                if (dlcSeen.Add(dlcId))
+                    result.DlcAppIds.Add(dlcId);
 
             // 兜底：api.steamcmd.net 返回的 depots 为空（新游戏/受 token 保护）时，
             // 用本地 appaccesstokens.json 里的 token 向 Steam 服务器查询完整 depots 与 DLC。
