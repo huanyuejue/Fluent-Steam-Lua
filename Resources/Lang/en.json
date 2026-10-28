@@ -1830,6 +1830,7 @@
   "Trainer_AddBinding": "Add Binding",
   "Trainer_NoBindings": "No bindings",
   "Trainer_NoBindingsHint": "Click Add Binding above to auto-start trainers",
+  "Trainer_Open": "Open",
   "Trainer_Download": "Download",
   "Trainer_MonitorIdle": " -  No active bindings, SvcMonitor background service has exited",
   "Trainer_MonitorRunning": " -  SvcMonitor background service running",

@@ -1830,6 +1830,7 @@
   "Trainer_AddBinding": "添加绑定",
   "Trainer_NoBindings": "暂无游戏绑定",
   "Trainer_NoBindingsHint": "点击上方「添加绑定」配置修改器自动启动",
+  "Trainer_Open": "打开",
   "Trainer_Download": "下载",
   "Trainer_MonitorIdle": " -  未有激活绑定项，SvcMonitor后台服务已结束进程",
   "Trainer_MonitorRunning": " -  SvcMonitor后台服务正在运行",
