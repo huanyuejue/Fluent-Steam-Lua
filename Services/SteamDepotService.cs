@@ -616,9 +616,12 @@ public class SteamDepotService : ISteamDepotService
 
     private sealed record DlcBuildInfo(int AppId, DepotQueryResult? Result, string DisplayName);
 
-    // 显示名优先级：小黑盒 > steamcmd（裸连可达，已有结果零成本）> Store schinese
+    // Chinese names prefer Heybox; English names prefer the localized Store response.
     private async Task<string> TryGetDisplayNameAsync(int appId, string steamcmdName, CancellationToken ct)
     {
+        if (LocalizationService.Instance.CurrentLanguage != "zh")
+            return await TryGetStoreNameAsync(appId, steamcmdName, ct);
+
         try
         {
             var (heiName, _, _) = await XiaoHeiHeService.GetGameDetailAsync(appId, ct);
@@ -880,12 +883,13 @@ public class SteamDepotService : ISteamDepotService
 
     private async Task<string> TryGetStoreNameAsync(int appId, string fallbackName, CancellationToken ct)
     {
+        var language = LocalizationService.Instance.CurrentLanguage == "zh" ? "schinese" : "english";
         try
         {
             var json = await _httpClientProvider.SendWithProxyRetryAsync(
                 "store-name",
                 TimeSpan.FromSeconds(10),
-                client => client.GetStringAsync($"https://store.steampowered.com/api/appdetails?appids={appId}&l=schinese", ct),
+                client => client.GetStringAsync($"https://store.steampowered.com/api/appdetails?appids={appId}&l={language}", ct),
                 HttpHeaderHelper.ConfigureBrowserJson);
             using var doc = JsonDocument.Parse(json);
             if (doc.RootElement.TryGetProperty(appId.ToString(), out var appData)

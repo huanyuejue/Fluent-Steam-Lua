@@ -210,6 +210,7 @@ namespace SteamLuaManager.ViewModels;
 		_dialogService = dialogService;
 		_archiveImport = archiveImport;
 		_luaFileManager.FilesChanged += OnFilesChanged;
+		LocalizationService.Instance.PropertyChanged += OnLanguageChanged;
 		WeakReferenceMessenger.Default.Register<LuaFolderChangedMessage>(this, (_, _) => OnRefreshRequested());
 		WeakReferenceMessenger.Default.Register<KernelUpdateAvailableMessage>(this, (_, m) => OnKernelUpdateAvailable(m));
 
@@ -238,8 +239,15 @@ namespace SteamLuaManager.ViewModels;
 		_searchDebounceTimer?.Stop();
 		_searchDebounceTimer = null;
 		_luaFileManager.FilesChanged -= OnFilesChanged;
+		LocalizationService.Instance.PropertyChanged -= OnLanguageChanged;
 		WeakReferenceMessenger.Default.Unregister<LuaFolderChangedMessage>(this);
 		WeakReferenceMessenger.Default.Unregister<KernelUpdateAvailableMessage>(this);
+	}
+
+	private void OnLanguageChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+	{
+		if (e.PropertyName == nameof(LocalizationService.CurrentLanguage))
+			OnRefreshRequested();
 	}
 
 	private void OnRefreshRequested()
@@ -1053,13 +1061,16 @@ namespace SteamLuaManager.ViewModels;
 				{
 					try
 					{
-						// DLC 名优先级：小黑盒 > steamcmd（批量查询现成名，零成本）> 直接显示 AppID，不再打 Store
+						// Chinese uses Heybox names; English retains the Steam metadata name.
 						string? displayName = null;
 						try
 						{
-							var (heiName, _, _) = await XiaoHeiHeService.GetGameDetailAsync(dlc.AppId, innerCt);
-							if (!string.IsNullOrWhiteSpace(heiName))
-								displayName = heiName;
+							if (LocalizationService.Instance.CurrentLanguage == "zh")
+							{
+								var (heiName, _, _) = await XiaoHeiHeService.GetGameDetailAsync(dlc.AppId, innerCt);
+								if (!string.IsNullOrWhiteSpace(heiName))
+									displayName = heiName;
+							}
 						}
 						catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
 						catch { }
