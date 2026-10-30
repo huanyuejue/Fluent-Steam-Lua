@@ -43,7 +43,7 @@ namespace SAM.API
             if (objectAddress == IntPtr.Zero)
             {
                 throw new InvalidOperationException(
-                    $"Steam 返回了空接口指针（{typeof(TNativeFunctions).Name}），该接口版本在当前 Steam 客户端中可能不受支持");
+                    SteamLuaManager.L.Get("App_SteamInterfaceUnavailable", typeof(TNativeFunctions).Name));
             }
 
             this.ObjectAddress = objectAddress;

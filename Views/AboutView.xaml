@@ -19,7 +19,7 @@
                        HorizontalAlignment="Center" Margin="0,0,0,16"/>
 
                 <!-- 软件名 -->
-                <TextBlock Text="Fluent Steam Lua 管理工具" FontSize="24" FontWeight="SemiBold"
+                <TextBlock Text="{l:Loc App_Title}" FontSize="24" FontWeight="SemiBold"
                            HorizontalAlignment="Center" Margin="0,0,0,20"
                            Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
 

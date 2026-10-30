@@ -102,7 +102,7 @@ public class GameMonitorService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("SvcMonitor 服务已启动");
+        _logger.LogInformation("SvcMonitor service started");
         Directory.CreateDirectory(Path.GetDirectoryName(ConfigPath)!);
 
         while (!stoppingToken.IsCancellationRequested)
@@ -114,7 +114,7 @@ public class GameMonitorService : BackgroundService
                 // 无激活绑定项则自我退出
                 if (!_bindings.Any(b => b.IsEnabled))
                 {
-                    _logger.LogInformation("无激活绑定项，SvcMonitor 服务已退出");
+                    _logger.LogInformation("No active bindings; SvcMonitor service stopped");
                     Environment.Exit(0);
                 }
 
@@ -124,7 +124,7 @@ public class GameMonitorService : BackgroundService
             catch (OperationCanceledException) { break; }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "监控循环异常");
+                _logger.LogWarning(ex, "Monitor loop failed");
                 await Task.Delay(5000, stoppingToken);
             }
         }
@@ -147,12 +147,12 @@ public class GameMonitorService : BackgroundService
                 _bindings = list;
                 _lastRead = file.LastWriteTimeUtc;
                 var enabled = _bindings.Count(b => b.IsEnabled);
-                _logger.LogInformation("已加载绑定配置: {Total} 个, 启用: {Enabled}", _bindings.Count, enabled);
+                _logger.LogInformation("Loaded binding configuration: {Total} total, {Enabled} enabled", _bindings.Count, enabled);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "读取绑定配置失败");
+            _logger.LogWarning(ex, "Could not read binding configuration");
         }
     }
 
@@ -202,7 +202,7 @@ public class GameMonitorService : BackgroundService
         {
             if (!File.Exists(binding.TrainerFilePath))
             {
-                _logger.LogWarning("修改器文件不存在: {Path}", binding.TrainerFilePath);
+                _logger.LogWarning("Trainer file does not exist: {Path}", binding.TrainerFilePath);
                 return;
             }
 
@@ -234,7 +234,7 @@ public class GameMonitorService : BackgroundService
             if (proc != null)
             {
                 _activeTrainers[binding.TrainerFilePath] = proc;
-                _logger.LogInformation("已启动修改器: {Name}", binding.TrainerDisplayName);
+                _logger.LogInformation("Started trainer: {Name}", binding.TrainerDisplayName);
 
                 // 延迟发送自动按键
                 if (binding.AutoKeys.Count > 0)
@@ -243,14 +243,14 @@ public class GameMonitorService : BackgroundService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "启动修改器失败: {Name}", binding.TrainerDisplayName);
+            _logger.LogWarning(ex, "Could not start trainer: {Name}", binding.TrainerDisplayName);
         }
     }
 
     private async Task SendAutoKeysAsync(TrainerBinding binding)
     {
         // 等待修改器初始化 (约10秒)
-        _logger.LogInformation("等待修改器初始化后发送自动按键 ({Count} 个)", binding.AutoKeys.Count);
+        _logger.LogInformation("Waiting for trainer initialization before sending automatic keys ({Count})", binding.AutoKeys.Count);
         await Task.Delay(10000);
 
         foreach (var keyStr in binding.AutoKeys)
@@ -302,7 +302,7 @@ public class GameMonitorService : BackgroundService
             await Task.Delay(300);
         }
 
-        _logger.LogInformation("自动按键发送完成 ({Count} 个)", binding.AutoKeys.Count);
+        _logger.LogInformation("Finished sending automatic keys ({Count})", binding.AutoKeys.Count);
     }
 
     private static void SendInputVk(byte vk, bool down)
