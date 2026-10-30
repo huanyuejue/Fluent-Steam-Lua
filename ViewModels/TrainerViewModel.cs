@@ -483,7 +483,7 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"写入共享绑定配置失败: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine(L.Get("Trainer_SharedConfigWriteFailed", ex.Message));
         }
     }
 

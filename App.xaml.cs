@@ -117,12 +117,13 @@ public partial class App : Application
         }
 
         // 单实例限制：已有实例时激活其窗口并退出（worker 子进程不参与）
+        LocalizationService.Instance.SetLanguage(new SettingsService().Load().Language);
         var mutex = new Mutex(true, SingleInstanceMutexName, out var createdNew);
         if (!createdNew)
         {
             ActivateExistingInstance();
             System.Windows.MessageBox.Show(L.Get("App_AlreadyRunning"),
-                "Fluent Steam Lua 管理工具",
+                L.Get("App_Title"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
             Shutdown(0);
@@ -187,7 +188,7 @@ public partial class App : Application
                 LogService.Error(L.Get("LogCat_System"), L.Get("App_CompatFailed", ex2));
                 System.Windows.MessageBox.Show(
                     L.Get("App_WindowFailedBody", ex2.Message),
-                    "Fluent Steam Lua 管理工具",
+                    L.Get("App_Title"),
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
                 Shutdown(1);
@@ -222,7 +223,10 @@ public partial class App : Application
     {
         try
         {
-            var hwnd = FindWindow(null, "Fluent Steam Lua 管理工具");
+            var hwnd = FindWindow(null, L.Get("App_Title"));
+            // Older versions always used the Chinese title.
+            if (hwnd == IntPtr.Zero)
+                hwnd = FindWindow(null, "Fluent Steam Lua 管理工具");
             if (hwnd == IntPtr.Zero) return;
             ShowWindow(hwnd, 9); // SW_RESTORE
             SetForegroundWindow(hwnd);
