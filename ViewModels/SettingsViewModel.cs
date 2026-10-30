@@ -76,7 +76,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     private string _selectedBackdrop = "Acrylic10";
 
     [ObservableProperty]
-    private string _language = "zh";
+    private string _language = LocalizationService.GetSystemLanguage();
 
     public List<LanguageOption> LanguageOptions { get; } =
         LocalizationService.SupportedLanguages.ToList();
