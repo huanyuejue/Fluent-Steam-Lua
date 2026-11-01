@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Globalization;
 using System.IO;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -6,7 +7,7 @@ using System.Text.Json;
 
 namespace SteamLuaManager.Services;
 
-// 应用内多语言服务：中文默认内嵌，英文等其他语言同样内嵌 JSON。
+// 应用内多语言服务：首次启动跟随系统显示语言，词库内嵌 JSON。
 // 加新语言三步：1) 照抄 Resources/Lang/en.json 翻译一份（如 ja.json）；
 // 2) 下方 SupportedLanguages 加一行；3) 设置页下拉框自动出现，无需改其他代码。
 // 切换语言实时生效（触发全局绑定刷新），不重启；线程文化保持不动，避免影响数字日期解析。
@@ -21,12 +22,12 @@ public sealed class LocalizationService : INotifyPropertyChanged
         new LanguageOption("en", "English"),
     };
 
-    private const string DefaultLanguage = "zh";
+    private const string FallbackLanguage = "zh";
 
     private readonly Dictionary<string, IReadOnlyDictionary<string, string>> _cache = new();
     private readonly object _lock = new();
 
-    private string _currentLanguage = DefaultLanguage;
+    private string _currentLanguage = GetSystemLanguage();
 
     private LocalizationService() { }
 
@@ -52,10 +53,15 @@ public sealed class LocalizationService : INotifyPropertyChanged
         !string.IsNullOrWhiteSpace(code) &&
         SupportedLanguages.Any(l => l.Code.Equals(code, StringComparison.OrdinalIgnoreCase));
 
+    // Use the Windows display language, without changing number/date formatting.
+    // All Chinese locales share the Chinese translation; other locales use English.
+    public static string GetSystemLanguage() =>
+        CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "zh" ? "zh" : "en";
+
     public static string Normalize(string? code)
     {
         var hit = SupportedLanguages.FirstOrDefault(l => l.Code.Equals(code, StringComparison.OrdinalIgnoreCase));
-        return hit?.Code ?? DefaultLanguage;
+        return hit?.Code ?? GetSystemLanguage();
     }
 
     public void SetLanguage(string? code)
@@ -70,8 +76,8 @@ public sealed class LocalizationService : INotifyPropertyChanged
     {
         if (GetDictionary(CurrentLanguage).TryGetValue(key, out var v))
             return v;
-        if (!CurrentLanguage.Equals(DefaultLanguage, StringComparison.OrdinalIgnoreCase) &&
-            GetDictionary(DefaultLanguage).TryGetValue(key, out var fallback))
+        if (!CurrentLanguage.Equals(FallbackLanguage, StringComparison.OrdinalIgnoreCase) &&
+            GetDictionary(FallbackLanguage).TryGetValue(key, out var fallback))
             return fallback;
         return key;
     }
@@ -96,7 +102,7 @@ public sealed class LocalizationService : INotifyPropertyChanged
         {
             if (_cache.TryGetValue(code, out var cached))
                 return cached;
-            var loaded = LoadFromResource(code) ?? LoadFromResource(DefaultLanguage) ??
+            var loaded = LoadFromResource(code) ?? LoadFromResource(FallbackLanguage) ??
                          new Dictionary<string, string>();
             _cache[code] = loaded;
             return loaded;
