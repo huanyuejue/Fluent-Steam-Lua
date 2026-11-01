@@ -26,12 +26,11 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
     private bool _disposed;
     private CancellationTokenSource? _downloadCts;
 
-    // 商店搜索的地区/语言组合（按优先级）：schinese 索引含中文本地化名称，english 兜底英文/外区
-    private static readonly (string Cc, string Lang)[] StoreSearchLocales =
-    {
-        ("cn", "schinese"),
-        ("us", "english")
-    };
+    // Chinese search retains its English fallback; English requests English names.
+    private static (string Cc, string Lang)[] StoreSearchLocales =>
+        LocalizationService.Instance.CurrentLanguage == "zh"
+            ? new[] { ("cn", "schinese"), ("us", "english") }
+            : new[] { ("us", "english") };
 
     [ObservableProperty]
     private string _gameId = string.Empty;
@@ -296,7 +295,7 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
         LogLines.Clear();
         AddLog(L.Get("Ruku_Searching", query));
 
-        // 回退链（中→英→Spy→社区）走完要几秒，总限时从 7 秒放宽到 15 秒
+        // Localized Store and fallback sources share a 15-second timeout.
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
 
         try
@@ -316,8 +315,10 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
             }
             if (appId > 0)
             {
-                // 小黑盒国内源优先（正常 0.3 秒返回）；miss 才进 appdetails，避免 Store 超时挡路
-                var (name, headerImage, releaseDate) = await XiaoHeiHeService.GetGameDetailAsync(appId, cts.Token);
+                // Heybox supplies Chinese names; English uses the localized Steam Store.
+                (string? name, string? headerImage, string releaseDate) = (null, null, "");
+                if (LocalizationService.Instance.CurrentLanguage == "zh")
+                    (name, headerImage, releaseDate) = await XiaoHeiHeService.GetGameDetailAsync(appId, cts.Token);
                 if (name == null)
                     (name, headerImage, releaseDate) = await GetAppNameAsync(appId, cts.Token);
                 // 商店下架的游戏 appdetails 无数据，用备用源再捞一次名字
@@ -377,9 +378,11 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
 
     private async Task<(string? Name, string? HeaderImage, string ReleaseDate)> GetAppNameAsync(int appId, CancellationToken ct = default)
     {
-        // 中文优先、查不到转英文；Steam 会对合服/改 ID 的游戏返回重定向后的 AppID 做 key，
+        // Follow the app language, with English fallback for Chinese requests.
+        // Steam 会对合服/改 ID 的游戏返回重定向后的 AppID 做 key，
         // 精确 key 命中失败时取首个 success 项（如 3669870 返回的 key 是 4760190）
-        foreach (var lang in new[] { "schinese", "english" })
+        foreach (var lang in LocalizationService.Instance.CurrentLanguage == "zh"
+                     ? new[] { "schinese", "english" } : new[] { "english" })
         {
             try
             {
@@ -441,8 +444,9 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
 
     private async Task SearchByNameAsync(string name, CancellationToken ct)
     {
-        // 国内源优先：小黑盒中英文直搜；有效结果直接返回，无结果/异常静默走现有链路
-        var heiHe = await XiaoHeiHeService.SearchByNameAsync(name, ct);
+        // Heybox results contain Chinese names, so only use them in Chinese mode.
+        var heiHe = LocalizationService.Instance.CurrentLanguage == "zh"
+            ? await XiaoHeiHeService.SearchByNameAsync(name, ct) : new List<HeiHeGame>();
         if (heiHe.Count > 0)
         {
             var heiCount = Math.Min(heiHe.Count, 10);
@@ -453,8 +457,7 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
             return;
         }
 
-        // 多组地区/语言降级重试：cc=cn&l=schinese 的索引含中文本地化名称（中文搜索必需），
-        // cc=us&l=english 兜底英文/外区匹配；命中即停
+        // Query locales in the order selected for the current app language.
         foreach (var (cc, lang) in StoreSearchLocales)
         {
             var url = $"https://store.steampowered.com/api/storesearch/?term={Uri.EscapeDataString(name)}&cc={cc}&l={lang}";

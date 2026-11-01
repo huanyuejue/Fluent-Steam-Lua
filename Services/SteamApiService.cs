@@ -13,7 +13,8 @@ public class SteamApiService : ISteamApiService
 	private readonly string _cacheDir;
 	private readonly string _coversDir;
 	private readonly string _cacheFilePath;
-	private ConcurrentDictionary<int, string> _nameCache = new();
+	private ConcurrentDictionary<string, string> _nameCache = new();
+	private static string NameCacheKey(int appId, string language) => $"{language}:{appId}";
 	// 元数据与封面下载分开限流：名字/Store API 走 8 并发，封面下载走 6 并发；
 	// 社区页回退单独 2 并发——8 并发打过去必吃 429（已在现网复现）
 	private readonly SemaphoreSlim _metaGate = new(8, 8);
@@ -162,7 +163,8 @@ public class SteamApiService : ISteamApiService
 			if (File.Exists(_cacheFilePath))
 			{
 				var json = File.ReadAllText(_cacheFilePath);
-				_nameCache = JsonSerializer.Deserialize<ConcurrentDictionary<int, string>>(json) ?? new();
+				// Legacy AppID-only entries have no known language and are not reused.
+				_nameCache = JsonSerializer.Deserialize<ConcurrentDictionary<string, string>>(json) ?? new();
 			}
 		}
 		catch (Exception ex)
@@ -188,11 +190,12 @@ public class SteamApiService : ISteamApiService
 
 	public void PopulateFromCache(List<GameInfo> games)
 	{
+		var language = LocalizationService.Instance.CurrentLanguage;
 		Directory.CreateDirectory(_coversDir);
 		foreach (var game in games)
 		{
 			// 缓存里的毒名字（历史版本误存的 "Error" 等）不采用，留给正文重取
-			if (_nameCache.TryGetValue(game.AppId, out var name) && !name.StartsWith("AppID:") && !IsJunkGameName(name))
+			if (_nameCache.TryGetValue(NameCacheKey(game.AppId, language), out var name) && !name.StartsWith("AppID:") && !IsJunkGameName(name))
 				game.GameName = name;
 
 			var coverPath = Path.Combine(_coversDir, $"{game.AppId}.jpg");
@@ -227,13 +230,14 @@ public class SteamApiService : ISteamApiService
 
 	public async Task RefreshSingleGameAsync(GameInfo game, CancellationToken cancellationToken = default)
 	{
+		var cacheKey = NameCacheKey(game.AppId, LocalizationService.Instance.CurrentLanguage);
 		Directory.CreateDirectory(_coversDir);
 		var coverPath = Path.Combine(_coversDir, $"{game.AppId}.jpg");
 		if (File.Exists(coverPath))
 			File.Delete(coverPath);
 
 		var oldName = game.GameName;
-		_nameCache.TryRemove(game.AppId, out _);
+		_nameCache.TryRemove(cacheKey, out _);
 
 		game.GameName = string.Empty;
 		game.CoverImagePath = string.Empty;
@@ -245,7 +249,7 @@ public class SteamApiService : ISteamApiService
 			if (!string.IsNullOrEmpty(oldName) && !oldName.StartsWith("AppID:") && !IsJunkGameName(oldName))
 			{
 				game.GameName = oldName;
-				_nameCache[game.AppId] = oldName;
+				_nameCache[cacheKey] = oldName;
 			}
 		}
 
@@ -264,7 +268,7 @@ public class SteamApiService : ISteamApiService
 			if (needCover && File.Exists(coverPath))
 				DeleteInvalidCover(coverPath, game);
 
-			// 1. 元数据段：小黑盒优先（中文名 + 封面直链），Store API 与后备源补位
+			// 1. Names follow the app language; Heybox remains a cover source.
 			string? headerUrl = null;
 			string? heiheCover = null;
 			if (needCover || needName)
@@ -301,23 +305,26 @@ public class SteamApiService : ISteamApiService
 		}
 	}
 
-	// 元数据段（小黑盒 → Store API → 后备名字源）：独立闸门，进出配对释放
+	// Localized metadata with an independent concurrency gate.
 	private async Task<(string? HeaderUrl, string? HeiheCover)> FetchMetaSectionAsync(
 		GameInfo game, bool needName, bool needCover, CancellationToken cancellationToken)
 	{
+		var language = LocalizationService.Instance.CurrentLanguage;
+		var useChinese = language == "zh";
+		var cacheKey = NameCacheKey(game.AppId, language);
 		await _metaGate.WaitAsync(cancellationToken);
 		string? headerUrl = null;
 		string? heiheCover = null;
 		try
 		{
-			// 0. 小黑盒国内源优先：中文名 + 封面直链；失败静默走原有链路
-			if (needName || needCover)
+			// Heybox names are Chinese-only; a cover lookup must not replace a name.
+			if ((needName && useChinese) || needCover)
 			{
 					var (heiName, heiCover, _) = await XiaoHeiHeService.GetGameDetailAsync(game.AppId, cancellationToken);
-				if (!string.IsNullOrWhiteSpace(heiName))
+				if (needName && useChinese && !string.IsNullOrWhiteSpace(heiName))
 				{
 					game.GameName = heiName;
-					_nameCache[game.AppId] = heiName;
+					_nameCache[cacheKey] = heiName;
 				}
 				if (!string.IsNullOrWhiteSpace(heiCover))
 					heiheCover = heiCover;
@@ -330,24 +337,24 @@ public class SteamApiService : ISteamApiService
 			// 小黑盒名+封面双全时直接跳过 Store API（Heybox 选中下的常见情形，不再刷超时日志）
 			if (stillNeedName || (needCover && heiheCover == null))
 			{
-				var storeResult = await TryStoreApi(game.AppId, "schinese", cancellationToken);
+				var storeResult = await TryStoreApi(game.AppId, useChinese ? "schinese" : "english", cancellationToken);
 				if (stillNeedName && storeResult.Name != null)
 				{
 					game.GameName = storeResult.Name;
-					_nameCache[game.AppId] = storeResult.Name;
+					_nameCache[cacheKey] = storeResult.Name;
 				}
 				if (needCover)
 					headerUrl = storeResult.HeaderUrl;
 
-				var triedEnglish = false;
-				if (stillNeedName && storeResult.Name == null)
+				var triedEnglish = !useChinese;
+				if (stillNeedName && storeResult.Name == null && !triedEnglish)
 				{
 					storeResult = await TryStoreApi(game.AppId, "english", cancellationToken);
 					triedEnglish = true;
 					if (storeResult.Name != null)
 					{
 						game.GameName = storeResult.Name;
-						_nameCache[game.AppId] = storeResult.Name;
+						_nameCache[cacheKey] = storeResult.Name;
 					}
 					if (needCover && headerUrl == null)
 						headerUrl = storeResult.HeaderUrl;
@@ -361,13 +368,13 @@ public class SteamApiService : ISteamApiService
 			}
 
 			// 名称后备来源（SteamSpy / SteamCommunity）
-			if (stillNeedName && string.IsNullOrEmpty(game.GameName))
+			if (stillNeedName && (string.IsNullOrEmpty(game.GameName) || game.GameName == $"AppID: {game.AppId}" || IsJunkGameName(game.GameName)))
 			{
 				var spyName = await TrySteamSpy(game.AppId, cancellationToken);
 				if (spyName != null)
 				{
 					game.GameName = spyName;
-					_nameCache[game.AppId] = spyName;
+					_nameCache[cacheKey] = spyName;
 				}
 				else
 				{
@@ -375,7 +382,7 @@ public class SteamApiService : ISteamApiService
 					if (communityName != null)
 					{
 						game.GameName = communityName;
-						_nameCache[game.AppId] = communityName;
+						_nameCache[cacheKey] = communityName;
 					}
 				}
 			}
