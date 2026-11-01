@@ -91,11 +91,18 @@ public sealed class TrayIconManager : IDisposable
         _notifyIcon = new NotifyIcon
         {
             Icon = LoadAppIcon(),
-            Text = "Fluent Steam Lua 管理工具",
+            Text = L.Get("App_Title"),
             Visible = false
         };
         _notifyIcon.DoubleClick += (_, _) => RestoreRequested?.Invoke();
         _notifyIcon.MouseUp += OnMouseUp;
+        LocalizationService.Instance.PropertyChanged += OnLanguageChanged;
+    }
+
+    private void OnLanguageChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(LocalizationService.CurrentLanguage))
+            _notifyIcon.Text = L.Get("App_Title");
     }
 
     public void ShowBalloonOnce(string title, string text)
@@ -383,6 +390,7 @@ public sealed class TrayIconManager : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        LocalizationService.Instance.PropertyChanged -= OnLanguageChanged;
         UnhookMouseHook();
         _instance = null;
         CloseMenu();

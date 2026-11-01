@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:l="clr-namespace:SteamLuaManager.Markup"
         xmlns:ui="http://schemas.inkore.net/lib/ui/wpf/modern"
-        Title="Fluent Steam Lua 管理工具"
+        Title="{l:Loc App_Title}"
         Icon="pack://application:,,,/Assets/app.ico"
         Height="780" Width="1070"
         MinHeight="500" MinWidth="800"
