@@ -27,14 +27,22 @@ public partial class App : Application
     /// <summary>单实例互斥量名称（fix 在 worker 子进程逻辑之后）。</summary>
     private const string SingleInstanceMutexName = "FluentSteamLuaManager_SingleInstance";
 
-    [DllImport("user32.dll", CharSet = CharSet.Auto)]
-    private static extern IntPtr FindWindow(string? lpClassName, string lpWindowName);
-
     [DllImport("user32.dll")]
     private static extern bool SetForegroundWindow(IntPtr hWnd);
 
     [DllImport("user32.dll")]
     private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    private static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder lpString, int nMaxCount);
+
+    [DllImport("user32.dll")]
+    private static extern bool IsWindowVisible(IntPtr hWnd);
 
     private static ApplicationTheme GetSystemTheme()
     {
@@ -219,19 +227,37 @@ public partial class App : Application
         base.OnStartup(e);
     }
 
+    // 主窗口标题带内核状态后缀（"标题 - 状态"），精确匹配拿不到窗口；
+    // 这里按标题前缀遍历顶层窗口，中英文两种标题都能命中
     private static void ActivateExistingInstance()
     {
         try
         {
-            var hwnd = FindWindow(null, L.Get("App_Title"));
-            // Older versions always used the Chinese title.
-            if (hwnd == IntPtr.Zero)
-                hwnd = FindWindow(null, "Fluent Steam Lua 管理工具");
+            var title = L.Get("App_Title");
+            var legacyTitle = "Fluent Steam Lua 管理工具";
+            var hwnd = FindWindowByTitlePrefix(title);
+            if (hwnd == IntPtr.Zero && !title.Equals(legacyTitle, StringComparison.Ordinal))
+                hwnd = FindWindowByTitlePrefix(legacyTitle);
             if (hwnd == IntPtr.Zero) return;
             ShowWindow(hwnd, 9); // SW_RESTORE
             SetForegroundWindow(hwnd);
         }
         catch { }
+    }
+
+    private static IntPtr FindWindowByTitlePrefix(string prefix)
+    {
+        var found = IntPtr.Zero;
+        EnumWindows((hWnd, _) =>
+        {
+            if (!IsWindowVisible(hWnd)) return true;
+            var sb = new System.Text.StringBuilder(512);
+            if (GetWindowText(hWnd, sb, sb.Capacity) <= 0) return true;
+            if (!sb.ToString().StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return true;
+            found = hWnd;
+            return false; // 命中即停
+        }, IntPtr.Zero);
+        return found;
     }
 
     protected override void OnExit(ExitEventArgs e)

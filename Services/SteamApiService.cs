@@ -320,7 +320,7 @@ public class SteamApiService : ISteamApiService
 			// Heybox names are Chinese-only; a cover lookup must not replace a name.
 			if ((needName && useChinese) || needCover)
 			{
-					var (heiName, heiCover, _) = await XiaoHeiHeService.GetGameDetailAsync(game.AppId, cancellationToken);
+				var (heiName, heiCover, _) = await XiaoHeiHeService.GetGameDetailAsync(game.AppId, cancellationToken);
 				if (needName && useChinese && !string.IsNullOrWhiteSpace(heiName))
 				{
 					game.GameName = heiName;
