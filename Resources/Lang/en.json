@@ -1412,6 +1412,7 @@
   "Kernel_NoDisabledFound": "No temporarily-disabled kernel files found",
   "Kernel_LogSkippedExists": "Could not clean these disabled copies; will retry on next enable: {0}",
   "Kernel_LogStaleCleaned": "Cleaned redundant disabled copies: {0}",
+  "Kernel_LogEntryNormalizeFailed": "Failed to normalize injection entry after restore: {0}",
   "Kernel_LogEnabled": "Enabled {0} kernel files",
   "Kernel_LogCleanStaleDisabled": "Cleaned stale disabled copy after install: {0}",
   "Kernel_LogStaleDeleteFailed": "Failed to clean stale disabled copy {0}: {1}",

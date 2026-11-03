@@ -1412,6 +1412,7 @@
   "Kernel_NoDisabledFound": "未检测到被临时禁用的内核文件",
   "Kernel_LogSkippedExists": "以下文件的停用副本没能清理，下次启用会再试：{0}",
   "Kernel_LogStaleCleaned": "已清理多余的停用副本：{0}",
+  "Kernel_LogEntryNormalizeFailed": "恢复后归一并注入入口失败: {0}",
   "Kernel_LogEnabled": "已启用 {0} 个内核文件",
   "Kernel_LogCleanStaleDisabled": "安装完成后清理停用残留: {0}",
   "Kernel_LogStaleDeleteFailed": "清理停用残留 {0} 失败: {1}",

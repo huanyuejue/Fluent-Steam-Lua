@@ -444,17 +444,17 @@ public class OpenSteamToolService : IOpenSteamToolService
         return list;
     }
 
-    // 临时禁用：给内核本体与当前激活入口加 .off 后缀，返回实际处理数；
+    // 临时禁用：给内核本体与所有已激活的注入入口加 .off 后缀，返回实际处理数；
     // 已是禁用态或目标后缀已存在的跳过，调用方负责 Steam 关闭门禁
     public Task<int> DisableKernelAsync()
     {
         var steamPath = GetSteamPath() ?? throw new InvalidOperationException(L.Get("Svc_CantDetectSteamPath"));
         var done = 0;
         var skipped = new List<string>();
-        // 内核本体必禁；入口只禁当前激活的那个——未激活的入口本就是 .disabled，不动它
+        // 本体必禁；入口凡是激活态的一律禁掉——只处理一个时，另一个仍会被 Steam 加载，
+        // 表现为界面显示已禁用但内核照常生效。停用态的入口（.disabled）不存在原名文件，循环里自然会跳过
         var targets = new List<string>(KernelBodyDlls);
-        var activeEntry = ActiveEntryFile(steamPath);
-        if (activeEntry != null) targets.Add(activeEntry);
+        targets.AddRange(InjectionEntryDlls);
         foreach (var dll in targets)
         {
             var path = Path.Combine(steamPath, dll);
@@ -482,6 +482,14 @@ public class OpenSteamToolService : IOpenSteamToolService
         LogService.Info(L.Get("LogCat_Kernel"), L.Get("Kernel_LogDisabled", done));
         return Task.FromResult(done);
     }
+
+    // 启用后该用哪个入口：两个入口都从 .off 还原回来时没有"原选择"可依，
+    // 统一回落到默认入口（dwmapi，反作弊友好）；默认入口文件缺失时才用 version，
+    // 避免归一后没有可用入口。用户仍可在界面上随时切换
+    private static InjectionMode ResolveInjectionModeAfterEnable(string steamPath) =>
+        File.Exists(Path.Combine(steamPath, DefaultInjectionEntry))
+            ? InjectionMode.Dwmapi
+            : InjectionMode.Version;
 
     // 启用：把内核本体与注入入口的 .off 副本还原回原名，返回还原的文件数。
     // 原名已存在的属残留副本（历史遗留或安装后未清），一并删掉让状态归位
@@ -528,21 +536,27 @@ public class OpenSteamToolService : IOpenSteamToolService
             LogService.Info(L.Get("LogCat_Kernel"), L.Get("Kernel_LogStaleCleaned", string.Join(", ", cleaned)));
         if (staleKept.Count > 0)
             LogService.Warn(L.Get("LogCat_Kernel"), L.Get("Kernel_LogSkippedExists", string.Join(", ", staleKept)));
+
+        // 禁用时两个入口都会被加 .off，还原后就成了双入口同时激活的冲突态；
+        // 这里按当前注入方式归一到单入口，保证启用后回到可直接使用的状态
+        if (done > 0)
+        {
+            try
+            {
+                SetInjectionMode(steamPath, ResolveInjectionModeAfterEnable(steamPath));
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            {
+                // 归一失败不影响内核本体已启用，残留成冲突态时界面会给出入口冲突提示
+                LogService.Warn(L.Get("LogCat_Kernel"), L.Get("Kernel_LogEntryNormalizeFailed", ex.Message));
+            }
+        }
+
         LogService.Info(L.Get("LogCat_Kernel"), L.Get("Kernel_LogEnabled", done));
         return Task.FromResult(done);
     }
 
     // ========== 注入入口切换 ==========
-
-    // 当前激活的注入入口文件（dwmapi 优先）；未安装或被禁用时为 null
-    private static string? ActiveEntryFile(string steamPath)
-    {
-        foreach (var dll in InjectionEntryDlls)
-        {
-            if (File.Exists(Path.Combine(steamPath, dll))) return dll;
-        }
-        return null;
-    }
 
     // 磁盘上两个入口 DLL 的激活组合；只反映文件现状，未安装/禁用的语义由调用方结合状态判断
     public InjectionEntryState GetEntryState()
@@ -615,6 +629,8 @@ public class OpenSteamToolService : IOpenSteamToolService
         var otherDisabled = otherPath + EntryDisabledSuffix;
         if (File.Exists(otherPath))
         {
+            // 停用副本已存在时以它为准，把重复的激活文件删掉即可，不覆盖副本内容；
+            // 没有副本就把它改名过去，保留一份供日后切换
             if (File.Exists(otherDisabled))
                 File.Delete(otherPath);
             else
