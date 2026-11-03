@@ -14,6 +14,19 @@ using SteamLuaManager.Services;
 
 namespace SteamLuaManager.ViewModels;
 
+// 远程清单仓库里没有这个游戏的包：与网络故障区分开，不重试也不提示检查网络。
+// 只覆盖仓库侧表达"对象不存在"的那几个状态码，其余仍走普通失败重试
+internal sealed class RemotePackageMissingException(string message) : Exception(message)
+{
+    // 各节点给的状态码不统一：S3 直连多是 404，经 Cloudflare 代理常变成 502/503，
+    // 部分节点返回 403。是否属于本异常统一由这里判定
+    public static bool IsMissingStatus(int statusCode) =>
+        statusCode is 403 or 404 or 502 or 503 or 504;
+
+    public static RemotePackageMissingException FromStatusCode(int statusCode) =>
+        new(L.Get("Ruku_PackageMissingDetail", statusCode));
+}
+
 public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
 {
     private readonly ISteamPathService _steamPathService;
@@ -796,7 +809,18 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
         var luaCount = 0;
         try
         {
-            var success = await DownloadFileAsync(shortCode, zipPath, ct);
+            bool success;
+            try
+            {
+                success = await DownloadFileAsync(shortCode, zipPath, ct);
+            }
+            catch (RemotePackageMissingException)
+            {
+                // 远程仓库没有收录这个游戏，属于正常业务结果，不当成故障
+                AddLog(L.Get("Ruku_PackageMissingLog", gameId));
+                StatusMessage = L.Get("Ruku_PackageMissingStatus", gameId);
+                return;
+            }
             if (!success)
             {
                 AddLog(L.Get("Ruku_DownloadFailed"));
@@ -890,6 +914,14 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
                     request.Headers.TryAddWithoutValidation("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0");
                     return await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
                 });
+
+            // 公共池里没有该游戏的包时，S3/R2 及其代理会回 404/403 或转发成 502/503，
+            // 这与网络不通不是一回事：重试没有意义，也不该让用户去查自己的网络。
+            // 其余状态码（如 500、429）仍按普通故障走退避重试
+            if (!response.IsSuccessStatusCode &&
+                RemotePackageMissingException.IsMissingStatus((int)response.StatusCode))
+                throw RemotePackageMissingException.FromStatusCode((int)response.StatusCode);
+
             response.EnsureSuccessStatusCode();
 
             await using var contentStream = await response.Content.ReadAsStreamAsync();
@@ -915,6 +947,11 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
                 // 只有用户取消才透出；在飞请求自身超时（TaskCanceledException）走下面重试
+                throw;
+            }
+            catch (RemotePackageMissingException)
+            {
+                // 仓库里没有这份包，重试多少次都一样，直接透出以免白等退避
                 throw;
             }
             catch (Exception ex)
