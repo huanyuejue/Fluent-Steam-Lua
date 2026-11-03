@@ -1006,12 +1006,17 @@ public partial class CloudSaveViewModel : ObservableObject
                     L.Get("Cloud_TestFailedBody", display, root, r.Error));
                 return;
             }
+            // 空账号目录有多种成因（新配置 / 尚未存档 / 前缀配错），弹窗用完整说明避免误导；
+            // 日志要一行一条便于翻查，另用简短版
             var detail = r.AccountCount == 0
                 ? L.Get("Cloud_NoAccounts")
                 : r.AppCount == 0
                     ? L.Get("Cloud_NoAppsUnderAccount", r.AccountCount)
                     : L.Get("Cloud_AccountsApps", r.AccountCount, r.AppCount);
-            LogService.Info(L.Get("LogCat_Cloud"), L.Get("Cloud_LogTestPassed", provider, detail));
+            var logDetail = r.AccountCount == 0
+                ? L.Get("Cloud_NoAccountsShort")
+                : detail.Replace("\n", " ");
+            LogService.Info(L.Get("LogCat_Cloud"), L.Get("Cloud_LogTestPassed", provider, logDetail));
             RestoreIdleListHint();
             await _dialogService.ShowAlertAsync(L.Get("Cloud_TestPassedTitle"),
                 L.Get("Cloud_TestPassedBody", display, root, detail));
