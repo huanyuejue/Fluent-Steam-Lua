@@ -8,8 +8,9 @@ using System.IO;
 
 namespace SteamLuaManager.ViewModels;
 
-public partial class CloudSaveViewModel : ObservableObject
+public partial class CloudSaveViewModel : ObservableObject, IDisposable
 {
+    private bool _disposed;
     private readonly ICloudRedirectService _cloudService;
     private readonly ISteamPathService _steamPathService;
     private readonly ISettingsService _settingsService;
@@ -19,6 +20,8 @@ public partial class CloudSaveViewModel : ObservableObject
 
     private bool _syncingCloudEnabled;
     private bool _listProgressSeen;
+    // 进程内是否已比对过云存档 DLL：只在首次进页面做一次，避免每次导航都读文件
+    private bool _dllCheckedThisSession;
     private readonly Dictionary<int, string> _saveDirs = new();
 
     public ObservableCollection<GameInfo> RedirectedGames { get; } = new();
@@ -86,6 +89,36 @@ public partial class CloudSaveViewModel : ObservableObject
     [ObservableProperty]
     private bool _isListHintVisible = true;
 
+    // 已部署 DLL 落后于软件包内版本时置位：界面据此显示一条可点击的更新提示。
+    // 由启用流程覆盖写入，所以不阻断开关，只做告知
+    [ObservableProperty]
+    private bool _isCloudDllOutdated;
+
+    [ObservableProperty]
+    private string _cloudDllOutdatedText = "";
+
+    // 页面底部通用提示：操作结果统一走这里，3 秒后自动消失（与其他页面一致）
+    [ObservableProperty]
+    private string _statusMessage = "";
+
+    private System.Windows.Threading.DispatcherTimer? _statusTimer;
+
+    partial void OnStatusMessageChanged(string value)
+    {
+        _statusTimer?.Stop();
+        if (string.IsNullOrEmpty(value)) return;
+        _statusTimer ??= new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+        _statusTimer.Tick -= StatusTimer_Tick;
+        _statusTimer.Tick += StatusTimer_Tick;
+        _statusTimer.Start();
+    }
+
+    private void StatusTimer_Tick(object? sender, EventArgs e)
+    {
+        _statusTimer?.Stop();
+        StatusMessage = string.Empty;
+    }
+
     public CloudSaveViewModel(
         ICloudRedirectService cloudService,
         ISteamPathService steamPathService,
@@ -114,6 +147,7 @@ public partial class CloudSaveViewModel : ObservableObject
         OnPropertyChanged(nameof(SyncPathText));
         RefreshProviderStatus();
         SetIdleListHint();
+        RefreshCloudDllState();
         foreach (var g in RedirectedGames) g.RefreshLocalizedTexts();
     }
 
@@ -163,6 +197,13 @@ public partial class CloudSaveViewModel : ObservableObject
             RefreshProviderBlock();
             SetIdleListHint();
             RefreshProviderStatus();
+            // 进程内只在首次进页面比一次：DLL 不会在运行期间自己变，反复读写没意义；
+            // 手动更新与切语言另有入口刷新，不依赖这里
+            if (!_dllCheckedThisSession)
+            {
+                _dllCheckedThisSession = true;
+                RefreshCloudDllState();
+            }
 
             // 云端源未登录/无凭证时不发起连接，直接显示闲置提示，避免空等超时
             if (SelectedProvider != "folder" && !IsProviderSignedIn)
@@ -784,6 +825,59 @@ public partial class CloudSaveViewModel : ObservableObject
                 : $"{_authStatusPart}；{_remoteRootPart}";
     }
 
+    // 比对已部署 DLL 与包内版本，决定是否显示更新提示。
+    // 读 1.7MB 文件并算哈希有开销，调用点按需收敛：首次进页面一次、切语言、手动更新后
+    private void RefreshCloudDllState()
+    {
+        try
+        {
+            var check = _cloudService.CheckDeployedDll();
+            // 未部署不算"过旧"：首次开启时本来就会部署，提前提示只会让人困惑
+            var outdated = check.State == CloudDllState.Outdated;
+            IsCloudDllOutdated = outdated;
+            CloudDllOutdatedText = outdated ? L.Get("Cloud_DllOutdated", check.BundledVersion) : "";
+        }
+        catch (Exception ex)
+        {
+            IsCloudDllOutdated = false;
+            CloudDllOutdatedText = "";
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogDllCheckFailed", ex.Message));
+        }
+    }
+
+    // 点提示立即部署：走与开启开关相同的部署路径（含占用探测与原子覆盖），
+    // 不动开关本身，避免用户只想更新文件却被顺手打开了重定向
+    [RelayCommand]
+    private async Task UpdateCloudDllAsync()
+    {
+        if (IsBusy) return;
+        try
+        {
+            IsBusy = true;
+            StatusMessage = L.Get("Cloud_DeployingDll");
+            await Task.Run(() => _cloudService.DeployDllOnly());
+            RefreshCloudDllState();
+            // 部署后回读一次状态才算成功：覆盖被占用时这里仍会是 Outdated
+            StatusMessage = IsCloudDllOutdated
+                ? L.Get("Cloud_DllUpdateFailed")
+                : L.Get("Cloud_DllUpdated");
+            if (IsCloudDllOutdated)
+                LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogDllUpdateUnchanged"));
+            else
+                LogService.Info(L.Get("LogCat_Cloud"), L.Get("Cloud_LogDllUpdated"));
+        }
+        catch (Exception ex)
+        {
+            // 部署失败的原因（文件被占用等）直接展示给用户，比笼统文案有指导意义
+            StatusMessage = ex.Message;
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogDllDeployFailed", ex.Message));
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
     // 登录态单独刷新：登录/保存凭证后只翻按钮状态，不覆盖操作结果提示
     private void UpdateSignedInFlag()
     {
@@ -1299,5 +1393,20 @@ public partial class CloudSaveViewModel : ObservableObject
         {
             IsBusy = false;
         }
+    }
+
+    // 页面底部提示的定时器持有本对象引用，窗口关闭时解绑，避免残留订阅
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        if (_statusTimer != null)
+        {
+            _statusTimer.Stop();
+            _statusTimer.Tick -= StatusTimer_Tick;
+            _statusTimer = null;
+        }
+        _refreshCts?.Dispose();
+        _signInCts?.Dispose();
     }
 }

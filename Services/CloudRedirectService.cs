@@ -45,8 +45,24 @@ public sealed record WebDavCredentials(
     bool AllowInsecureHttp = false, bool AllowInsecureTls = false,
     int TimeoutSec = 0, string ExtraHeaders = "");
 
+// 已部署 DLL 与软件包内版本的比对结果
+public enum CloudDllState
+{
+    NotDeployed,   // 目标位置还没有 DLL：首次启用时部署
+    UpToDate,      // 与包内一致，无需处理
+    Outdated,      // 包内已是新版本，需要覆盖
+    Unknown        // 读取或比对失败，不阻断流程，也不提示
+}
+
+// 检测结果：State 决定界面怎么提示，BundledVersion 用于文案展示
+public sealed record CloudDllCheck(CloudDllState State, string BundledVersion, string TargetPath);
+
 public interface ICloudRedirectService
 {
+    // 已部署 DLL 与包内版本的比对：供界面在开启前提示"有更新需重新部署"
+    CloudDllCheck CheckDeployedDll();
+    // 只更新 DLL，不动开关与配置文件：用户只想换文件时不该顺手打开重定向
+    void DeployDllOnly();
     Task<CloudSaveStatus> RefreshStatusAsync(CancellationToken ct = default);
     Task EnableAsync(string? syncPath, IProgress<string>? status, CancellationToken ct = default);
     Task DisableAsync();
@@ -357,6 +373,50 @@ public class CloudRedirectService : ICloudRedirectService
             return Path.Combine(steamPath, DllFileName);
         if (Path.IsPathRooted(configured)) return configured;
         return Path.Combine(steamPath, configured);
+    }
+
+    // 已部署 DLL 与软件包内版本的比对。DLL 自身没有版本资源，只能按内容哈希判断：
+    // 长度不同直接判定过旧；长度相同再流式算 SHA256，避免整份读进内存
+    public CloudDllCheck CheckDeployedDll()
+    {
+        var bundledVersion = CloudRedirectInfo.BundledVersion;
+        var steampath = ResolveSteamPath();
+        if (string.IsNullOrEmpty(steampath))
+            return new CloudDllCheck(CloudDllState.Unknown, bundledVersion, string.Empty);
+
+        var target = ResolveLibraryTarget(steampath);
+        try
+        {
+            if (!File.Exists(target))
+                return new CloudDllCheck(CloudDllState.NotDeployed, bundledVersion, target);
+
+            var embedded = GetEmbeddedDllBytes();
+            if (embedded == null || embedded.Length == 0)
+                return new CloudDllCheck(CloudDllState.Unknown, bundledVersion, target);
+
+            // 长度先行：长度不同必然不是同一份，省掉哈希
+            if (new FileInfo(target).Length != embedded.Length)
+                return new CloudDllCheck(CloudDllState.Outdated, bundledVersion, target);
+
+            using var fs = new FileStream(target, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var sha = SHA256.Create();
+            var same = CryptographicOperations.FixedTimeEquals(SHA256.HashData(embedded), sha.ComputeHash(fs));
+            return new CloudDllCheck(same ? CloudDllState.UpToDate : CloudDllState.Outdated, bundledVersion, target);
+        }
+        catch (Exception ex)
+        {
+            // 被 Steam 占用就退化为未知，让启用流程自己去做占用探测并给出准确报错
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogDllCheckFailed", ex.Message));
+            return new CloudDllCheck(CloudDllState.Unknown, bundledVersion, target);
+        }
+    }
+
+    public void DeployDllOnly()
+    {
+        var steampath = ResolveSteamPath();
+        if (string.IsNullOrEmpty(steampath))
+            throw new InvalidOperationException(L.Get("Cloud_NoSteamPath"));
+        EnsureDllDeployed(steampath);
     }
 
     private void EnsureDllDeployed(string steamPath)

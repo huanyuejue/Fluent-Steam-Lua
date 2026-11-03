@@ -73,6 +73,7 @@
     <EmbeddedResource Include="Resources\CloudRedirectDll.zip" />
     <EmbeddedResource Include="Resources\Lang\*.json" />
     <Compile Include="obj\Generated\FeedbackSecrets.g.cs" />
+    <Compile Include="obj\Generated\CloudRedirectInfo.g.cs" />
   </ItemGroup>
 
   <!-- 免启动破解：进程内引用 SteamAutoCrack.Core（已改 net8/x64，随主程序编译） -->
@@ -283,6 +284,27 @@
                   DestinationFile="$(ProjectDir)Resources\CloudRedirectDll.zip"
                   Overwrite="true" />
     <RemoveDir Directories="$(ProjectDir)Resources\CloudRedirectDllPublish" />
+
+    <!-- 把包内 DLL 的指纹固化进程序集：运行时靠它与已部署的 DLL 比对，
+         判断要不要提示用户重新部署（DLL 自身没有版本资源可用） -->
+    <GetFileHash Files="$(CloudRedirectDllPath)" Algorithm="SHA256">
+      <Output TaskParameter="Items" ItemName="_CloudRedirectDllHash" />
+    </GetFileHash>
+    <PropertyGroup>
+      <_CloudRedirectSha>$([System.String]::Copy('%(_CloudRedirectDllHash.FileHash)').Replace('-','').ToLowerInvariant())</_CloudRedirectSha>
+      <_CloudRedirectTag>$(CloudRedirectResolvedVersion)</_CloudRedirectTag>
+    </PropertyGroup>
+    <ItemGroup>
+      <CloudRedirectInfoLine Include="// &lt;auto-generated /&gt; Generated at build time from CloudRedirect release. Do not edit. Not committed." />
+      <CloudRedirectInfoLine Include="namespace SteamLuaManager.Services%3B" />
+      <CloudRedirectInfoLine Include="internal static class CloudRedirectInfo" />
+      <CloudRedirectInfoLine Include="{" />
+      <CloudRedirectInfoLine Include="    internal const string BundledVersion = &quot;$(_CloudRedirectTag)&quot;%3B" />
+      <CloudRedirectInfoLine Include="    internal const string BundledSha256 = &quot;$(_CloudRedirectSha)&quot;%3B" />
+      <CloudRedirectInfoLine Include="}" />
+    </ItemGroup>
+    <MakeDir Directories="$(ProjectDir)obj\Generated" />
+    <WriteLinesToFile File="$(ProjectDir)obj\Generated\CloudRedirectInfo.g.cs" Lines="@(CloudRedirectInfoLine)" Overwrite="true" Encoding="UTF-8" />
   </Target>
 
   <Target Name="GenerateFeedbackSecrets" BeforeTargets="BeforeBuild">

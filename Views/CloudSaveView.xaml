@@ -155,8 +155,16 @@
         </Style>
     </UserControl.Resources>
 
-    <controls:SmoothScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-        <StackPanel Margin="36,24,36,24">
+    <DockPanel>
+        <!-- 通用操作结果提示：贴底左侧，3 秒后自动消失（与其他页面一致） -->
+        <ui:InfoBar DockPanel.Dock="Bottom" Style="{StaticResource InfoBarStyle}"
+                    IsOpen="{Binding StatusMessage, Converter={StaticResource StringNotEmptyToBoolConverter}}"
+                    Message="{Binding StatusMessage}"
+                    HorizontalAlignment="Left"
+                    Margin="36,0,0,12"/>
+
+        <controls:SmoothScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="36,24,36,24">
 
             <TextBlock Text="{l:Loc Cloud_Title}" FontSize="28" FontWeight="SemiBold" Margin="0,0,0,4"
                        Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
@@ -201,6 +209,31 @@
                        TextWrapping="Wrap"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                        Visibility="{Binding ProviderStatusLine, Converter={StaticResource StringNotEmptyToVisibilityConverter}}"/>
+
+            <!-- 已部署 DLL 落后于软件包内版本：右侧按钮单独触发覆盖部署，不打开开关 -->
+            <Border Margin="0,0,0,8" Padding="12,8" CornerRadius="6"
+                    Background="{DynamicResource SystemFillColorCautionBackgroundBrush}"
+                    Visibility="{Binding IsCloudDllOutdated, Converter={StaticResource BoolToVisibilityConverter}}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <ui:FontIcon Grid.Column="0" Glyph="&#xE7BA;" FontSize="14" Margin="0,0,8,0" VerticalAlignment="Top"
+                                 Foreground="{DynamicResource SystemFillColorCautionBrush}"/>
+                    <TextBlock Grid.Column="1" Text="{Binding CloudDllOutdatedText}" FontSize="12" TextWrapping="Wrap"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                    <Button Grid.Column="2" Content="{l:Loc Cloud_DllUpdateNow}" Command="{Binding UpdateCloudDllCommand}"
+                            Padding="12,4" Margin="12,0,0,0" VerticalAlignment="Center"
+                            IsEnabled="{Binding IsBusy, Converter={StaticResource BoolInvertConverter}}">
+                        <Button.Background>
+                            <SolidColorBrush Color="{DynamicResource ControlFillColorDefault}" Opacity="0.45"/>
+                        </Button.Background>
+                    </Button>
+                </Grid>
+            </Border>
 
             <ui:SettingsCard Header="{l:Loc Cloud_LocalDir}" Margin="0,0,0,8"
                                      Description="{l:Loc Cloud_LocalDirDesc}"
@@ -575,6 +608,7 @@
                 </StackPanel>
             </Border>
 
-        </StackPanel>
-    </controls:SmoothScrollViewer>
+            </StackPanel>
+        </controls:SmoothScrollViewer>
+    </DockPanel>
 </UserControl>
