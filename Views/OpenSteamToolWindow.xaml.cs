@@ -486,7 +486,11 @@ public partial class OpenSteamToolWindow : Window
             try
             {
                 var done = await _service.EnableKernelAsync();
-                await ShowDialogAsync(L.Get("Main_EnableDone"), L.Get("Main_EnableDoneBody", done));
+                // 还原数为 0 说明原名本来就在、只清掉了历史残留副本：状态已归位，
+                // 但仍要如实告知"没有文件需要恢复"，不能谎称恢复了若干文件
+                await ShowDialogAsync(
+                    L.Get("Main_EnableDone"),
+                    done > 0 ? L.Get("Main_EnableDoneBody", done) : L.Get("Main_EnableDoneNothing"));
                 RefreshState();
             }
             catch (Exception ex)

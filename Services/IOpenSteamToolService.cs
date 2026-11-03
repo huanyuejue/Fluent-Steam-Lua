@@ -333,6 +333,25 @@ public class OpenSteamToolService : IOpenSteamToolService
             if (!extractedEntry)
                 LogService.Warn(L.Get("LogCat_Kernel"), L.Get("Kernel_ZipNoEntryDll"));
 
+            // 新文件已落盘，此时清掉旧的停用副本：原名和新副本同时存在会让启用流程
+            // 全走跳过分支，界面报"恢复 0 个"且残留越来越多。放在解压成功之后清理，
+            // 解压失败时原有禁用态保持不动
+            foreach (var name in KernelBodyDlls.Concat(InjectionEntryDlls))
+            {
+                var stale = Path.Combine(steamPath, name + KernelDisabledSuffix);
+                if (!File.Exists(stale)) continue;
+                try
+                {
+                    File.Delete(stale);
+                    LogService.Info(L.Get("LogCat_Kernel"), L.Get("Kernel_LogCleanStaleDisabled", name + KernelDisabledSuffix));
+                }
+                catch (Exception ex) when (ex is UnauthorizedAccessException || ex is IOException)
+                {
+                    // 清理失败不阻断安装：新内核已就位，下次启用还能自愈
+                    LogService.Warn(L.Get("LogCat_Kernel"), L.Get("Kernel_LogStaleDeleteFailed", name + KernelDisabledSuffix, ex.Message));
+                }
+            }
+
             // 装完归一注入入口：默认 dwmapi，用户原选 version 则保持 version，
             // 避免升级后旧入口与新入口同时激活
             var targetMode = priorMode == InjectionMode.Version ? InjectionMode.Version : InjectionMode.Dwmapi;
@@ -464,12 +483,14 @@ public class OpenSteamToolService : IOpenSteamToolService
         return Task.FromResult(done);
     }
 
-    // 启用：把内核本体与注入入口的 .off 副本还原回原名，返回实际处理数；原名已存在的跳过，避免覆盖
+    // 启用：把内核本体与注入入口的 .off 副本还原回原名，返回还原的文件数。
+    // 原名已存在的属残留副本（历史遗留或安装后未清），一并删掉让状态归位
     public Task<int> EnableKernelAsync()
     {
         var steamPath = GetSteamPath() ?? throw new InvalidOperationException(L.Get("Svc_CantDetectSteamPath"));
         var done = 0;
-        var skipped = new List<string>();
+        var cleaned = new List<string>();
+        var staleKept = new List<string>();
         foreach (var dll in KernelBodyDlls.Concat(InjectionEntryDlls))
         {
             var path = Path.Combine(steamPath, dll);
@@ -477,7 +498,18 @@ public class OpenSteamToolService : IOpenSteamToolService
             if (!File.Exists(disabledPath)) continue;
             if (File.Exists(path))
             {
-                skipped.Add(dll);
+                // 原名已在，这份副本还原出来只会覆盖掉当前文件，直接清掉；
+                // 删不掉时保留它，下次启用再试，不让残留阻塞流程
+                try
+                {
+                    File.Delete(disabledPath);
+                    cleaned.Add(dll);
+                }
+                catch (Exception ex) when (ex is UnauthorizedAccessException || ex is IOException)
+                {
+                    LogService.Warn(L.Get("LogCat_Kernel"), L.Get("Kernel_LogStaleDeleteFailed", dll + KernelDisabledSuffix, ex.Message));
+                    staleKept.Add(dll);
+                }
                 continue;
             }
             try
@@ -490,10 +522,12 @@ public class OpenSteamToolService : IOpenSteamToolService
                 throw new InvalidOperationException(L.Get("Kernel_CantEnable", dll, ex.Message), ex);
             }
         }
-        if (done == 0 && skipped.Count == 0)
+        if (done == 0 && cleaned.Count == 0 && staleKept.Count == 0)
             throw new InvalidOperationException(L.Get("Kernel_NoDisabledFound"));
-        if (skipped.Count > 0)
-            LogService.Warn(L.Get("LogCat_Kernel"), L.Get("Kernel_LogSkippedExists", string.Join(", ", skipped)));
+        if (cleaned.Count > 0)
+            LogService.Info(L.Get("LogCat_Kernel"), L.Get("Kernel_LogStaleCleaned", string.Join(", ", cleaned)));
+        if (staleKept.Count > 0)
+            LogService.Warn(L.Get("LogCat_Kernel"), L.Get("Kernel_LogSkippedExists", string.Join(", ", staleKept)));
         LogService.Info(L.Get("LogCat_Kernel"), L.Get("Kernel_LogEnabled", done));
         return Task.FromResult(done);
     }
