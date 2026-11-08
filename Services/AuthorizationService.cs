@@ -140,8 +140,7 @@ public sealed class AuthorizationService : IAuthorizationService
 
         // 内嵌 AppID 定位：Steam 只保证经 GetAppOwnershipTicketData 返回的偏移，
         // 票据布局随类型变化（常规票据 AppID 在偏移 16；部分 D 加密标题不在 16，
-        // 实测 3489700 的票据 16 处为 7）。先走常规偏移，找不到再在票据内 4 字节
-        // 对齐扫描声明 appid——32 位随机命中的概率可忽略，首个命中即采纳并记录偏移。
+        // 实测 3489700 的票据 16 处为 7）。按"结构描述头 → 常规偏移 → 全票扫描"依次尝试
         var appIdOffset = LocateEmbeddedAppId(appTicketBytes, appId);
         if (appIdOffset < 0)
         {
@@ -187,12 +186,29 @@ public sealed class AuthorizationService : IAuthorizationService
         return value;
     }
 
-    // 在票据内定位声明 appid：常规偏移 16 优先，其余 4 字节对齐位置依次扫描
+    // 在票据内定位声明 appid。票据头部是 [偏移][长度] 的描述头，用来指向 AppID 本身
+    // （实测 4115450 的票据：偏移 0 值 50、偏移 4 值 4，AppID 正好在 50 处）。
+    // 该描述头并非所有票据都有，故按可信度依次尝试，任一命中即采纳：
+    //   1) 描述头：偏移量+长度都对得上且内容相符，最可靠
+    //   2) 常规偏移 16：老票据的固定位置
+    //   3) 全票逐字节扫描：兜底，AppID 不保证 4 字节对齐（上面的 50 就不是），
+    //      32 位随机命中的概率可忽略，首个命中即采纳
     private static int LocateEmbeddedAppId(byte[] appTicketBytes, uint appId)
     {
+        if (appTicketBytes.Length >= 8)
+        {
+            var declaredOffset = BitConverter.ToUInt32(appTicketBytes, 0);
+            var declaredLength = BitConverter.ToUInt32(appTicketBytes, 4);
+            if (declaredLength == 4
+                && declaredOffset + 4 <= appTicketBytes.Length
+                && BitConverter.ToUInt32(appTicketBytes, (int)declaredOffset) == appId)
+                return (int)declaredOffset;
+        }
+
         if (appTicketBytes.Length >= 20 && BitConverter.ToUInt32(appTicketBytes, 16) == appId)
             return 16;
-        for (var off = 0; off + 4 <= appTicketBytes.Length; off += 4)
+
+        for (var off = 0; off + 4 <= appTicketBytes.Length; off++)
         {
             if (off == 16) continue;
             if (BitConverter.ToUInt32(appTicketBytes, off) == appId)
