@@ -14,11 +14,9 @@
 
 A modern, lightweight Steam Lua library manager built with WPF + Fluent Design. Currently supports OpenSteamTool only.
 
-> 🌐 Project page: https://huanyuejue.github.io/Fluent-Steam-Lua/
+> Project page: https://huanyuejue.github.io/Fluent-Steam-Lua/
 
-> ✈️ FSL Telegram group: [Click to join](https://t.me/FluentSL)
-
-> 💬 FSL QQ group: [Click to join](https://qun.qq.com/universal-share/share?ac=1&authKey=MQ1TVyxN4lUMerzDnHMsl6bp7noFeScwL%2F6C7AhW12PJx9fBlfJt7k%2BJ9uo%2B1SGY&busi_data=eyJncm91cENvZGUiOiIxMDU0MjI4MTYyIiwidG9rZW4iOiJjOGZHRHJKemF4Qytwa1lyMUgxbHdKYnRRcjFqS0plWFBEb3VJVFFqWXc4NzBYUFlMNDlRcUludHJRZ3ovRW5yIiwidWluIjoiNjMwOTExODEzIn0%3D&data=Z5XGMODvXtiqhqhOreDKo3DW9BAsa1W-WfOUjRaP6twkkcvauHBJIJxmahQU2kaAwpyJB5wcxgVqlkIRpQRG1w&svctype=4&tempid=h5_group_info) or group number: 1054228162
+> FSL Telegram group: [Click to join](https://t.me/FluentSL)
 
 ## Preview
 
