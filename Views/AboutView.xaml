@@ -79,7 +79,7 @@
             </StackPanel>
         </controls:SmoothScrollViewer>
 
-        <!-- 底部图标：QQ 群 + GitHub + 爱发电，统一样式 -->
+        <!-- 底部图标：QQ 群 + Telegram 群 + GitHub + 爱发电，统一样式 -->
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Bottom"
                     Margin="0,0,0,24">
             <Button Click="QqGroup_Click" ToolTip="{l:Loc About_QqTip}"
@@ -91,6 +91,14 @@
                           Fill="{DynamicResource TextFillColorSecondaryBrush}"
                           Stretch="Fill"/>
                 </Grid>
+            </Button>
+            <Button Click="Telegram_Click" ToolTip="{l:Loc About_TgTip}"
+                    Background="Transparent" BorderThickness="0"
+                    Margin="8,0,0,0" Cursor="Hand"
+                    Width="40" Height="40">
+                <Path Data="M23.91 3.79L20.3 20.84c-.25 1.21-.98 1.5-2 .94l-5.5-4.07-2.66 2.57c-.3.3-.55.56-1.1.56-.72 0-.6-.27-.84-.95L6.3 13.7l-5.45-1.7c-1.18-.35-1.19-1.16.26-1.75l21.03-8.1c.1-.04.2-.06.3-.06.97 0 .83.9.77 1.7z"
+                      Fill="{DynamicResource TextFillColorSecondaryBrush}"
+                      Stretch="Uniform"/>
             </Button>
             <Button Click="GitHub_Click" ToolTip="{l:Loc About_GitHubTip}"
                     Background="Transparent" BorderThickness="0"
