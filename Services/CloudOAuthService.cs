@@ -12,7 +12,8 @@ namespace SteamLuaManager.Services;
 // 复刻上游 companion 的 OAuth 回环登录：浏览器拉起授权、本地 HttpListener 收码、
 // 换 token 后按 DLL 约定的 {access_token, refresh_token, expires_at} 落盘，DLL 负责后续自动刷新。
 // 应用凭证复用上游公开值（Google 与 DLL 内硬编码同一套，OneDrive 用 rclone 公开 ID），
-// 来源见 https://github.com/Selectively11/CloudRedirect/blob/master/ui/Services/OAuthService.cs。
+// 来源见 https://github.com/huanyuejue/CloudRedirect/blob/master/ui/Services/OAuthService.cs
+// （上游原作者仓库已删，此处指向本项目的保留 fork）。
 public sealed class CloudOAuthService : IDisposable
 {
     public const string ProviderGDrive = "gdrive";

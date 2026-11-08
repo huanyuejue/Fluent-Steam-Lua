@@ -1,5 +1,17 @@
 # Fluent Steam Lua 管理工具
 
+<p>
+  <a href="README.md">
+    <img src="https://flagcdn.com/w40/cn.png" width="22" alt="China flag">
+    <b>简体中文</b>
+  </a>
+  &nbsp;|&nbsp;
+  <a href="README.en.md">
+    <img src="https://flagcdn.com/w40/us.png" width="22" alt="United States flag">
+    English
+  </a>
+</p>
+
 基于 WPF + Fluent Design 开发的现代化轻量级 Steam Lua 入库管理工具，目前仅适配OpenSteamTool
 
 > 🌐 项目介绍页：https://huanyuejue.github.io/Fluent-Steam-Lua/
@@ -60,12 +72,13 @@
 - 一键管理当前库里已拥有游戏的成就数据并保存云端（解锁/回锁）
 
 #### 云存档重定向
-- 基于 [CloudRedirect](https://github.com/Selectively11/CloudRedirect) 实现
-- 将 Lua 入库的游戏的 Steam 云存档重定向到本地目录，修复云存档报错问题
-- 开关与目录变更需重启 Steam 生效，成就与时长跟随云端同步
-- 重定向的本地目录支持自定义路今后与一键重置默认路径，切换目录自动迁移旧存档
+- 基于 [CloudRedirect](https://github.com/huanyuejue/CloudRedirect) 实现
+- 将 Lua 入库的游戏的 Steam 云存档重定向到自选的存储位置，修复云存档报错问题
+- 支持本地目录、Google Drive、OneDrive、Cloudflare R2、S3 兼容存储、WebDAV 六种存储方式，可在界面随时切换
+- 开关与存储位置变更需重启 Steam 生效，成就与时长跟随云端同步
+- 目标目录支持自定义路径与一键重置默认，切换位置时自动迁移旧存档
 - 展示并管理已重定向的游戏，支持一键打开路径和清空存档（游戏恢复最初状态）
-- 支持删除存档：先完整备份并验数，通过后才删，备份手动拷回恢复
+- 支持删除存档：先完整备份并验证数量，通过后才删，备份可手动拷回恢复
 
 #### 免Steam启动游戏
 - 一键去除 SteamStub 并部署 Goldberg 模拟器，游戏免 Steam 启动且可正常弹成就完成体验
