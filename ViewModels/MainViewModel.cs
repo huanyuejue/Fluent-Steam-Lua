@@ -213,6 +213,8 @@ namespace SteamLuaManager.ViewModels;
 		LocalizationService.Instance.PropertyChanged += OnLanguageChanged;
 		WeakReferenceMessenger.Default.Register<LuaFolderChangedMessage>(this, (_, _) => OnRefreshRequested());
 		WeakReferenceMessenger.Default.Register<KernelUpdateAvailableMessage>(this, (_, m) => OnKernelUpdateAvailable(m));
+		// 安装或更新完内核后横幅自动收起，不必等用户手动关
+		WeakReferenceMessenger.Default.Register<KernelUpdatedMessage>(this, (_, _) => DismissKernelUpdateBanner());
 
 		var settings = settingsService.Load();
 		IsAutoRefreshEnabled = settings.AutoRefreshEnabled;
@@ -242,6 +244,7 @@ namespace SteamLuaManager.ViewModels;
 		LocalizationService.Instance.PropertyChanged -= OnLanguageChanged;
 		WeakReferenceMessenger.Default.Unregister<LuaFolderChangedMessage>(this);
 		WeakReferenceMessenger.Default.Unregister<KernelUpdateAvailableMessage>(this);
+		WeakReferenceMessenger.Default.Unregister<KernelUpdatedMessage>(this);
 	}
 
 	private void OnLanguageChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -266,9 +269,21 @@ namespace SteamLuaManager.ViewModels;
 		});
 	}
 
+	// 既供横幅上的关闭按钮用，也供内核装完后自动收起：消息可能来自其他线程，
+	// 统一在这里切回 UI 线程再改绑定属性
 	[RelayCommand]
 	private void DismissKernelUpdateBanner()
 	{
+		try
+		{
+			var dispatcher = Application.Current?.Dispatcher;
+			if (dispatcher != null && !dispatcher.CheckAccess())
+			{
+				dispatcher.Invoke(() => IsKernelUpdateBannerVisible = false);
+				return;
+			}
+		}
+		catch { }
 		IsKernelUpdateBannerVisible = false;
 	}
 

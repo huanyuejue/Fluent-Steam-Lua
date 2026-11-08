@@ -12,7 +12,9 @@ using iNKORE.UI.WPF.Modern;
 using iNKORE.UI.WPF.Modern.Controls;
 using iNKORE.UI.WPF.Modern.Controls.Helpers;
 using iNKORE.UI.WPF.Modern.Helpers.Styles;
+using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.DependencyInjection;
+using SteamLuaManager.Models;
 using SteamLuaManager.Services;
 
 namespace SteamLuaManager.Views;
@@ -212,11 +214,46 @@ public partial class OpenSteamToolWindow : Window
         {
             var v = await _service.GetLocalVersionAsync();
             KernelVersionText.Text = string.IsNullOrEmpty(v) ? L.Get("Main_Unknown") : v;
+            UpdateNewVersionBadge(v);
         }
         catch
         {
             KernelVersionText.Text = L.Get("Main_Unknown");
+            KernelUpdateBadge.Visibility = Visibility.Collapsed;
         }
+    }
+
+    // 远端有更新时在版本号旁亮一个徽标。网络失败静默处理：这只是个提示，
+    // 不该让"打不开更新源"变成界面上的错误
+    private async void UpdateNewVersionBadge(string? localVersion)
+    {
+        if (string.IsNullOrEmpty(localVersion)) return;
+        try
+        {
+            var remote = await _service.GetRemoteInfoAsync();
+            if (string.IsNullOrEmpty(remote.Version)) return;
+            // fork 仓库 tag 不带 v 前缀，老版本本地号带 v，统一剥掉再比
+            if (!Version.TryParse(localVersion.Trim().TrimStart('v', 'V'), out var localVer)) return;
+            if (!Version.TryParse(remote.Version.Trim().TrimStart('v', 'V'), out var remoteVer)) return;
+            if (localVer >= remoteVer)
+            {
+                KernelUpdateBadge.Visibility = Visibility.Collapsed;
+                return;
+            }
+            KernelUpdateBadgeText.Text = L.Get("Ost_NewVersionBadge");
+            KernelUpdateBadge.Visibility = Visibility.Visible;
+        }
+        catch
+        {
+            KernelUpdateBadge.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    // 点徽标等同于点"更新"：复用同一条检查流程，避免两套逻辑分叉
+    private void KernelUpdateBadge_Click(object sender, MouseButtonEventArgs e)
+    {
+        e.Handled = true;
+        _ = UpdateKernelAsync();
     }
 
     // ========== 弹窗 ==========
@@ -367,7 +404,9 @@ public partial class OpenSteamToolWindow : Window
 
         try
         {
-            var (version, downloadUrl, _) = await _service.GetRemoteInfoAsync();
+            var remote = await _service.GetRemoteInfoAsync();
+            var version = remote.Version;
+            var downloadUrl = remote.DownloadUrl;
             if (string.IsNullOrEmpty(downloadUrl))
             {
                 await ShowDialogAsync(L.Get("Main_DialogError"), L.Get("Main_NoDownloadUrl"));
@@ -379,6 +418,8 @@ public partial class OpenSteamToolWindow : Window
 
             await ShowDialogAsync(L.Get("Main_InstDone"), L.Get("Main_InstDoneBody", version));
             RefreshState();
+            // 装的就是远端最新版，横幅同样可以收起了
+            WeakReferenceMessenger.Default.Send(new KernelUpdatedMessage());
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
@@ -425,7 +466,10 @@ public partial class OpenSteamToolWindow : Window
 
         try
         {
-            var (remoteVersion, downloadUrl, releaseUrl) = await _service.GetRemoteInfoAsync();
+            var remote = await _service.GetRemoteInfoAsync();
+            var remoteVersion = remote.Version;
+            var downloadUrl = remote.DownloadUrl;
+            var releaseUrl = remote.ReleaseUrl;
             if (string.IsNullOrEmpty(downloadUrl))
             {
                 await ShowDialogAsync(L.Get("Main_DialogError"), L.Get("Main_NoRemoteInfo"));
@@ -447,12 +491,7 @@ public partial class OpenSteamToolWindow : Window
             var updateDialog = new ContentDialog
             {
                 Title = L.Get("Main_UpdateAvail"),
-                Content = new TextBlock
-                {
-                    Text = L.Get("Main_UpdateAvailBody", localDisplay, remoteVersion),
-                    TextWrapping = TextWrapping.Wrap,
-                    MaxWidth = 460
-                },
+                Content = BuildKernelUpdateContent(localDisplay, remoteVersion, remote.ReleaseNotes),
                 PrimaryButtonText = L.Get("Main_Update"),
                 SecondaryButtonText = L.Get("Main_GoRelease"),
                 CloseButtonText = L.Get("Common_Cancel"),
@@ -471,12 +510,95 @@ public partial class OpenSteamToolWindow : Window
 
             await ShowDialogAsync(L.Get("Main_UpdDone"), L.Get("Main_UpdDoneBody", remoteVersion));
             RefreshState();
+            // 已是最新版，主页那条"有新版本"横幅没有继续留着的理由
+            WeakReferenceMessenger.Default.Send(new KernelUpdatedMessage());
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
             await ShowDialogAsync(L.Get("Main_DialogError"), L.Get("Main_UpdCheckFailed", ex.Message));
         }
+    }
+
+    // 内核更新弹窗内容：版本卡片 + 更新说明区，与软件更新框保持同一套观感。
+    // 说明只显示上游"更新内容"那一节，安装步骤放在发布页里看
+    private static StackPanel BuildKernelUpdateContent(string localVersion, string remoteVersion, string releaseNotes)
+    {
+        var content = new StackPanel { MaxWidth = 460 };
+
+        var card = new Border
+        {
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(16, 12, 16, 12),
+            Margin = new Thickness(0, 0, 0, 16)
+        };
+        card.SetResourceReference(Border.BackgroundProperty, "ControlFillColorDefaultBrush");
+        card.SetResourceReference(Border.BorderBrushProperty, "SurfaceStrokeColorDefaultBrush");
+        card.BorderThickness = new Thickness(1);
+        var cardStack = new StackPanel();
+        cardStack.Children.Add(BuildVersionRow(L.Get("App_CurrentVersion"), localVersion));
+        cardStack.Children.Add(BuildVersionRow(L.Get("App_LatestVersion"), remoteVersion));
+        card.Child = cardStack;
+        content.Children.Add(card);
+
+        var logTitle = new TextBlock
+        {
+            Text = L.Get("App_Changelog"),
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+        logTitle.SetResourceReference(TextBlock.ForegroundProperty, "TextFillColorPrimaryBrush");
+        content.Children.Add(logTitle);
+
+        var logBorder = new Border
+        {
+            CornerRadius = new CornerRadius(8),
+            MaxHeight = 300,
+            Padding = new Thickness(16, 12, 16, 12)
+        };
+        logBorder.SetResourceReference(Border.BackgroundProperty, "LayerFillColorDefaultBrush");
+        logBorder.SetResourceReference(Border.BorderBrushProperty, "SurfaceStrokeColorDefaultBrush");
+        logBorder.BorderThickness = new Thickness(1);
+
+        if (!string.IsNullOrWhiteSpace(releaseNotes))
+        {
+            logBorder.Child = new FlowDocumentScrollViewer
+            {
+                MaxHeight = 280,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                // 与文档正文用同一份字体实例：不设会回退到默认字体，中文观感明显不一致
+                FontFamily = MarkdownRenderer.BodyFont,
+                Document = MarkdownRenderer.Render(releaseNotes),
+                // 右侧留白避开滚动条（内边距由文档 PagePadding 控制，这里只管控件外边距）
+                Margin = new Thickness(0, 0, 16, 0),
+                IsToolBarVisible = false,
+                IsSelectionEnabled = true
+            };
+        }
+        else
+        {
+            logBorder.Child = new TextBlock
+            {
+                Text = L.Get("App_NoChangelog"),
+                Opacity = 0.6
+            };
+        }
+        content.Children.Add(logBorder);
+        return content;
+    }
+
+    // 版本行：左标签右值，标签用次要色
+    private static StackPanel BuildVersionRow(string label, string value)
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 2) };
+        var labelText = new TextBlock { Text = label, Margin = new Thickness(0, 0, 8, 0), Opacity = 0.7 };
+        labelText.SetResourceReference(TextBlock.ForegroundProperty, "TextFillColorPrimaryBrush");
+        var valueText = new TextBlock { Text = value, FontWeight = FontWeights.SemiBold };
+        valueText.SetResourceReference(TextBlock.ForegroundProperty, "TextFillColorPrimaryBrush");
+        row.Children.Add(labelText);
+        row.Children.Add(valueText);
+        return row;
     }
 
     private async Task ToggleKernelAsync()

@@ -35,7 +35,8 @@ public interface IOpenSteamToolService
     bool HasDisabledKernel { get; }
     string? GetSteamPath();
     Task<string?> GetLocalVersionAsync();
-    Task<(string version, string downloadUrl, string releaseUrl)> GetRemoteInfoAsync();
+    Task<KernelRemoteInfo> GetRemoteInfoAsync();
+    // 远端最新 release 信息：ReleaseNotes 只含"更新内容"一节，供弹窗展示
     Task InstallAsync(string downloadUrl, IProgress<string>? status = null, IProgress<int>? downloadProgress = null, CancellationToken ct = default);
     Task UninstallAsync();
     // 卸载确认框用的实际存在文件清单（相对 Steam 根目录，含停用副本与 bin 残留）
@@ -63,6 +64,9 @@ public sealed record TomlFetchResult(string FileName, string TargetPath, bool Su
 
 // 扫描到的第三方内核文件：相对路径 + 所属内核标注（确认框逐字展示用）
 public sealed record ForeignKernelFile(string RelativePath, string Owner);
+
+// 远端最新内核信息：ReleaseNotes 是截取后的"更新内容"段落，供更新弹窗展示
+public sealed record KernelRemoteInfo(string Version, string DownloadUrl, string ReleaseUrl, string ReleaseNotes);
 
 public class OpenSteamToolService : IOpenSteamToolService
 {
@@ -186,7 +190,7 @@ public class OpenSteamToolService : IOpenSteamToolService
         return Task.FromResult<string?>(null);
     }
 
-    public async Task<(string version, string downloadUrl, string releaseUrl)> GetRemoteInfoAsync()
+    public async Task<KernelRemoteInfo> GetRemoteInfoAsync()
     {
         var json = await _httpClientProvider.SendWithProxyRetryAsync(
             "open-steam-tool",
@@ -211,7 +215,47 @@ public class OpenSteamToolService : IOpenSteamToolService
                 }
             }
         }
-        return (tag, downloadUrl, releaseUrl);
+        // 更新说明只取"更新内容"那一节：安装方法动辄几十行，弹窗里没必要展示
+        var notes = doc.RootElement.TryGetProperty("body", out var bodyElement)
+            ? ExtractUpdateNotes(bodyElement.GetString())
+            : "";
+        return new KernelRemoteInfo(tag, downloadUrl, releaseUrl, notes);
+    }
+
+    // 截取 release 正文里"更新内容"到下一个二级标题之间的内容；
+    // 上游若没用这个标题，整段原样返回，宁可多展示也不丢信息
+    internal static string ExtractUpdateNotes(string? body)
+    {
+        if (string.IsNullOrWhiteSpace(body)) return "";
+        var lines = body.Replace("\r\n", "\n").Split('\n');
+        var start = -1;
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var trimmed = lines[i].Trim();
+            if (!trimmed.StartsWith("##", StringComparison.Ordinal)) continue;
+            // 只认二级标题：三级小分类不该被当成整节的起点
+            if (trimmed.StartsWith("###", StringComparison.Ordinal)) continue;
+            var title = trimmed.TrimStart('#').Trim();
+            if (title.Contains("更新内容") || title.Contains("更新日志") || title.Contains("Changelog", StringComparison.OrdinalIgnoreCase))
+            {
+                start = i + 1;
+                break;
+            }
+        }
+        if (start < 0) return body.Trim();
+
+        // 遇到下一个"二级"标题才算结束：### 这类三级标题是本节内的小分类，要保留
+        var end = lines.Length;
+        for (var i = start; i < lines.Length; i++)
+        {
+            var heading = lines[i].TrimStart();
+            if (!heading.StartsWith("##", StringComparison.Ordinal)) continue;
+            if (heading.StartsWith("###", StringComparison.Ordinal)) continue;
+            end = i;
+            break;
+        }
+        var section = string.Join('\n', lines[start..end]).Trim();
+        return section.Length > 0 ? section : body.Trim();
     }
 
     // 单下载源总预算：多源串行，黑洞源不能无限拖；用户取消走 ct 立刻中断

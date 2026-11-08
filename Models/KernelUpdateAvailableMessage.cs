@@ -13,3 +13,8 @@ public sealed class KernelUpdateAvailableMessage
 
     public string RemoteVersion { get; }
 }
+
+/// <summary>内核更新完成通知（内核窗口 → 主页收起横幅）。</summary>
+public sealed class KernelUpdatedMessage
+{
+}

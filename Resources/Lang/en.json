@@ -1444,6 +1444,7 @@
   "Ost_WindowTitle": "OpenSteamTool Management",
   "Ost_StatusKernel": "Kernel state",
   "Ost_StatusVersion": "Kernel version",
+  "Ost_NewVersionBadge": "Update available",
   "Ost_StatusInject": "Current injection mode",
   "Ost_StatusSteamPath": "Steam path",
   "Ost_StatusRunning": "Installed",

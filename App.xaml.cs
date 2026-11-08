@@ -1,4 +1,4 @@
-﻿using System.Windows;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Interop;
@@ -365,7 +365,7 @@ public partial class App : Application
             if (!kernelService.IsInstalled) return;
             var localVersion = await kernelService.GetLocalVersionAsync();
             if (string.IsNullOrEmpty(localVersion)) return;
-            var (remoteVersion, _, _) = await kernelService.GetRemoteInfoAsync();
+            var remoteVersion = (await kernelService.GetRemoteInfoAsync()).Version;
             // fork 仓库 tag 不带 v 前缀，老版本本地号带 v，统一去掉前缀再比对
             var localVer = Version.TryParse(localVersion.Trim().TrimStart('v', 'V'), out var lv) ? lv : null;
             var remoteVer = Version.TryParse(remoteVersion.Trim().TrimStart('v', 'V'), out var rv) ? rv : null;
@@ -439,20 +439,22 @@ public partial class App : Application
 
         if (!string.IsNullOrWhiteSpace(result.ReleaseNotes))
         {
-            var notes = new TextBlock
-            {
-                Text = result.ReleaseNotes,
-                TextWrapping = TextWrapping.Wrap,
-                // 右侧预留空间，避免滚动条遮住日志文字
-                Padding = new Thickness(0, 0, 16, 0)
-            };
-            logBorder.Child = new ScrollViewer
+            // 走 Markdown 渲染，标题/粗体/代码/链接有真实排版；右侧留白避开滚动条
+            var viewer = new FlowDocumentScrollViewer
             {
                 MaxHeight = 280,
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                Content = notes
+                // 控件自身也要这套设置：它不继承外部 TextBlock 样式，缺了会让正文回退到默认字体
+                FontFamily = MarkdownRenderer.BodyFont,
+                Document = MarkdownRenderer.Render(result.ReleaseNotes),
+                // 右侧留白避开滚动条（内边距由文档自己的 PagePadding 控制，这里只管控件外边距）
+                Margin = new Thickness(0, 0, 16, 0),
+                // 只读展示，关掉自带的查找/缩放工具条
+                IsToolBarVisible = false,
+                IsSelectionEnabled = true
             };
+            logBorder.Child = viewer;
         }
         else
         {

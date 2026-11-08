@@ -1444,6 +1444,7 @@
   "Ost_WindowTitle": "OpenSteamTool 管理",
   "Ost_StatusKernel": "内核状态",
   "Ost_StatusVersion": "内核版本",
+  "Ost_NewVersionBadge": "有可用新版本",
   "Ost_StatusInject": "当前注入方式",
   "Ost_StatusSteamPath": "Steam 路径",
   "Ost_StatusRunning": "已安装",

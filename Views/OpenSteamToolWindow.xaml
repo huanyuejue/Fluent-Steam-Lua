@@ -92,6 +92,14 @@
                                 <TextBlock x:Name="KernelVersionText" FontSize="14.5" FontWeight="SemiBold" Margin="0,6,0,0"
                                            TextTrimming="CharacterEllipsis"
                                            Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                <!-- 胶囊另起一行：这一栏横向放不下"版本号+胶囊"，竖排既不被裁切也不挤压版本号 -->
+                                <Border x:Name="KernelUpdateBadge" Visibility="Collapsed" Margin="0,4,0,0"
+                                        Padding="7,1" CornerRadius="9" HorizontalAlignment="Left"
+                                        Cursor="Hand" MouseLeftButtonUp="KernelUpdateBadge_Click"
+                                        Background="{DynamicResource SystemFillColorCautionBackgroundBrush}">
+                                    <TextBlock x:Name="KernelUpdateBadgeText" FontSize="11.5" FontWeight="Bold"
+                                               Foreground="{DynamicResource SystemFillColorCautionBrush}"/>
+                                </Border>
                             </StackPanel>
                         </StackPanel>
                         <Border Grid.Column="3" Width="1" Margin="0,14"
