@@ -19,10 +19,15 @@ public sealed record RedirectedApp(
 public sealed record MigrateResult(int MovedFiles, long MovedBytes, List<string> FailedFiles);
 
 // 删除目标种类：sync=重定向存档目录，cache=DLL 本地缓存，userdata=Steam 用户数据，cloud=云端远端目录
+// 注意：游戏真实存档目录（Documents\My Games\...）永远不在删除范围内，只做提示不落盘
 public sealed record DeleteTarget(
     string Kind, string AccountId, string Path, int FileCount, long TotalBytes, string? Provider = null);
 
 public sealed record DeletePreview(int AppId, List<DeleteTarget> Targets, string BackupDir);
+
+// 删除云端后仍留在游戏目录里的存档（只读报告，永不删除）。
+// 不清理这些文件，下次启动 Steam 的 AutoCloud 会把它们重新上传，云端存档就又回来了。
+public sealed record LocalRemnant(string RootToken, string FileName, string FullPath, long Size);
 
     // DisplayKey 非空表示显示名需要跟语言走，由消费侧按当前语言实时取值
     public sealed record CloudProviderOption(string Id, string DisplayName, string? DisplayKey = null);
@@ -72,6 +77,8 @@ public interface ICloudRedirectService
     string GetDefaultSyncPath();
     Task<DeletePreview> PreviewAppDeleteAsync(int appId, IProgress<string>? progress = null, CancellationToken ct = default);
     Task DeleteAppSavesAsync(DeletePreview preview, IProgress<string>? status, CancellationToken ct = default);
+    // 删除云端后仍在游戏目录里的存档（只读，永不删除）：提示用户会被 AutoCloud 重新上传
+    IReadOnlyList<LocalRemnant> FindLocalRemnants(int appId);
     // 云端源下打开路径的目标地址；本地源返回空，由调用方走目录打开
     string GetCloudConsoleUrl(int appId);
     IReadOnlyList<CloudProviderOption> ProviderOptions { get; }
@@ -1322,6 +1329,18 @@ public class CloudRedirectService : ICloudRedirectService
         }, ct);
     }
 
+    // 删除完成后报告“本地残留”：云端已清，但游戏目录里的存档还在。
+    // 这里只读不删；仅当真有残留时返回，供调用方拼进完成提示。
+    private IReadOnlyList<LocalRemnant> CollectRemnantsSafe(int appId)
+    {
+        try { return FindLocalRemnants(appId); }
+        catch (Exception ex)
+        {
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogLocalRemnantScanFailed", ex.Message));
+            return Array.Empty<LocalRemnant>();
+        }
+    }
+
     private static string KindLabel(string kind) => kind switch
     {
         "sync" => L.Get("Cloud_KindSync"),
@@ -1330,6 +1349,99 @@ public class CloudRedirectService : ICloudRedirectService
         "cloud" => L.Get("Cloud_KindCloud"),
         _ => kind
     };
+
+    // 删除云端后仍然留在游戏目录里的存档（只读扫描，永不删除）。
+    // 这些文件留着，下次启动 Steam 的 AutoCloud 会把它们重新上传，云端存档又回来了；
+    // 所以删除完成后必须如实报告，由用户自己决定要不要清理。
+    public IReadOnlyList<LocalRemnant> FindLocalRemnants(int appId)
+    {
+        var list = new List<LocalRemnant>();
+        try
+        {
+            var steamPath = ResolveSteamPath();
+            if (string.IsNullOrEmpty(steamPath)) return list;
+
+            // 扫描所有可能的存档根：Documents / Saved Games / AppData Local&Roaming&LocalLow
+            var roots = new List<(string Token, string Path)>();
+            void Add(string token, Environment.SpecialFolder folder)
+            {
+                try
+                {
+                    var p = Environment.GetFolderPath(folder);
+                    if (!string.IsNullOrEmpty(p) && Directory.Exists(p)) roots.Add((token, p));
+                }
+                catch { }
+            }
+            Add("%WinMyDocuments%", Environment.SpecialFolder.MyDocuments);
+            Add("%WinAppDataLocal%", Environment.SpecialFolder.LocalApplicationData);
+            Add("%WinAppDataRoaming%", Environment.SpecialFolder.ApplicationData);
+
+            // 清单里记录的文件名 + 根 token，才是该游戏真正的存档集合
+            var manifest = LoadLocalManifestEntries(appId);
+            if (manifest.Count == 0) return list;
+
+            foreach (var (rootToken, relPath) in manifest)
+            {
+                var root = roots.FirstOrDefault(r => string.Equals(r.Token, rootToken, StringComparison.OrdinalIgnoreCase)).Path;
+                if (string.IsNullOrEmpty(root)) continue;
+                var full = Path.Combine(root, relPath.Replace('/', Path.DirectorySeparatorChar));
+                if (!File.Exists(full)) continue;
+                try { list.Add(new LocalRemnant(rootToken, relPath, full, new FileInfo(full).Length)); }
+                catch { }
+            }
+        }
+        catch (Exception ex)
+        {
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogLocalRemnantScanFailed", ex.Message));
+        }
+        return list;
+    }
+
+    // 读任意账号目录下的 manifest.cloudredirect，取 root_token / file_tokens 映射；
+    // 本地缓存里的 manifest 是 DLL 写入的权威记录，比猜目录可靠
+    private List<(string RootToken, string RelPath)> LoadLocalManifestEntries(int appId)
+    {
+        var result = new List<(string, string)>();
+        try
+        {
+            var steamPath = ResolveSteamPath();
+            if (string.IsNullOrEmpty(steamPath)) return result;
+            var storageRoot = Path.Combine(steamPath, "cloud_redirect", "storage");
+            if (!Directory.Exists(storageRoot)) return result;
+
+            foreach (var accountDir in Directory.GetDirectories(storageRoot))
+            {
+                var appDir = Path.Combine(accountDir, appId.ToString());
+                var fileTokens = Path.Combine(appDir, "file_tokens.cloudredirect");
+                if (!File.Exists(fileTokens)) continue;
+
+                var defaultToken = "%WinMyDocuments%";
+                var rootTokenFile = Path.Combine(appDir, "root_token.cloudredirect");
+                if (File.Exists(rootTokenFile))
+                {
+                    var t = File.ReadAllText(rootTokenFile).Trim();
+                    if (!string.IsNullOrEmpty(t)) defaultToken = t;
+                }
+
+                foreach (var line in File.ReadAllLines(fileTokens))
+                {
+                    if (string.IsNullOrWhiteSpace(line)) continue;
+                    var tab = line.IndexOf('\t');
+                    var name = tab > 0 ? line[..tab] : line;
+                    var token = tab > 0 ? line[(tab + 1)..].Trim() : defaultToken;
+                    if (string.IsNullOrWhiteSpace(name)) continue;
+                    if (string.IsNullOrWhiteSpace(token)) token = defaultToken;
+                    result.Add((token, name));
+                }
+                if (result.Count > 0) break;
+            }
+        }
+        catch (Exception ex)
+        {
+            LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogLocalRemnantScanFailed", ex.Message));
+        }
+        return result;
+    }
 
     // 单遍遍历：目录项建目录（含空目录），文件项确保父目录后拷贝；
     // 与原来两遍结果一致（含空目录保留），中途失败同样上抛由调用方中止
