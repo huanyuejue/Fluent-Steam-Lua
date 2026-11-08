@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Fluent Steam Lua 管理工具 - 现代化 Steam Lua 入库管理工具</title>
-<meta name="description" content="基于 WPF + Fluent Design 开发的现代化轻量级 Steam Lua 入库管理工具，支持入库管理、修改器、内核、成就管理。">
+<meta name="description" content="A modern, lightweight Steam Lua library manager built with WPF + Fluent Design, covering library import, trainers, kernel and achievements.">
 <link rel="icon" type="image/png" href="favicon.png">
 <style>
   :root {
@@ -122,6 +122,19 @@
   }
   .theme-toggle:hover { color: var(--text); background: var(--pill-border); }
   .theme-toggle svg { display: block; }
+
+  /* 语言切换 */
+  .lang-toggle {
+    display: inline-flex; align-items: center; justify-content: center;
+    height: 34px; min-width: 54px; padding: 0 11px; border-radius: 10px;
+    background: var(--pill-bg); border: 1px solid var(--pill-border);
+    color: var(--text-2); cursor: pointer;
+    font-family: inherit; font-size: 12.5px; font-weight: 600; letter-spacing: 0.3px;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+  .lang-toggle:hover { color: var(--text); background: var(--pill-border); border-color: var(--card-border-strong); }
+  .lang-toggle:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
+  .lang-toggle svg { display: block; margin-right: 6px; }
 
   .container { max-width: 1220px; margin: 0 auto; padding: 0 32px; }
 
@@ -415,6 +428,98 @@
     .nav-links a:not(.nav-cta) { display: none; }
   }
 </style>
+
+  <script>
+  /* ==================== i18n 运行时 ==================== */
+  (function () {
+    var STORAGE_KEY = 'site-lang';
+    var HTML_LANG = { zh: 'zh-CN', en: 'en' };
+
+    // 简体中文与繁体中文都归入中文，其余语言一律使用英文
+    function detectLanguage() {
+      var saved = null;
+      try { saved = localStorage.getItem(STORAGE_KEY); } catch (e) {}
+      if (saved === 'zh' || saved === 'en') return saved;
+
+      var langs = [];
+      if (navigator.languages && navigator.languages.length) {
+        langs = Array.prototype.slice.call(navigator.languages);
+      } else if (navigator.language) {
+        langs = [navigator.language];
+      }
+      if (!langs.length) langs = [document.documentElement.lang || 'en'];
+
+      for (var i = 0; i < langs.length; i++) {
+        var tag = String(langs[i] || '').toLowerCase();
+        if (!tag) continue;
+        // zh / zh-CN / zh-Hans / zh-TW / zh-Hant 等含 zh 的语言标签都视为中文
+        if (tag === 'zh' || tag.indexOf('zh-') === 0 || tag.indexOf('zh_') === 0) return 'zh';
+      }
+      return 'en';
+    }
+
+    var current = detectLanguage();
+
+    function applyLanguage(lang) {
+      current = lang === 'zh' ? 'zh' : 'en';
+      document.documentElement.lang = HTML_LANG[current];
+
+      var nodes = document.querySelectorAll('.i18n');
+      for (var i = 0; i < nodes.length; i++) {
+        var el = nodes[i];
+        var text = current === 'zh' ? el.getAttribute('data-zh') : el.getAttribute('data-en');
+        if (text !== null) el.textContent = text;
+      }
+
+      var title = document.querySelector('title');
+      if (title) {
+        title.textContent = current === 'zh'
+          ? 'Fluent Steam Lua 管理工具 - 现代化 Steam Lua 入库管理工具'
+          : 'Fluent Steam Lua Manager - A Modern Steam Lua Library Manager';
+      }
+
+      var desc = document.querySelector('meta[name="description"]');
+      if (desc) {
+        desc.setAttribute('content', current === 'zh'
+          ? '基于 WPF + Fluent Design 开发的现代化轻量级 Steam Lua 入库管理工具，支持入库管理、修改器、内核、成就管理。'
+          : 'A modern, lightweight Steam Lua library manager built with WPF + Fluent Design, covering library import, trainers, kernel and achievements.');
+      }
+
+      var btn = document.getElementById('langToggle');
+      var label = document.getElementById('langLabel');
+      var tip = current === 'zh' ? 'Switch to English' : '切换到中文';
+      if (btn) {
+        btn.setAttribute('title', tip);
+        btn.setAttribute('aria-label', tip);
+      }
+      if (label) label.textContent = current === 'zh' ? 'EN' : '中文';
+
+      try { localStorage.setItem(STORAGE_KEY, current); } catch (e) {}
+    }
+
+    // 脚本位于 head 内，body 尚未解析完成，因此等 DOM 就绪后再统一应用语言
+    function applyNow() {
+      applyLanguage(current);
+
+      var toggle = document.getElementById('langToggle');
+      if (toggle && !toggle.dataset.i18nBound) {
+        toggle.dataset.i18nBound = '1';
+        toggle.addEventListener('click', function () {
+          applyLanguage(current === 'zh' ? 'en' : 'zh');
+        });
+      }
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', applyNow);
+    } else {
+      applyNow();
+    }
+
+    window.__setSiteLanguage = applyLanguage;
+  })();
+  </script>
+
 </head>
 <body>
 
@@ -425,13 +530,17 @@
       Fluent Steam Lua
     </a>
     <div class="nav-links">
-      <a href="#features">功能特性</a>
-      <a href="#screenshots">界面预览</a>
-      <a href="#usage">使用说明</a>
-      <a href="#faq">常见问题</a>
+      <a href="#features"><span class="i18n" data-zh="功能特性" data-en="Features">功能特性</span></a>
+      <a href="#screenshots"><span class="i18n" data-zh="界面预览" data-en="Preview">界面预览</span></a>
+      <a href="#usage"><span class="i18n" data-zh="使用说明" data-en="Usage">使用说明</span></a>
+      <a href="#faq"><span class="i18n" data-zh="常见问题" data-en="FAQ">常见问题</span></a>
       <a href="https://github.com/huanyuejue/Fluent-Steam-Lua" target="_blank" rel="noopener">GitHub</a>
-      <a class="nav-cta" href="https://github.com/huanyuejue/Fluent-Steam-Lua/releases/latest" target="_blank" rel="noopener">下载</a>
-      <button class="theme-toggle" id="themeToggle" title="切换浅色 / 深色主题" aria-label="切换浅色 / 深色主题">
+      <a class="nav-cta" href="https://github.com/huanyuejue/Fluent-Steam-Lua/releases/latest" target="_blank" rel="noopener"><span class="i18n" data-zh="下载" data-en="Download">下载</span></a>
+      <button class="lang-toggle" id="langToggle" type="button" title="Switch to English" aria-label="Switch to English">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        <span id="langLabel">EN</span>
+      </button>
+      <button class="theme-toggle" id="themeToggle" title="Toggle light / dark theme" aria-label="Toggle light / dark theme">
         <svg id="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
         <svg id="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
       </button>
@@ -441,100 +550,100 @@
 
 <header class="hero">
   <div class="container">
-    <h1>Fluent Steam Lua<br>管理工具</h1>
-    <p class="sub">基于 WPF + Fluent Design 开发的现代化轻量级 Steam Lua 入库管理工具</p>
+    <h1>Fluent Steam Lua<br><span class="i18n" data-zh="管理工具" data-en="Manager">管理工具</span></h1>
+    <p class="sub"><span class="i18n" data-zh="基于 WPF + Fluent Design 开发的现代化轻量级 Steam Lua 入库管理工具" data-en="A modern, lightweight Steam Lua library manager built with WPF + Fluent Design">基于 WPF + Fluent Design 开发的现代化轻量级 Steam Lua 入库管理工具</span></p>
     <div class="hero-actions">
       <a class="btn btn-primary" href="https://github.com/huanyuejue/Fluent-Steam-Lua/releases/latest" target="_blank" rel="noopener">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span class="i18n" data-zh="前往下载" data-en="Download Now">
         前往下载
-      </a>
+</span>      </a>
       <a class="btn btn-secondary" href="https://github.com/huanyuejue/Fluent-Steam-Lua" target="_blank" rel="noopener">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg><span class="i18n" data-zh="查看源码" data-en="View Source">
         查看源码
-      </a>
+</span>      </a>
     </div>
-    <p class="hint">需要 Windows 10 1809+ 与 <a href="https://dotnet.microsoft.com/download/dotnet/8.0" target="_blank" rel="noopener">.NET 8 Runtime</a></p>
+    <p class="hint"><span class="i18n" data-zh="需要 Windows 10 1809+ 与" data-en="Requires Windows 10 1809+ and">需要 Windows 10 1809+ 与</span> <a href="https://dotnet.microsoft.com/download/dotnet/8.0" target="_blank" rel="noopener">.NET 8 Runtime</a></p>
     <div class="platforms">
-      <span class="plat-tag"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="12" x2="10" y2="12"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="15" y1="13" x2="15.01" y2="13"/><line x1="18" y1="11" x2="18.01" y2="11"/><rect x="2" y="6" width="20" height="12" rx="2"/></svg>游戏入库</span>
-      <span class="plat-tag"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>修改器管理</span>
-      <span class="plat-tag"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/></svg>内核安装</span>
-      <span class="plat-tag"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 5h3a1 1 0 0 1 1 1v1a4 4 0 0 1-4 4M7 5H4a1 1 0 0 0-1 1v1a4 4 0 0 0 4 4"/></svg>成就解锁</span>
-      <span class="plat-tag"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>清单提取</span>
+      <span class="plat-tag"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="12" x2="10" y2="12"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="15" y1="13" x2="15.01" y2="13"/><line x1="18" y1="11" x2="18.01" y2="11"/><rect x="2" y="6" width="20" height="12" rx="2"/></svg><span class="i18n" data-zh="游戏入库" data-en="Game Import">游戏入库</span></span>
+      <span class="plat-tag"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span class="i18n" data-zh="修改器管理" data-en="Trainer Management">修改器管理</span></span>
+      <span class="plat-tag"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/></svg><span class="i18n" data-zh="内核安装" data-en="Kernel Install">内核安装</span></span>
+      <span class="plat-tag"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 5h3a1 1 0 0 1 1 1v1a4 4 0 0 1-4 4M7 5H4a1 1 0 0 0-1 1v1a4 4 0 0 0 4 4"/></svg><span class="i18n" data-zh="成就解锁" data-en="Achievement Unlock">成就解锁</span></span>
+      <span class="plat-tag"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span class="i18n" data-zh="清单提取" data-en="Manifest Extract">清单提取</span></span>
     </div>
-    <span class="hero-badge">免费开源 · 无推广 · 专注入库体验</span>
+    <span class="hero-badge"><span class="i18n" data-zh="免费开源 · 无推广 · 专注入库体验" data-en="Free &amp; Open Source · No Ads · Built for Library Import">免费开源 · 无推广 · 专注入库体验</span></span>
   </div>
 </header>
 
 <section id="features">
   <div class="container">
     <div class="section-head reveal">
-      <h2 class="section-title">功能特性</h2>
-      <p class="section-desc">一站式管理你的 Steam Lua 入库清单</p>
+      <h2 class="section-title"><span class="i18n" data-zh="功能特性" data-en="Features">功能特性</span></h2>
+      <p class="section-desc"><span class="i18n" data-zh="一站式管理你的 Steam Lua 入库清单" data-en="Manage every Steam Lua library manifest in one place">一站式管理你的 Steam Lua 入库清单</span></p>
     </div>
     <div class="features">
       <div class="feature reveal">
         <div class="feature-icon">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
         </div>
-        <h3>入库管理</h3>
+        <h3><span class="i18n" data-zh="入库管理" data-en="Library Management">入库管理</span></h3>
         <ul>
-          <li>自动读取封面与中文游戏名，三种布局自由切换</li>
-          <li>搜索预览并入库新游戏（AppId / 游戏名）</li>
-          <li>查询 DLC 入库情况，快速禁用 / 启用入库状态</li>
-          <li>固定清单版本到最新版或当前已安装版本</li>
+          <li><span class="i18n" data-zh="自动读取封面与中文游戏名，三种布局自由切换" data-en="Auto-reads cover art and localized game names, with three switchable layouts">自动读取封面与中文游戏名，三种布局自由切换</span></li>
+          <li><span class="i18n" data-zh="搜索预览并入库新游戏（AppId / 游戏名）" data-en="Search, preview and import new games (AppID / game name)">搜索预览并入库新游戏（AppId / 游戏名）</span></li>
+          <li><span class="i18n" data-zh="查询 DLC 入库情况，快速禁用 / 启用入库状态" data-en="Check DLC import status, quickly disable or enable the import state">查询 DLC 入库情况，快速禁用 / 启用入库状态</span></li>
+          <li><span class="i18n" data-zh="固定清单版本到最新版或当前已安装版本" data-en="Pin the manifest version to the latest or the currently installed version">固定清单版本到最新版或当前已安装版本</span></li>
         </ul>
       </div>
       <div class="feature reveal">
         <div class="feature-icon">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
         </div>
-        <h3>修改器管理</h3>
+        <h3><span class="i18n" data-zh="修改器管理" data-en="Trainer Management">修改器管理</span></h3>
         <ul>
-          <li>搜索并下载管理修改器（风灵月影）</li>
-          <li>绑定游戏进程，开游戏自动启动修改器</li>
-          <li>启动时自动激活修改器指定功能项</li>
+          <li><span class="i18n" data-zh="搜索并下载管理修改器（风灵月影）" data-en="Search, download and manage trainers (FLiNG)">搜索并下载管理修改器（风灵月影）</span></li>
+          <li><span class="i18n" data-zh="绑定游戏进程，开游戏自动启动修改器" data-en="Bind a trainer to a game process so it launches automatically with the game">绑定游戏进程，开游戏自动启动修改器</span></li>
+          <li><span class="i18n" data-zh="启动时自动激活修改器指定功能项" data-en="Optionally auto-activate specific trainer features on launch">启动时自动激活修改器指定功能项</span></li>
         </ul>
       </div>
       <div class="feature reveal">
         <div class="feature-icon">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
         </div>
-        <h3>内核管理</h3>
+        <h3><span class="i18n" data-zh="内核管理" data-en="Kernel Management">内核管理</span></h3>
         <ul>
-          <li>目前只适配 OpenSteamTool</li>
-          <li>快捷安装 / 更新 / 卸载内核</li>
+          <li><span class="i18n" data-zh="目前只适配 OpenSteamTool" data-en="Currently supports OpenSteamTool only">目前只适配 OpenSteamTool</span></li>
+          <li><span class="i18n" data-zh="快捷安装 / 更新 / 卸载内核" data-en="Quick install / update / uninstall the kernel">快捷安装 / 更新 / 卸载内核</span></li>
         </ul>
       </div>
       <div class="feature reveal">
         <div class="feature-icon">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.9 6.26 6.9.8-5.1 4.7 1.4 6.8-6.1-3.4-6.1 3.4 1.4-6.8-5.1-4.7 6.9-.8z"/></svg>
         </div>
-        <h3>Steam 成就</h3>
+        <h3><span class="i18n" data-zh="Steam 成就" data-en="Steam Achievements">Steam 成就</span></h3>
         <ul>
-          <li>快捷启动 / 重启 Steam</li>
-          <li>一键切换本地已登录账号</li>
-          <li>成就数据解锁 / 回锁并保存云端</li>
+          <li><span class="i18n" data-zh="快捷启动 / 重启 Steam" data-en="Quick launch / restart Steam">快捷启动 / 重启 Steam</span></li>
+          <li><span class="i18n" data-zh="一键切换本地已登录账号" data-en="One-click switching between saved local accounts">一键切换本地已登录账号</span></li>
+          <li><span class="i18n" data-zh="成就数据解锁 / 回锁并保存云端" data-en="Unlock / re-lock achievement data with cloud backup">成就数据解锁 / 回锁并保存云端</span></li>
         </ul>
       </div>
       <div class="feature reveal">
         <div class="feature-icon">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
         </div>
-        <h3>自动监控</h3>
+        <h3><span class="i18n" data-zh="自动监控" data-en="Auto Monitoring">自动监控</span></h3>
         <ul>
-          <li>文件变更自动监控并刷新缓存</li>
-          <li>项目有新版本自动检测并提醒</li>
+          <li><span class="i18n" data-zh="文件变更自动监控并刷新缓存" data-en="Monitors file changes automatically and refreshes the cache">文件变更自动监控并刷新缓存</span></li>
+          <li><span class="i18n" data-zh="项目有新版本自动检测并提醒" data-en="Detects new project versions and notifies you">项目有新版本自动检测并提醒</span></li>
         </ul>
       </div>
       <div class="feature reveal">
         <div class="feature-icon">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
         </div>
-        <h3>现代化界面</h3>
+        <h3><span class="i18n" data-zh="现代化界面" data-en="Modern Interface">现代化界面</span></h3>
         <ul>
-          <li>Fluent Design 设计语言</li>
-          <li>跟随系统 / 深色 / 浅色主题</li>
-          <li>亚克力 / 云母背景效果</li>
+          <li><span class="i18n" data-zh="Fluent Design 设计语言" data-en="Fluent Design language">Fluent Design 设计语言</span></li>
+          <li><span class="i18n" data-zh="跟随系统 / 深色 / 浅色主题" data-en="Follow system, dark or light theme">跟随系统 / 深色 / 浅色主题</span></li>
+          <li><span class="i18n" data-zh="亚克力 / 云母背景效果" data-en="Acrylic / Mica backdrop effects">亚克力 / 云母背景效果</span></li>
         </ul>
       </div>
     </div>
@@ -544,50 +653,50 @@
 <section id="screenshots">
   <div class="container">
     <div class="section-head reveal">
-      <h2 class="section-title">界面预览</h2>
+      <h2 class="section-title"><span class="i18n" data-zh="界面预览" data-en="Preview">界面预览</span></h2>
     </div>
     <div class="showcase-row reveal">
       <div class="showcase-info">
-        <h3>主页 · 入库游戏展示</h3>
-        <p>自动读取封面与中文游戏名，三种视图布局自由切换，游戏入库状态一目了然</p>
+        <h3><span class="i18n" data-zh="主页 · 入库游戏展示" data-en="Home · Imported Game Gallery">主页 · 入库游戏展示</span></h3>
+        <p><span class="i18n" data-zh="自动读取封面与中文游戏名，三种视图布局自由切换，游戏入库状态一目了然" data-en="Auto-reads cover art and localized game names, with three switchable layouts and the import state always in plain sight">自动读取封面与中文游戏名，三种视图布局自由切换，游戏入库状态一目了然</span></p>
         <ul>
-          <li>列表 / 网格 / 大图三种视图自由切换</li>
-          <li>自动读取封面与中文游戏名</li>
-          <li>游戏信息、DLC查询、版本固定</li>
+          <li><span class="i18n" data-zh="列表 / 网格 / 大图三种视图自由切换" data-en="Switch freely between list, grid and large-image views">列表 / 网格 / 大图三种视图自由切换</span></li>
+          <li><span class="i18n" data-zh="自动读取封面与中文游戏名" data-en="Auto-reads cover art and localized game names">自动读取封面与中文游戏名</span></li>
+          <li><span class="i18n" data-zh="游戏信息、DLC查询、版本固定" data-en="Game info, DLC check, version pinning">游戏信息、DLC查询、版本固定</span></li>
         </ul>
       </div>
       <div class="carousel">
         <div class="carousel-track">
-          <img src="https://sunky.top/i/2026/08/01/6a6db776c6bcc.png" alt="主页视图一" loading="lazy">
-          <img src="https://sunky.top/i/2026/08/01/6a6da85105e70.png" alt="主页视图二" loading="lazy">
-          <img src="https://sunky.top/i/2026/08/01/6a6da85a866e4.png" alt="主页视图三" loading="lazy">
+          <img src="https://sunky.top/i/2026/08/01/6a6db776c6bcc.png" alt="Home view 1" loading="lazy">
+          <img src="https://sunky.top/i/2026/08/01/6a6da85105e70.png" alt="Home view 2" loading="lazy">
+          <img src="https://sunky.top/i/2026/08/01/6a6da85a866e4.png" alt="Home view 3" loading="lazy">
         </div>
-        <button class="carousel-arrow prev" aria-label="上一张">&#8249;</button>
-        <button class="carousel-arrow next" aria-label="下一张">&#8250;</button>
+        <button class="carousel-arrow prev" aria-label="Previous image">&#8249;</button>
+        <button class="carousel-arrow next" aria-label="Next image">&#8250;</button>
         <div class="carousel-dots">
-          <button class="carousel-dot active" aria-label="第 1 张"></button>
-          <button class="carousel-dot" aria-label="第 2 张"></button>
-          <button class="carousel-dot" aria-label="第 3 张"></button>
+          <button class="carousel-dot active" aria-label="Image 1"></button>
+          <button class="carousel-dot" aria-label="Image 2"></button>
+          <button class="carousel-dot" aria-label="Image 3"></button>
         </div>
       </div>
     </div>
 
     <div class="feature-blocks-grid">
       <div class="feature-mini reveal">
-        <h4>DLC查询</h4>
-        <p>一键查询当前游戏清单 DLC 信息是否齐全</p>
+        <h4><span class="i18n" data-zh="DLC查询" data-en="DLC Check">DLC查询</span></h4>
+        <p><span class="i18n" data-zh="一键查询当前游戏清单 DLC 信息是否齐全" data-en="One-click check of whether the current game manifest has all its DLC">一键查询当前游戏清单 DLC 信息是否齐全</span></p>
       </div>
       <div class="feature-mini reveal">
-        <h4>版本固定</h4>
-        <p>将清单游戏版本固定到最新版本或当前已安装版本</p>
+        <h4><span class="i18n" data-zh="版本固定" data-en="Version Pinning">版本固定</span></h4>
+        <p><span class="i18n" data-zh="将清单游戏版本固定到最新版本或当前已安装版本" data-en="Pin the manifest game version to the latest or the currently installed version">将清单游戏版本固定到最新版本或当前已安装版本</span></p>
       </div>
       <div class="feature-mini reveal">
-        <h4>封面节点</h4>
-        <p>内置五大封面接口，默认使用 Steam Store 接口</p>
+        <h4><span class="i18n" data-zh="封面节点" data-en="Cover Sources">封面节点</span></h4>
+        <p><span class="i18n" data-zh="内置五大封面接口，默认使用 Steam Store 接口" data-en="Five built-in cover APIs, using Steam Store by default">内置五大封面接口，默认使用 Steam Store 接口</span></p>
       </div>
       <div class="feature-mini reveal">
-        <h4>入库状态</h4>
-        <p>可在不删除 Lua 清单的情况下禁用或启动该游戏的入库状态</p>
+        <h4><span class="i18n" data-zh="入库状态" data-en="Import State">入库状态</span></h4>
+        <p><span class="i18n" data-zh="可在不删除 Lua 清单的情况下禁用或启动该游戏的入库状态" data-en="Disable or enable a game's import state without deleting its Lua manifest">可在不删除 Lua 清单的情况下禁用或启动该游戏的入库状态</span></p>
       </div>
     </div>
   </div>
@@ -597,46 +706,46 @@
   <div class="container">
     <div class="showcase-row reversed reveal">
       <div class="showcase-info">
-        <h3>清单 · 搜索即入库</h3>
-        <p>一键搜索游戏并自动下载补全 DLC，只需搜索并点击入库，游戏即可出现在 Steam 游戏库存</p>
+        <h3><span class="i18n" data-zh="清单 · 搜索即入库" data-en="Manifest · Search to Import">清单 · 搜索即入库</span></h3>
+        <p><span class="i18n" data-zh="一键搜索游戏并自动下载补全 DLC，只需搜索并点击入库，游戏即可出现在 Steam 游戏库存" data-en="Search a game and its DLC downloads automatically — just search and click import, and the game shows up in your Steam library">一键搜索游戏并自动下载补全 DLC，只需搜索并点击入库，游戏即可出现在 Steam 游戏库存</span></p>
         <ul>
-          <li>搜索游戏一键入库，自动下载补全 DLC</li>
-          <li>入库状态实时同步，Steam 库存即时可见</li>
-          <li>清单提取与备份，轻松迁移与恢复</li>
+          <li><span class="i18n" data-zh="搜索游戏一键入库，自动下载补全 DLC" data-en="One-click import with automatic DLC completion">搜索游戏一键入库，自动下载补全 DLC</span></li>
+          <li><span class="i18n" data-zh="入库状态实时同步，Steam 库存即时可见" data-en="Import state syncs in real time and appears in your Steam library instantly">入库状态实时同步，Steam 库存即时可见</span></li>
+          <li><span class="i18n" data-zh="清单提取与备份，轻松迁移与恢复" data-en="Extract and back up manifests for easy migration and restore">清单提取与备份，轻松迁移与恢复</span></li>
         </ul>
       </div>
       <div class="carousel">
         <div class="carousel-track">
-          <img src="https://sunky.top/i/2026/08/01/6a6dbe3b88ca4.png" alt="清单入库一" loading="lazy">
-          <img src="https://sunky.top/i/2026/08/01/6a6dbe7dc7169.png" alt="清单入库二" loading="lazy">
-          <img src="https://sunky.top/i/2026/08/01/6a6dbe8fa3a4f.png" alt="清单入库三" loading="lazy">
+          <img src="https://sunky.top/i/2026/08/01/6a6dbe3b88ca4.png" alt="Manifest import 1" loading="lazy">
+          <img src="https://sunky.top/i/2026/08/01/6a6dbe7dc7169.png" alt="Manifest import 2" loading="lazy">
+          <img src="https://sunky.top/i/2026/08/01/6a6dbe8fa3a4f.png" alt="Manifest import 3" loading="lazy">
         </div>
-        <button class="carousel-arrow prev" aria-label="上一张">&#8249;</button>
-        <button class="carousel-arrow next" aria-label="下一张">&#8250;</button>
+        <button class="carousel-arrow prev" aria-label="Previous image">&#8249;</button>
+        <button class="carousel-arrow next" aria-label="Next image">&#8250;</button>
         <div class="carousel-dots">
-          <button class="carousel-dot active" aria-label="第 1 张"></button>
-          <button class="carousel-dot" aria-label="第 2 张"></button>
-          <button class="carousel-dot" aria-label="第 3 张"></button>
+          <button class="carousel-dot active" aria-label="Image 1"></button>
+          <button class="carousel-dot" aria-label="Image 2"></button>
+          <button class="carousel-dot" aria-label="Image 3"></button>
         </div>
       </div>
     </div>
 
     <div class="feature-blocks-grid">
       <div class="feature-mini reveal">
-        <h4>多清单接口</h4>
-        <p>内置三个清单接口，防止清单库跑路无法使用</p>
+        <h4><span class="i18n" data-zh="多清单接口" data-en="Multiple Manifest APIs">多清单接口</span></h4>
+        <p><span class="i18n" data-zh="内置三个清单接口，防止清单库跑路无法使用" data-en="Three built-in manifest APIs, so a library going offline never locks you out">内置三个清单接口，防止清单库跑路无法使用</span></p>
       </div>
       <div class="feature-mini reveal">
-        <h4>模糊搜索</h4>
-        <p>支持输入模糊游戏名进行匹配搜索</p>
+        <h4><span class="i18n" data-zh="模糊搜索" data-en="Fuzzy Search">模糊搜索</span></h4>
+        <p><span class="i18n" data-zh="支持输入模糊游戏名进行匹配搜索" data-en="Supports matching searches with partial game names">支持输入模糊游戏名进行匹配搜索</span></p>
       </div>
       <div class="feature-mini reveal">
-        <h4>游戏信息</h4>
-        <p>快速点击跳转 Steam 商店确认游戏信息</p>
+        <h4><span class="i18n" data-zh="游戏信息" data-en="Game Info">游戏信息</span></h4>
+        <p><span class="i18n" data-zh="快速点击跳转 Steam 商店确认游戏信息" data-en="Click through to the Steam store to confirm the game details">快速点击跳转 Steam 商店确认游戏信息</span></p>
       </div>
       <div class="feature-mini reveal">
-        <h4>仓库更新</h4>
-        <p>可手动更新仓库在本地的缓存密钥，获取最新游戏清单</p>
+        <h4><span class="i18n" data-zh="仓库更新" data-en="Repository Update">仓库更新</span></h4>
+        <p><span class="i18n" data-zh="可手动更新仓库在本地的缓存密钥，获取最新游戏清单" data-en="Refresh the cached repository key by hand to pull the latest game manifests">可手动更新仓库在本地的缓存密钥，获取最新游戏清单</span></p>
       </div>
     </div>
   </div>
@@ -646,46 +755,46 @@
   <div class="container">
     <div class="showcase-row reveal">
       <div class="showcase-info">
-        <h3>修改器 · 风灵月影</h3>
-        <p>接口直达官网，无篡改风险，搜索一键下载，修改器绑定游戏进程同步启动</p>
+        <h3><span class="i18n" data-zh="修改器 · 风灵月影" data-en="Trainers · FLiNG">修改器 · 风灵月影</span></h3>
+        <p><span class="i18n" data-zh="接口直达官网，无篡改风险，搜索一键下载，修改器绑定游戏进程同步启动" data-en="Straight to the official API with no tampering risk — search to download, and trainers launch in sync with the game">接口直达官网，无篡改风险，搜索一键下载，修改器绑定游戏进程同步启动</span></p>
         <ul>
-          <li>接口直达官网，无篡改风险</li>
-          <li>搜索一键下载游戏修改器</li>
-          <li>绑定游戏进程，随游戏同步启动</li>
+          <li><span class="i18n" data-zh="接口直达官网，无篡改风险" data-en="Straight to the official API, no tampering risk">接口直达官网，无篡改风险</span></li>
+          <li><span class="i18n" data-zh="搜索一键下载游戏修改器" data-en="Search and download game trainers in one click">搜索一键下载游戏修改器</span></li>
+          <li><span class="i18n" data-zh="绑定游戏进程，随游戏同步启动" data-en="Bind to a game process and launch in sync">绑定游戏进程，随游戏同步启动</span></li>
         </ul>
       </div>
       <div class="carousel">
         <div class="carousel-track">
-          <img src="https://sunky.top/i/2026/08/01/6a6dc833a02a7.png" alt="修改器一" loading="lazy">
-          <img src="https://sunky.top/i/2026/08/01/6a6dc8486dd48.png" alt="修改器二" loading="lazy">
-          <img src="https://sunky.top/i/2026/08/01/6a6dc8570a9bb.png" alt="修改器三" loading="lazy">
+          <img src="https://sunky.top/i/2026/08/01/6a6dc833a02a7.png" alt="Trainer 1" loading="lazy">
+          <img src="https://sunky.top/i/2026/08/01/6a6dc8486dd48.png" alt="Trainer 2" loading="lazy">
+          <img src="https://sunky.top/i/2026/08/01/6a6dc8570a9bb.png" alt="Trainer 3" loading="lazy">
         </div>
-        <button class="carousel-arrow prev" aria-label="上一张">&#8249;</button>
-        <button class="carousel-arrow next" aria-label="下一张">&#8250;</button>
+        <button class="carousel-arrow prev" aria-label="Previous image">&#8249;</button>
+        <button class="carousel-arrow next" aria-label="Next image">&#8250;</button>
         <div class="carousel-dots">
-          <button class="carousel-dot active" aria-label="第 1 张"></button>
-          <button class="carousel-dot" aria-label="第 2 张"></button>
-          <button class="carousel-dot" aria-label="第 3 张"></button>
+          <button class="carousel-dot active" aria-label="Image 1"></button>
+          <button class="carousel-dot" aria-label="Image 2"></button>
+          <button class="carousel-dot" aria-label="Image 3"></button>
         </div>
       </div>
     </div>
 
     <div class="feature-blocks-grid">
       <div class="feature-mini reveal">
-        <h4>官网接口</h4>
-        <p>修改器均为官网接口直链下载，无任何篡改风险</p>
+        <h4><span class="i18n" data-zh="官网接口" data-en="Official API">官网接口</span></h4>
+        <p><span class="i18n" data-zh="修改器均为官网接口直链下载，无任何篡改风险" data-en="Every trainer is fetched through a direct official API link, with no tampering risk">修改器均为官网接口直链下载，无任何篡改风险</span></p>
       </div>
       <div class="feature-mini reveal">
-        <h4>下载管理</h4>
-        <p>已下载的修改器一键统计并管理，随时启动想要的修改器</p>
+        <h4><span class="i18n" data-zh="下载管理" data-en="Download Manager">下载管理</span></h4>
+        <p><span class="i18n" data-zh="已下载的修改器一键统计并管理，随时启动想要的修改器" data-en="Track and manage downloaded trainers, then launch whichever one you want">已下载的修改器一键统计并管理，随时启动想要的修改器</span></p>
       </div>
       <div class="feature-mini reveal">
-        <h4>游戏绑定</h4>
-        <p>可指定修改器绑定对应的游戏进程，实现同步启动</p>
+        <h4><span class="i18n" data-zh="游戏绑定" data-en="Game Binding">游戏绑定</span></h4>
+        <p><span class="i18n" data-zh="可指定修改器绑定对应的游戏进程，实现同步启动" data-en="Bind a trainer to a specific game process for synchronized launching">可指定修改器绑定对应的游戏进程，实现同步启动</span></p>
       </div>
       <div class="feature-mini reveal">
-        <h4>功能激活</h4>
-        <p>预设激活想要的功能项，修改器启动自动激活，无需手动点击</p>
+        <h4><span class="i18n" data-zh="功能激活" data-en="Feature Activation">功能激活</span></h4>
+        <p><span class="i18n" data-zh="预设激活想要的功能项，修改器启动自动激活，无需手动点击" data-en="Pre-select the features to activate so they switch on automatically when the trainer starts">预设激活想要的功能项，修改器启动自动激活，无需手动点击</span></p>
       </div>
     </div>
   </div>
@@ -695,46 +804,46 @@
   <div class="container">
     <div class="showcase-row reversed reveal">
       <div class="showcase-info">
-        <h3>成就 · 快速解锁</h3>
-        <p>快速解锁 / 回锁指定游戏的成就数据，并同步数据至 Steam 云端，无需下载游戏即可解锁成就</p>
+        <h3><span class="i18n" data-zh="成就 · 快速解锁" data-en="Achievements · Quick Unlock">成就 · 快速解锁</span></h3>
+        <p><span class="i18n" data-zh="快速解锁 / 回锁指定游戏的成就数据，并同步数据至 Steam 云端，无需下载游戏即可解锁成就" data-en="Quickly unlock or re-lock achievement data for any game and sync it to Steam Cloud — no game download required">快速解锁 / 回锁指定游戏的成就数据，并同步数据至 Steam 云端，无需下载游戏即可解锁成就</span></p>
         <ul>
-          <li>快速解锁 / 回锁指定游戏成就</li>
-          <li>成就数据同步至 Steam 云端</li>
-          <li>无需下载游戏即可解锁成就</li>
+          <li><span class="i18n" data-zh="快速解锁 / 回锁指定游戏成就" data-en="Quickly unlock or re-lock achievements for a given game">快速解锁 / 回锁指定游戏成就</span></li>
+          <li><span class="i18n" data-zh="成就数据同步至 Steam 云端" data-en="Achievement data syncs to Steam Cloud">成就数据同步至 Steam 云端</span></li>
+          <li><span class="i18n" data-zh="无需下载游戏即可解锁成就" data-en="Unlock achievements without downloading the game">无需下载游戏即可解锁成就</span></li>
         </ul>
       </div>
       <div class="carousel">
         <div class="carousel-track">
-          <img src="https://sunky.top/i/2026/08/01/6a6dcb65632b0.png" alt="成就解锁一" loading="lazy">
-          <img src="https://sunky.top/i/2026/08/01/6a6dcb732e757.png" alt="成就解锁二" loading="lazy">
-          <img src="https://sunky.top/i/2026/08/01/6a6dcb86b7d84.png" alt="成就解锁三" loading="lazy">
+          <img src="https://sunky.top/i/2026/08/01/6a6dcb65632b0.png" alt="Achievement unlock 1" loading="lazy">
+          <img src="https://sunky.top/i/2026/08/01/6a6dcb732e757.png" alt="Achievement unlock 2" loading="lazy">
+          <img src="https://sunky.top/i/2026/08/01/6a6dcb86b7d84.png" alt="Achievement unlock 3" loading="lazy">
         </div>
-        <button class="carousel-arrow prev" aria-label="上一张">&#8249;</button>
-        <button class="carousel-arrow next" aria-label="下一张">&#8250;</button>
+        <button class="carousel-arrow prev" aria-label="Previous image">&#8249;</button>
+        <button class="carousel-arrow next" aria-label="Next image">&#8250;</button>
         <div class="carousel-dots">
-          <button class="carousel-dot active" aria-label="第 1 张"></button>
-          <button class="carousel-dot" aria-label="第 2 张"></button>
-          <button class="carousel-dot" aria-label="第 3 张"></button>
+          <button class="carousel-dot active" aria-label="Image 1"></button>
+          <button class="carousel-dot" aria-label="Image 2"></button>
+          <button class="carousel-dot" aria-label="Image 3"></button>
         </div>
       </div>
     </div>
 
     <div class="feature-blocks-grid">
       <div class="feature-mini reveal">
-        <h4>成就解锁</h4>
-        <p>使用 Steam 官方接口解锁成就，无客户端篡改风险</p>
+        <h4><span class="i18n" data-zh="成就解锁" data-en="Achievement Unlock">成就解锁</span></h4>
+        <p><span class="i18n" data-zh="使用 Steam 官方接口解锁成就，无客户端篡改风险" data-en="Unlocks through the official Steam API, with no client tampering risk">使用 Steam 官方接口解锁成就，无客户端篡改风险</span></p>
       </div>
       <div class="feature-mini reveal">
-        <h4>云端同步</h4>
-        <p>解锁数据回传云端，跨设备依旧保留</p>
+        <h4><span class="i18n" data-zh="云端同步" data-en="Cloud Sync">云端同步</span></h4>
+        <p><span class="i18n" data-zh="解锁数据回传云端，跨设备依旧保留" data-en="Unlock data is written back to the cloud and stays across your devices">解锁数据回传云端，跨设备依旧保留</span></p>
       </div>
       <div class="feature-mini reveal">
-        <h4>无需下载</h4>
-        <p>无需下载游戏即可一键解锁成就，快速白金游戏</p>
+        <h4><span class="i18n" data-zh="无需下载" data-en="No Download">无需下载</span></h4>
+        <p><span class="i18n" data-zh="无需下载游戏即可一键解锁成就，快速白金游戏" data-en="Unlock achievements in one click without the game, and platinum titles fast">无需下载游戏即可一键解锁成就，快速白金游戏</span></p>
       </div>
       <div class="feature-mini reveal">
-        <h4>成就回锁</h4>
-        <p>想要重新体验游戏？一键回锁全部成就，从零开始体验游戏</p>
+        <h4><span class="i18n" data-zh="成就回锁" data-en="Achievement Re-lock">成就回锁</span></h4>
+        <p><span class="i18n" data-zh="想要重新体验游戏？一键回锁全部成就，从零开始体验游戏" data-en="Want to replay the game? Re-lock every achievement in one click and start from scratch">想要重新体验游戏？一键回锁全部成就，从零开始体验游戏</span></p>
       </div>
     </div>
   </div>
@@ -743,34 +852,34 @@
 <section id="usage">
   <div class="container">
     <div class="section-head reveal">
-      <h2 class="section-title">快速上手</h2>
-      <p class="section-desc">五步完成首次入库</p>
+      <h2 class="section-title"><span class="i18n" data-zh="快速上手" data-en="Quick Start">快速上手</span></h2>
+      <p class="section-desc"><span class="i18n" data-zh="五步完成首次入库" data-en="Five steps to your first import">五步完成首次入库</span></p>
     </div>
     <div class="steps">
       <div class="step reveal">
         <div class="step-num">01</div>
-        <h4>下载并安装</h4>
-        <p>前往 Release 下载最新版，解压并运行</p>
+        <h4><span class="i18n" data-zh="下载并安装" data-en="Download &amp; Install">下载并安装</span></h4>
+        <p><span class="i18n" data-zh="前往 Release 下载最新版，解压并运行" data-en="Grab the latest Release, extract it and run it">前往 Release 下载最新版，解压并运行</span></p>
       </div>
       <div class="step reveal">
         <div class="step-num">02</div>
-        <h4>设置 Steam 路径</h4>
-        <p>在「设置」中确认或手动指定 Steam 安装目录</p>
+        <h4><span class="i18n" data-zh="设置 Steam 路径" data-en="Set Steam Path">设置 Steam 路径</span></h4>
+        <p><span class="i18n" data-zh="在「设置」中确认或手动指定 Steam 安装目录" data-en="Confirm or specify the Steam install directory in Settings">在「设置」中确认或手动指定 Steam 安装目录</span></p>
       </div>
       <div class="step reveal">
         <div class="step-num">03</div>
-        <h4>安装内核</h4>
-        <p>在右下角悬浮面板中的内核管理安装 OpenSteamTool，并重启 Steam 使内核生效</p>
+        <h4><span class="i18n" data-zh="安装内核" data-en="Install Kernel">安装内核</span></h4>
+        <p><span class="i18n" data-zh="在右下角悬浮面板中的内核管理安装 OpenSteamTool，并重启 Steam 使内核生效" data-en="Install OpenSteamTool from Kernel Management in the floating panel at the bottom right, then restart Steam to activate it">在右下角悬浮面板中的内核管理安装 OpenSteamTool，并重启 Steam 使内核生效</span></p>
       </div>
       <div class="step reveal">
         <div class="step-num">04</div>
-        <h4>开始入库</h4>
-        <p>在「入库」页搜索游戏，一键生成 Lua 清单</p>
+        <h4><span class="i18n" data-zh="开始入库" data-en="Start Importing">开始入库</span></h4>
+        <p><span class="i18n" data-zh="在「入库」页搜索游戏，一键生成 Lua 清单" data-en="Search for a game on the Import page and generate the Lua manifest in one click">在「入库」页搜索游戏，一键生成 Lua 清单</span></p>
       </div>
       <div class="step reveal">
         <div class="step-num">05</div>
-        <h4>下载游戏</h4>
-        <p>打开 Steam 库存搜索游戏并下载安装</p>
+        <h4><span class="i18n" data-zh="下载游戏" data-en="Download the Game">下载游戏</span></h4>
+        <p><span class="i18n" data-zh="打开 Steam 库存搜索游戏并下载安装" data-en="Open your Steam library, find the game and download it">打开 Steam 库存搜索游戏并下载安装</span></p>
       </div>
     </div>
   </div>
@@ -779,25 +888,25 @@
 <section id="faq">
   <div class="container">
     <div class="section-head reveal">
-      <h2 class="section-title">常见问题</h2>
-      <p class="section-desc">了解更多</p>
+      <h2 class="section-title"><span class="i18n" data-zh="常见问题" data-en="FAQ">常见问题</span></h2>
+      <p class="section-desc"><span class="i18n" data-zh="了解更多" data-en="Learn more">了解更多</span></p>
     </div>
     <div class="faq">
       <details class="reveal">
-        <summary>软件完全免费使用吗？</summary>
-        <div class="faq-body">完全免费开源，源代码托管在 GitHub，无任何收费或变相付费。</div>
+        <summary><span class="i18n" data-zh="软件完全免费使用吗？" data-en="Is the software completely free?">软件完全免费使用吗？</span></summary>
+        <div class="faq-body"><span class="i18n" data-zh="完全免费开源，源代码托管在 GitHub，无任何收费或变相付费。" data-en="Completely free and open source, with the source code hosted on GitHub. No fees and no hidden charges.">完全免费开源，源代码托管在 GitHub，无任何收费或变相付费。</span></div>
       </details>
       <details class="reveal">
-        <summary>支持哪些 Windows 版本？</summary>
-        <div class="faq-body">Windows 10 1809 及以上版本，以及 Windows 11。首次运行需安装 <a href="https://dotnet.microsoft.com/download/dotnet/8.0" target="_blank" rel="noopener">.NET 8 Runtime</a>。</div>
+        <summary><span class="i18n" data-zh="支持哪些 Windows 版本？" data-en="Which Windows versions are supported?">支持哪些 Windows 版本？</span></summary>
+        <div class="faq-body"><span class="i18n" data-zh="Windows 10 1809 及以上版本，以及 Windows 11。首次运行需安装" data-en="Windows 10 version 1809 and later, plus Windows 11. The first run requires">Windows 10 1809 及以上版本，以及 Windows 11。首次运行需安装</span> <a href="https://dotnet.microsoft.com/download/dotnet/8.0" target="_blank" rel="noopener">.NET 8 Runtime</a>。</div>
       </details>
       <details class="reveal">
-        <summary>使用的什么内核？</summary>
-        <div class="faq-body">本工具目前仅适配 OpenSteamTool 内核，内核提供底层入库能力，可在软件右下角悬浮按钮内的「内核管理」中一键 <span class="faq-inline">安装 / 更新 / 卸载</span>。</div>
+        <summary><span class="i18n" data-zh="使用的什么内核？" data-en="Which kernel does it use?">使用的什么内核？</span></summary>
+        <div class="faq-body"><span class="i18n" data-zh="本工具目前仅适配 OpenSteamTool 内核，内核提供底层入库能力，可在软件右下角悬浮按钮内的「内核管理」中一键" data-en="The tool currently supports the OpenSteamTool kernel only, which provides the underlying import capability. Manage it from Kernel Management in the floating button at the bottom right, where you can one-click">本工具目前仅适配 OpenSteamTool 内核，内核提供底层入库能力，可在软件右下角悬浮按钮内的「内核管理」中一键</span> <span class="faq-inline"><span class="i18n" data-zh="安装 / 更新 / 卸载" data-en="Install / Update / Uninstall">安装 / 更新 / 卸载</span></span>。</div>
       </details>
       <details class="reveal">
-        <summary>如何反馈问题或建议？</summary>
-        <div class="faq-body">欢迎前往 <a href="https://github.com/huanyuejue/Fluent-Steam-Lua/issues" target="_blank" rel="noopener">GitHub Issues</a> 提交反馈或发送问题到邮箱 <a href="mailto:1376158303@qq.com">1376158303@qq.com</a>。</div>
+        <summary><span class="i18n" data-zh="如何反馈问题或建议？" data-en="How do I report issues or suggest improvements?">如何反馈问题或建议？</span></summary>
+        <div class="faq-body"><span class="i18n" data-zh="欢迎前往" data-en="Feel free to head to">欢迎前往</span> <a href="https://github.com/huanyuejue/Fluent-Steam-Lua/issues" target="_blank" rel="noopener">GitHub Issues</a><span class="i18n" data-zh="提交反馈或发送问题到邮箱" data-en="to submit feedback, or email us at"> 提交反馈或发送问题到邮箱</span> <a href="mailto:1376158303@qq.com">1376158303@qq.com</a>。</div>
       </details>
     </div>
   </div>
@@ -806,28 +915,28 @@
 <footer class="footer">
   <div class="footer-grid reveal">
     <div>
-      <div class="footer-brand">Fluent Steam <span>Lua 管理工具</span></div>
-      <p class="footer-desc">基于 WPF + Fluent Design 开发的现代化轻量级 Steam Lua 入库管理工具，开源免费，持续更新。</p>
+      <div class="footer-brand">Fluent Steam <span><span class="i18n" data-zh="Lua 管理工具" data-en="Lua Manager">Lua 管理工具</span></span></div>
+      <p class="footer-desc"><span class="i18n" data-zh="基于 WPF + Fluent Design 开发的现代化轻量级 Steam Lua 入库管理工具，开源免费，持续更新。" data-en="A modern, lightweight Steam Lua library manager built with WPF + Fluent Design. Free and open source, with continuous updates.">基于 WPF + Fluent Design 开发的现代化轻量级 Steam Lua 入库管理工具，开源免费，持续更新。</span></p>
     </div>
     <div>
-      <h5>产品</h5>
-      <a href="#features">功能特性</a>
-      <a href="#screenshots">界面预览</a>
-      <a href="#usage">使用说明</a>
-      <a href="#faq">常见问题</a>
+      <h5><span class="i18n" data-zh="产品" data-en="Product">产品</span></h5>
+      <a href="#features"><span class="i18n" data-zh="功能特性" data-en="Features">功能特性</span></a>
+      <a href="#screenshots"><span class="i18n" data-zh="界面预览" data-en="Preview">界面预览</span></a>
+      <a href="#usage"><span class="i18n" data-zh="使用说明" data-en="Usage">使用说明</span></a>
+      <a href="#faq"><span class="i18n" data-zh="常见问题" data-en="FAQ">常见问题</span></a>
     </div>
     <div>
-      <h5>社区</h5>
-      <a href="https://t.me/FluentSL" target="_blank" rel="noopener">TG 交流群</a>
-      <a href="https://github.com/huanyuejue/Fluent-Steam-Lua" target="_blank" rel="noopener">GitHub 仓库</a>
-      <a href="https://github.com/huanyuejue/Fluent-Steam-Lua/releases/latest" target="_blank" rel="noopener">下载 Release</a>
-      <a href="https://github.com/huanyuejue/Fluent-Steam-Lua/issues" target="_blank" rel="noopener">问题反馈</a>
-      <a href="mailto:1376158303@qq.com">邮箱联系</a>
+      <h5><span class="i18n" data-zh="社区" data-en="Community">社区</span></h5>
+      <a href="https://t.me/FluentSL" target="_blank" rel="noopener"><span class="i18n" data-zh="TG 交流群" data-en="Telegram Group">TG 交流群</span></a>
+      <a href="https://github.com/huanyuejue/Fluent-Steam-Lua" target="_blank" rel="noopener"><span class="i18n" data-zh="GitHub 仓库" data-en="GitHub Repo">GitHub 仓库</span></a>
+      <a href="https://github.com/huanyuejue/Fluent-Steam-Lua/releases/latest" target="_blank" rel="noopener"><span class="i18n" data-zh="下载 Release" data-en="Download Release">下载 Release</span></a>
+      <a href="https://github.com/huanyuejue/Fluent-Steam-Lua/issues" target="_blank" rel="noopener"><span class="i18n" data-zh="问题反馈" data-en="Report Issues">问题反馈</span></a>
+      <a href="mailto:1376158303@qq.com"><span class="i18n" data-zh="邮箱联系" data-en="Email Contact">邮箱联系</span></a>
     </div>
   </div>
-  <div class="footer-copy">
+  <div class="footer-copy"><span class="i18n" data-zh="Fluent Steam Lua 管理工具 · 免费开源 · Copyright © 2024-present huanyuejue" data-en="Fluent Steam Lua Manager · Free &amp; Open Source · Copyright © 2024-present huanyuejue">
     Fluent Steam Lua 管理工具 · 免费开源 · Copyright © 2024-present huanyuejue
-  </div>
+</span>  </div>
 </footer>
 
 <script>
