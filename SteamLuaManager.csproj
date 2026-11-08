@@ -127,8 +127,8 @@
         var spec = (Version ?? "").Trim();
         var wantLatest = spec.Length == 0 || spec.Equals("latest", StringComparison.OrdinalIgnoreCase);
 
-        // latest 时先把"最新"解析成具体 tag：缓存按 tag 分目录、日志可读，
-        // 且用 /releases/latest 的 302 目标解析，不消耗 GitHub API 配额。
+        // latest 时先把"最新"解析成具体 tag：缓存按 tag 分目录、日志可读。
+        // 走 API 会消耗匿名配额（60 次/小时），但比 github.com 主站的直连稳定，构建频率下够用。
         string tag = wantLatest ? null : spec;
         Exception resolveError = null;
         if (wantLatest)
@@ -165,9 +165,9 @@
             var destDir = Path.Combine(RootDir, tag);
             var marker = Path.Combine(destDir, ".fetch-ok");
             var dllFile = Path.Combine(destDir, dllName);
-            var baseUrl = wantLatest
-                ? $"{repo}/releases/latest/download"
-                : $"{repo}/releases/download/{tag}";
+            // 统一用带具体 tag 的地址：latest/download 这个快捷路径在 GitHub 侧会返回 502，
+            // 反正 tag 已经在上面解析出来了，走 tag 路径更稳
+            var baseUrl = $"{repo}/releases/download/{tag}";
 
             string expected = null;
             try
@@ -223,7 +223,57 @@
             }
         }
 
+        // 解析最新 tag：优先走 api.github.com，它比 github.com 主站在国内稳定得多；
+        // API 不可用时退回网页重定向解析，两条路都断才判定失败
         string ResolveLatestTag(string repoUrl)
+        {
+            var apiError = "";
+            try
+            {
+                var tag = ResolveLatestTagViaApi(repoUrl);
+                if (tag != null) return tag;
+            }
+            catch (Exception ex)
+            {
+                apiError = ex.Message;
+            }
+
+            try
+            {
+                return ResolveLatestTagViaRedirect(repoUrl);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    $"未能解析最新版本：API 方式（{apiError}），重定向方式（{ex.Message}）");
+            }
+        }
+
+        string ResolveLatestTagViaApi(string repoUrl)
+        {
+            // https://github.com/{owner}/{repo} -> https://api.github.com/repos/{owner}/{repo}/releases/latest
+            var slug = repoUrl.Substring("https://github.com/".Length).Trim('/');
+            using var http = new HttpClient();
+            http.Timeout = TimeSpan.FromSeconds(30);
+            http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "SteamLuaManager-Build");
+            http.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "application/vnd.github+json");
+            using var resp = http.GetAsync($"https://api.github.com/repos/{slug}/releases/latest").GetAwaiter().GetResult();
+            if (!resp.IsSuccessStatusCode) return null;
+            var json = resp.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+            // 只取 tag_name，避免为一次取值引入 JSON 解析依赖
+            var idx = json.IndexOf("\"tag_name\"", StringComparison.Ordinal);
+            if (idx < 0) return null;
+            var colon = json.IndexOf(':', idx);
+            if (colon < 0) return null;
+            var firstQuote = json.IndexOf('"', colon + 1);
+            if (firstQuote < 0) return null;
+            var secondQuote = json.IndexOf('"', firstQuote + 1);
+            if (secondQuote < 0) return null;
+            var tag = json.Substring(firstQuote + 1, secondQuote - firstQuote - 1).Trim();
+            return tag.Length > 0 ? tag : null;
+        }
+
+        string ResolveLatestTagViaRedirect(string repoUrl)
         {
             using var handler = new HttpClientHandler { AllowAutoRedirect = false };
             using var http = new HttpClient(handler);
@@ -239,7 +289,7 @@
                 if (cut >= 0) parsed = parsed.Substring(0, cut);
                 if (parsed.Length > 0) return parsed;
             }
-            throw new InvalidOperationException($"未能从 {repoUrl}/releases/latest 解析出版本号（HTTP {(int)resp.StatusCode}）");
+            throw new InvalidOperationException($"HTTP {(int)resp.StatusCode}，未取到 tag 重定向");
         }
 
         string NewestCachedDir(string root, string file)
