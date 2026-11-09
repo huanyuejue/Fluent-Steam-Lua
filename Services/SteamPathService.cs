@@ -9,12 +9,22 @@ namespace SteamLuaManager.Services;
 
 public class SteamPathService : ISteamPathService
 {
+    // 32 位 Steam 在 WOW6432Node 下，64 位在主视图；用户级记录另存一份，
+    // 只认其中一个会在部分机器上漏检，进而回退到并不存在的默认路径
     private const string RegistryPath = @"SOFTWARE\WOW6432Node\Valve\Steam";
+    private const string RegistryPath64 = @"SOFTWARE\Valve\Steam";
+    private const string RegistryPathUser = @"Software\Valve\Steam";
     private const string InstallPathKey = "InstallPath";
+    private const string SteamPathKey = "SteamPath";
     private const string LuaSubFolder = @"config\lua";
     private const string ConfigFileName = "opensteamtool.toml";
     private const string ExampleConfigFileName = "opensteamtool.example.toml";
     private string? _customPath;
+
+    // 探测结果缓存：注册表加多路径试探的单次耗时在几十毫秒量级，
+    // 而调用点散布在很多界面路径上，不缓存会在启动和切页时反复扫盘。
+    // 只缓存成功结果，未找到时保持每次重试，装完 Steam 不必重启程序。
+    private string? _cachedSteamPath;
 
     // 配置文件解析缓存（按最后写入时间失效，支持修改 toml 后即时生效）
     private string? _cachedConfigFile;
@@ -26,19 +36,42 @@ public class SteamPathService : ISteamPathService
         return !string.IsNullOrEmpty(_customPath) ? _customPath : DetectSteamPath();
     }
 
-    public string? DetectSteamPath()
+    // Steam 目录判定：除 steam.exe 外再看一眼只有真实安装才有的子目录，
+    // 用来把曾经装过、现已迁走的残留目录和当前生效的安装区分开
+    private static bool LooksLikeSteamInstall(string? path)
     {
-        try
+        if (string.IsNullOrEmpty(path)) return false;
+        if (!File.Exists(Path.Combine(path, "steam.exe"))) return false;
+        return Directory.Exists(Path.Combine(path, "steamapps"))
+            || Directory.Exists(Path.Combine(path, "config"))
+            || Directory.Exists(Path.Combine(path, "appcache"))
+            || Directory.Exists(Path.Combine(path, "userdata"));
+    }
+
+    public string? DetectSteamPath() => _cachedSteamPath ??= DetectSteamPathCore();
+
+    private string? DetectSteamPathCore()
+    {
+        // 注册表有多处可能登记安装路径：64 位 Steam 在主视图，32 位在 WOW6432Node，
+        // 另有一份用户级记录（值为 SteamPath 而非 InstallPath）。逐处尝试，命中即返回。
+        var registryProbes = new (RegistryKey Hive, string SubKey, string ValueName)[]
         {
-            using var key = Registry.LocalMachine.OpenSubKey(RegistryPath);
-            if (key?.GetValue(InstallPathKey) is string installPath)
+            (Registry.LocalMachine, RegistryPath, InstallPathKey),
+            (Registry.LocalMachine, RegistryPath64, InstallPathKey),
+            (Registry.CurrentUser, RegistryPathUser, SteamPathKey),
+        };
+        foreach (var probe in registryProbes)
+        {
+            try
             {
-                if (File.Exists(Path.Combine(installPath, "steam.exe")))
+                using var key = probe.Hive.OpenSubKey(probe.SubKey);
+                if (key?.GetValue(probe.ValueName) is string installPath &&
+                    LooksLikeSteamInstall(installPath))
                     return installPath;
             }
-        }
-        catch
-        {
+            catch
+            {
+            }
         }
 
         string[] commonPaths = new[]
@@ -51,13 +84,17 @@ public class SteamPathService : ISteamPathService
             @"E:\Program Files (x86)\Steam"
         };
 
+        // 先找特征齐全的安装；只剩残留时再退回仅凭 steam.exe 命中的目录，
+        // 保持旧行为可用，同时优先选中真正生效的那一份
+        string? looseMatch = null;
         foreach (var path in commonPaths)
         {
-            if (File.Exists(Path.Combine(path, "steam.exe")))
-                return path;
+            if (!File.Exists(Path.Combine(path, "steam.exe"))) continue;
+            if (LooksLikeSteamInstall(path)) return path;
+            looseMatch ??= path;
         }
 
-        return null;
+        return looseMatch;
     }
 
     /// <summary>返回当前生效的 OpenSteamTool 配置文件路径。
@@ -631,7 +668,13 @@ public class SteamPathService : ISteamPathService
         }
     }
 
-    public void SetCustomPath(string path) => _customPath = path;
+    // 自定义路径变更后必须丢弃探测缓存，否则切换目录仍会沿用上一次的结果
+    public void SetCustomPath(string path)
+    {
+        _customPath = path;
+        _cachedSteamPath = null;
+    }
+
     public string? GetCustomPath() => _customPath;
 
     // 云存档开关：读 [cloud] enabled 裸值，缺省 false（内核默认关闭）

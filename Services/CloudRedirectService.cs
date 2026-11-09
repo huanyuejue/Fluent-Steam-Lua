@@ -580,7 +580,11 @@ public class CloudRedirectService : ICloudRedirectService
             }
 
             root["provider"] = provider;
-            var tokenPath = GetTokenPath(provider);
+            // 这里按当前用户的 ConfigDir 重算落点，不沿用 config.json 里已有的值：
+            // 历史配置可能带着别的 Windows 账号或别的机器的绝对路径，换环境后
+            // 该文件不存在，DLL 侧会一路走到 init 失败并退回纯本地模式，
+            // 用户看到的现象就是云存档怎么都传不上去。
+            var tokenPath = DefaultTokenPath(provider);
             if (!string.IsNullOrEmpty(tokenPath))
                 root["token_path"] = tokenPath;
 
@@ -589,8 +593,13 @@ public class CloudRedirectService : ICloudRedirectService
             {
                 foreach (var kv in existing)
                 {
-                    if (kv.Value?.GetValueKind() == JsonValueKind.String)
-                        registry[kv.Key] = kv.Value!.GetValue<string>();
+                    if (kv.Value?.GetValueKind() != JsonValueKind.String) continue;
+                    // 其余已登记过的源同样按当前用户重算，把历史遗留的他机路径一并纠正；
+                    // 没有本机落点的条目（如 folder）保持原样，避免写入空值。
+                    var recomputed = DefaultTokenPath(kv.Key);
+                    registry[kv.Key] = string.IsNullOrEmpty(recomputed)
+                        ? kv.Value!.GetValue<string>()
+                        : recomputed;
                 }
             }
             if (!string.IsNullOrEmpty(tokenPath))
@@ -608,9 +617,22 @@ public class CloudRedirectService : ICloudRedirectService
         }
     }
 
+    // 各源凭证/ token 的本机默认落点，与上游 companion 路径一致，DLL 与官方客户端互认。
+    // 只描述当前用户该放在哪里，不读配置，供重算与兜底共用。
+    private string DefaultTokenPath(string provider) => provider switch
+    {
+        "gdrive" => Path.Combine(ConfigDir, "google_tokens.json"),
+        "onedrive" => Path.Combine(ConfigDir, "onedrive_tokens.json"),
+        "r2" => Path.Combine(ConfigDir, "r2_credentials.json"),
+        "s3" => Path.Combine(ConfigDir, "s3_credentials.json"),
+        "webdav" => Path.Combine(ConfigDir, "webdav_credentials.json"),
+        _ => string.Empty,
+    };
+
     // 各源凭证/ token 默认落点，与上游 companion 路径一致，DLL 与官方客户端互认
     public string GetTokenPath(string provider)
     {
+        string? registered = null;
         try
         {
             var configPath = Path.Combine(ConfigDir, "config.json");
@@ -622,22 +644,17 @@ public class CloudRedirectService : ICloudRedirectService
                     reg.ValueKind == JsonValueKind.Object &&
                     reg.TryGetProperty(provider, out var p) &&
                     p.ValueKind == JsonValueKind.String && !string.IsNullOrEmpty(p.GetString()))
-                    return p.GetString()!;
+                    registered = p.GetString()!;
             }
         }
         catch (Exception ex)
         {
             LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_LogTokenRegFailed", ex.Message));
         }
-        return provider switch
-        {
-            "gdrive" => Path.Combine(ConfigDir, "google_tokens.json"),
-            "onedrive" => Path.Combine(ConfigDir, "onedrive_tokens.json"),
-            "r2" => Path.Combine(ConfigDir, "r2_credentials.json"),
-            "s3" => Path.Combine(ConfigDir, "s3_credentials.json"),
-            "webdav" => Path.Combine(ConfigDir, "webdav_credentials.json"),
-            _ => string.Empty,
-        };
+
+        var fallback = DefaultTokenPath(provider);
+        if (string.IsNullOrEmpty(registered)) return fallback;
+        return File.Exists(registered) ? registered : fallback;
     }
 
     // OAuth 类源看 refresh_token 是否存在；R2/S3 看必填字段是否齐
