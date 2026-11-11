@@ -22,9 +22,6 @@ public partial class BridgeGuideWindow : Window
 {
     private const string ExtensionsPageUrl = "chrome://extensions/";
 
-    /// <summary>扩展 ID：与 manifest 里的公钥对应，正式包使用固定 ID。</summary>
-    private const string ExtensionId = "kgdjhdhilpddemficmfanmehanglaaha";
-
     private readonly IBridgeServiceManager _bridgeManager;
     private readonly IExtensionStateService _extensionState;
     private readonly string _extensionDir;
@@ -327,7 +324,8 @@ public partial class BridgeGuideWindow : Window
         }
 
         // Steam 扩展插件状态，底部固定显示插件名称
-        var state = _extensionState.Query(ExtensionId);
+        // 按部署目录判断，不用 ID：未打包扩展的 ID 由 Chrome 依路径推导，换目录就变
+        var state = _extensionState.Query(_extensionDir);
         var extOk = state.Installed && state.Enabled;
         var extName = ReadExtensionName() ?? L.Get("Bridge_ExtName");
         if (!state.Installed)

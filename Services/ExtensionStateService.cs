@@ -16,8 +16,12 @@ namespace SteamLuaManager.Services;
 /// </summary>
 public interface IExtensionStateService
 {
-    /// <summary>查询扩展当前状态。</summary>
-    ExtensionInstallState Query(string extensionId);
+    /// <summary>
+    /// 查询扩展当前状态。
+    /// 按扩展所在目录识别而不是按 ID：未打包扩展的 ID 由 Chrome 依目录路径推导，
+    /// 程序换目录就会变，写死 ID 必然失效。
+    /// </summary>
+    ExtensionInstallState Query(string? extensionPath);
 }
 
 public sealed record ExtensionInstallState(
@@ -29,19 +33,9 @@ public sealed record ExtensionInstallState(
 
 public sealed class ExtensionStateService : IExtensionStateService
 {
-    /// <summary>
-    /// 扩展 ID 集合。
-    /// 带 key 的正式包用固定 ID（程序目录变动也不影响）；
-    /// 早期未带 key 的版本由 Chrome 按路径推导，换目录后会变，故一并兼容。
-    /// </summary>
-    public static readonly string[] KnownExtensionIds =
-    {
-        "kgdjhdhilpddemficmfanmehanglaaha",
-        "mkalijidhpmfbigdpnlbckjiahmkjkhi"
-    };
     private const string SecurePreferencesRelative = @"Default\Secure Preferences";
 
-    public ExtensionInstallState Query(string extensionId)
+    public ExtensionInstallState Query(string? extensionPath)
     {
         try
         {
@@ -55,8 +49,11 @@ public sealed class ExtensionStateService : IExtensionStateService
             using var doc = JsonDocument.Parse(File.ReadAllText(prefsPath));
             if (!doc.RootElement.TryGetProperty("extensions", out var extensions)) return new ExtensionInstallState(false, false, null, null, null);
             if (!extensions.TryGetProperty("settings", out var settings)) return new ExtensionInstallState(false, false, null, null, null);
-            // 依次尝试已知的 ID，命中任意一个即认为已安装
-            if (!TryGetEntry(settings, extensionId, out var entry)) return new ExtensionInstallState(false, false, null, null, null);
+
+            if (!TryFindEntryByPath(settings, extensionPath, out var entry))
+            {
+                return new ExtensionInstallState(false, false, null, null, null);
+            }
 
             // location: 1=INTERNAL 4=UNPACKED 5=COMPONENT 9=EXTERNAL_REGISTRY
             var location = entry.TryGetProperty("location", out var loc) ? loc.GetInt32() : 0;
@@ -84,7 +81,7 @@ public sealed class ExtensionStateService : IExtensionStateService
             // location 4（解压加载）或 5（组件）都算已安装；路径仍存在才算真正可用
             var installed = location is 1 or 4 or 5 or 8 or 9 or 10;
 
-            // 配置里的记录可能被 Chrome 留下而扩展实际已被移除（换 ID、目录被清空等），
+            // 配置里的记录可能被 Chrome 留下而扩展实际已被移除（目录被清空等），
             // 因此还要核对目标目录里确实有 manifest，否则会误报成已安装
             var manifestAlive = true;
             if (!string.IsNullOrEmpty(path) && Directory.Exists(path))
@@ -107,10 +104,37 @@ public sealed class ExtensionStateService : IExtensionStateService
     }
 
     /// <summary>
-    /// 在扩展清单里查找指定 ID。
-    /// 传入的是我们自己的 ID 时，允许回退到其它历史 ID（同一扩展在不同版本下 ID 可能不同）；
-    /// 传入无关 ID 时则只做精确匹配，否则任何查询都会误判为已安装。
+    /// 在扩展清单里按安装路径查找我们这条扩展。
+    /// 路径是配置里唯一稳定的标识：ID 会随目录变化，名称可能缺失，只有 path 始终指向加载目录。
     /// </summary>
+    private static bool TryFindEntryByPath(JsonElement settings, string? extensionPath, out JsonElement entry)
+    {
+        entry = default;
+        if (string.IsNullOrEmpty(extensionPath)) return false;
+
+        var target = NormalizePath(extensionPath);
+
+        foreach (var prop in settings.EnumerateObject())
+        {
+            if (!prop.Value.TryGetProperty("path", out var pathProp)) continue;
+
+            var installedPath = pathProp.GetString();
+            if (string.IsNullOrEmpty(installedPath)) continue;
+
+            if (string.Equals(NormalizePath(installedPath), target, StringComparison.OrdinalIgnoreCase))
+            {
+                entry = prop.Value;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>统一分隔符与尾部斜杠，避免同一个目录因写法不同而匹配失败。</summary>
+    private static string NormalizePath(string path)
+        => path.Replace('/', '\\').TrimEnd('\\');
+
     /// <summary>从扩展目录的 manifest.json 读名称与版本，读不到时返回空。</summary>
     private static (string? Name, string? Version) ReadManifestInfo(string? extensionPath)
     {
@@ -130,26 +154,6 @@ public sealed class ExtensionStateService : IExtensionStateService
         {
             return (null, null);
         }
-    }
-
-    private static bool TryGetEntry(JsonElement settings, string extensionId, out JsonElement entry)
-    {
-        if (settings.TryGetProperty(extensionId, out entry)) return true;
-
-        if (Array.IndexOf(KnownExtensionIds, extensionId) >= 0)
-        {
-            foreach (var known in KnownExtensionIds)
-            {
-                if (!string.Equals(known, extensionId, StringComparison.Ordinal)
-                    && settings.TryGetProperty(known, out entry))
-                {
-                    return true;
-                }
-            }
-        }
-
-        entry = default;
-        return false;
     }
 
     /// <summary>
