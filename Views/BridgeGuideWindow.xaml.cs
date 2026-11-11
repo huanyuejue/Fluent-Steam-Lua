@@ -267,16 +267,34 @@ public partial class BridgeGuideWindow : Window
 
             // 打开 bridge 的父目录，用户在其中能看到 extension 文件夹并拖动它
             var bridgeRoot = System.IO.Path.GetDirectoryName(_extensionDir);
-            if (string.IsNullOrEmpty(bridgeRoot))
+            if (string.IsNullOrEmpty(bridgeRoot) || !System.IO.Directory.Exists(bridgeRoot))
             {
                 _ = ShowTipAsync(L.Get("Bridge_WindowTitle"), L.Get("Bridge_NotDeployed"));
                 return;
             }
 
-            Process.Start(new ProcessStartInfo("explorer.exe", $"\"{bridgeRoot}\"")
+            // 单文件发布时当前进程带着解包目录相关的环境变量，
+            // 直接 shell 启动 explorer 会让它继承这些变量并初始化失败（0xc0000142）。
+            // 这里用系统目录下的完整路径，并显式构造一份干净的基础环境
+            var windowsDir = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+            var explorer = System.IO.Path.Combine(windowsDir, "explorer.exe");
+            if (!System.IO.File.Exists(explorer)) explorer = "explorer.exe";
+
+            var psi = new ProcessStartInfo(explorer, $"\"{bridgeRoot}\"")
             {
-                UseShellExecute = true
-            });
+                UseShellExecute = false,
+                WorkingDirectory = windowsDir
+            };
+
+            // 只保留 explorer 正常运行需要的系统变量，避免继承单文件的解包路径
+            psi.EnvironmentVariables.Clear();
+            foreach (var name in new[] { "SystemRoot", "windir", "SystemDrive", "TEMP", "TMP", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "ProgramData", "ProgramFiles", "ProgramFiles(x86)", "CommonProgramFiles", "ComSpec", "PATH", "PATHEXT", "NUMBER_OF_PROCESSORS", "PROCESSOR_ARCHITECTURE", "COMPUTERNAME", "USERNAME", "USERDOMAIN", "HOMEDRIVE", "HOMEPATH" })
+            {
+                var value = Environment.GetEnvironmentVariable(name);
+                if (!string.IsNullOrEmpty(value)) psi.EnvironmentVariables[name] = value;
+            }
+
+            Process.Start(psi);
         }
         catch (Exception ex)
         {

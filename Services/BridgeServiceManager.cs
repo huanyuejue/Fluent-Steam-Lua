@@ -202,15 +202,35 @@ public sealed class BridgeServiceManager : IBridgeServiceManager
         }
     }
 
-    /// <summary>探测目录是否可创建/写入，用于判断能否就地部署。</summary>
+    /// <summary>
+    /// 探测目录是否可写入，用于判断能否就地部署。
+    /// 只在已存在的目录里写探针文件，不主动创建目标目录：
+    /// 用户没开启功能时不该在程序目录下留出空的 bridge 文件夹。
+    /// 目录尚不存在时，改为在最近的已存在父目录里试探能否建子目录。
+    /// </summary>
     private static bool CanWriteTo(string dir)
     {
         try
         {
-            Directory.CreateDirectory(dir);
-            var probe = Path.Combine(dir, ".write-probe");
-            File.WriteAllText(probe, "1");
-            File.Delete(probe);
+            if (Directory.Exists(dir))
+            {
+                var probe = Path.Combine(dir, ".write-probe");
+                File.WriteAllText(probe, "1");
+                File.Delete(probe);
+                return true;
+            }
+
+            // 目标目录还不存在：找一个已存在的父目录，验证能否在其下建目录
+            var parent = Path.GetDirectoryName(dir);
+            while (!string.IsNullOrEmpty(parent) && !Directory.Exists(parent))
+            {
+                parent = Path.GetDirectoryName(parent);
+            }
+            if (string.IsNullOrEmpty(parent)) return false;
+
+            var probeDir = Path.Combine(parent, ".write-probe-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(probeDir);
+            Directory.Delete(probeDir);
             return true;
         }
         catch
@@ -400,18 +420,31 @@ public sealed class BridgeServiceManager : IBridgeServiceManager
     /// <summary>探测桥接端口是否已在监听，用来判断服务真正就绪而不是进程刚起来。</summary>
     private static async Task<bool> IsPortListeningAsync(CancellationToken ct)
     {
+        System.Net.Sockets.TcpClient? client = null;
         try
         {
-            using var client = new System.Net.Sockets.TcpClient();
+            client = new System.Net.Sockets.TcpClient();
             var connect = client.ConnectAsync(System.Net.IPAddress.Loopback, BridgePort);
             var completed = await Task.WhenAny(connect, Task.Delay(500, ct));
-            if (completed != connect) return false;
+
+            if (completed != connect)
+            {
+                // 超时也要把连接任务接住：直接返回会让它在后台带着异常结束，
+                // 而异常无人观察，最终会在终结器线程上重新抛出把进程日志刷脏
+                _ = connect.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
+                return false;
+            }
+
             await connect;
             return client.Connected;
         }
         catch
         {
             return false;
+        }
+        finally
+        {
+            try { client?.Dispose(); } catch { }
         }
     }
 

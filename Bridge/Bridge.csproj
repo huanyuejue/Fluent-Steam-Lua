@@ -17,9 +17,9 @@
     <Product>Fluent Steam Lua 管理工具</Product>
     <!-- 桥接与浏览器扩展共用同一个组件版本：两者必须成对部署，
          版本号统一才能在启动时只做一次比对就判断整套组件是否需要更新 -->
-    <Version>1.4.0</Version>
-    <AssemblyVersion>1.4.0.0</AssemblyVersion>
-    <FileVersion>1.4.0.0</FileVersion>
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
     <!-- 常驻小进程：工作站 GC 更省内存，服务端 GC 会为吞吐预留大块堆 -->
     <ServerGarbageCollection>false</ServerGarbageCollection>
     <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
