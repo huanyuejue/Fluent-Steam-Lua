@@ -16,6 +16,18 @@ public interface ISteamDepotService
     Task EnsureAllSourcesAsync(CancellationToken ct = default);
     DateTime? GetLastUpdateTime(string source);
 
+    /// <summary>
+    /// 释放常驻的密钥字典缓存。密钥库有数万条，长期占着几十 MB；
+    /// 常驻进程在闲置时可以主动放掉，下次入库会按文件时间戳重新加载。
+    /// </summary>
+    void ReleaseKeyCache();
+
+    /// <summary>
+    /// 判断某 app 是否在本地 token 表里有 access token。
+    /// 仓储返回空时用它区分「这游戏本身没仓库」和「要 token 才能查」，别让用户摸不着头脑。
+    /// </summary>
+    Task<bool> HasAppTokenAsync(int appId, CancellationToken ct = default);
+
     /// <summary>EnsureAllSourcesAsync 完成后触发，通知 UI 刷新时间显示。</summary>
     event Action? AllSourcesUpdated;
 }

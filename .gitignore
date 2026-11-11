@@ -49,6 +49,11 @@ Desktop.ini
 
 screenshots/
 # ��������
+Bridge/out/
 Resources/*
 !Resources/Lang/
 publish/
+
+# 扩展签名私钥只在本机使用，提交后会导致扩展 ID 被固定且私钥泄露
+Build/extension.pem
+*.crxkey

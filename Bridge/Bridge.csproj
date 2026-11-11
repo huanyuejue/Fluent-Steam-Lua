@@ -1,0 +1,80 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetPlatformVersion>10.0.18362.0</TargetPlatformVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>FluentLuaBridge</AssemblyName>
+    <RootNamespace>FluentLuaBridge</RootNamespace>
+    <ApplicationIcon>..\Assets\app.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <AssemblyTitle>Fluent Steam Lua 商店页入库桥接服务</AssemblyTitle>
+    <Product>Fluent Steam Lua 管理工具</Product>
+    <!-- 桥接与浏览器扩展共用同一个组件版本：两者必须成对部署，
+         版本号统一才能在启动时只做一次比对就判断整套组件是否需要更新 -->
+    <Version>1.4.0</Version>
+    <AssemblyVersion>1.4.0.0</AssemblyVersion>
+    <FileVersion>1.4.0.0</FileVersion>
+    <!-- 常驻小进程：工作站 GC 更省内存，服务端 GC 会为吞吐预留大块堆 -->
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <RetainVMGarbageCollection>false</RetainVMGarbageCollection>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 本工程自身源码 -->
+    <Compile Include="**\*.cs" Exclude="bin\**;obj\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 从主工程链接入库所需的最小服务子集，避免复制代码导致逻辑分叉。
+         这些文件仍归属主工程，两边编译的是同一份源码。 -->
+    <Compile Include="..\Services\SteamDepotService.cs" Link="Linked\SteamDepotService.cs" />
+    <Compile Include="..\Services\ISteamDepotService.cs" Link="Linked\ISteamDepotService.cs" />
+    <Compile Include="..\Services\SteamPathService.cs" Link="Linked\SteamPathService.cs" />
+    <Compile Include="..\Services\ISteamPathService.cs" Link="Linked\ISteamPathService.cs" />
+    <Compile Include="..\Services\IHttpClientProvider.cs" Link="Linked\IHttpClientProvider.cs" />
+    <Compile Include="..\Services\HttpHeaderHelper.cs" Link="Linked\HttpHeaderHelper.cs" />
+    <Compile Include="..\Services\SettingsService.cs" Link="Linked\SettingsService.cs" />
+    <Compile Include="..\Services\ISteamAppInfoService.cs" Link="Linked\ISteamAppInfoService.cs" />
+    <Compile Include="..\Services\VdfParser.cs" Link="Linked\VdfParser.cs" />
+    <Compile Include="..\Services\LogService.cs" Link="Linked\LogService.cs" />
+    <Compile Include="..\Services\LocalizationService.cs" Link="Linked\LocalizationService.cs" />
+    <Compile Include="..\Services\L.cs" Link="Linked\L.cs" />
+    <Compile Include="..\Services\GitHubMirror.cs" Link="Linked\GitHubMirror.cs" />
+    <Compile Include="..\Services\XiaoHeiHeService.cs" Link="Linked\XiaoHeiHeService.cs" />
+    <Compile Include="..\Models\DepotQueryResult.cs" Link="Linked\DepotQueryResult.cs" />
+    <Compile Include="..\Models\CdnEndpoint.cs" Link="Linked\CdnEndpoint.cs" />
+    <Compile Include="..\Models\DepotInfo.cs" Link="Linked\DepotInfo.cs" />
+    <Compile Include="..\Models\TrainerBinding.cs" Link="Linked\TrainerBinding.cs" />
+    <Compile Include="..\Models\TrainerInfo.cs" Link="Linked\TrainerInfo.cs" />
+    <Compile Include="..\Models\RankGame.cs" Link="Linked\RankGame.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
+    <PackageReference Include="Serilog" Version="4.4.0" />
+    <PackageReference Include="Tomlyn" Version="2.10.1" />
+    <!-- SettingsService 的 AppSettings 会牵出带 MVVM 特性的模型，
+         该包本身很小，比切开模型更省事 -->
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- UseWindowsForms 的隐式 using 与 WPF 冲突，与主工程保持一致的排除方式 -->
+    <Using Remove="System.Drawing" />
+    <Using Remove="System.Windows.Forms" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="app.manifest" />
+    <Resource Include="..\Assets\app.ico" Link="Assets\app.ico" />
+    <Resource Include="..\Assets\app.png" Link="Assets\app.png" />
+  </ItemGroup>
+
+</Project>

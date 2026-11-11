@@ -456,6 +456,19 @@ Style="{StaticResource SettingsCardStyle}">
                                              OnContent="{l:Loc Common_On}" OffContent="{l:Loc Common_Off}"/>
                         </ui:SettingsCard>
 
+                        <ui:SettingsCard Header="{l:Loc Settings_StoreImport}" Margin="0,0,0,8"
+                                         Description="{l:Loc Settings_StoreImportDesc}"
+Style="{StaticResource SettingsCardStyle}">
+                            <StackPanel Orientation="Horizontal">
+                                <Button Content="{l:Loc Settings_InstallExtBtn}"
+                                        Command="{Binding OpenBridgeGuideCommand}"
+                                        Margin="0,0,12,0" Padding="14,6" Height="32" FontSize="13"
+                                        ToolTip="{l:Loc Settings_InstallExtDesc}" />
+                                <ui:ToggleSwitch IsOn="{Binding StorePageImportEnabled}"
+                                                 OnContent="{l:Loc Common_On}" OffContent="{l:Loc Common_Off}"/>
+                            </StackPanel>
+                        </ui:SettingsCard>
+
                     </StackPanel>
                 </controls:SmoothScrollViewer>
             </TabItem>

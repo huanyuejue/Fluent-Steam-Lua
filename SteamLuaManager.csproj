@@ -54,6 +54,13 @@
     <Compile Remove="SvcMonitor\**\*" />
     <EmbeddedResource Remove="SvcMonitor\**\*" />
     <None Remove="SvcMonitor\**\*" />
+    <Compile Remove="Bridge\**\*" />
+    <EmbeddedResource Remove="Bridge\**\*" />
+    <None Remove="Bridge\**\*" />
+    <Page Remove="Bridge\**\*" />
+    <Compile Remove="extension\**\*" />
+    <EmbeddedResource Remove="extension\**\*" />
+    <None Remove="extension\**\*" />
     <Compile Remove="Updater\**\*" />
     <EmbeddedResource Remove="Updater\**\*" />
     <None Remove="Updater\**\*" />
@@ -69,6 +76,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Resources\SvcMonitor.zip" />
+    <EmbeddedResource Include="Resources\Bridge.zip" />
     <EmbeddedResource Include="Resources\Updater.zip" />
     <EmbeddedResource Include="Resources\CloudRedirectDll.zip" />
     <EmbeddedResource Include="Resources\Lang\*.json" />
@@ -105,6 +113,21 @@
                   DestinationFile="$(ProjectDir)Resources\SvcMonitor.zip"
                   Overwrite="true" />
     <RemoveDir Directories="$(ProjectDir)Resources\SvcMonitorPublish" />
+  </Target>
+
+  <!-- 商店页一键入库的桥接进程与浏览器扩展：同样随主程序一起打包内嵌，
+       用户开启功能时由主程序释放到 LocalAppData，避免额外分发文件 -->
+  <Target Name="BuildBridgeForEmbed" BeforeTargets="BeforeBuild">
+    <ItemGroup>
+      <BridgePublishFiles Include="$(ProjectDir)extension\**\*" />
+    </ItemGroup>
+    <Exec Command="dotnet publish $(ProjectDir)Bridge\Bridge.csproj -c $(Configuration) -r win-x64 --self-contained false -p:DebugType=none -o $(ProjectDir)Resources\BridgePublish" />
+    <Copy SourceFiles="@(BridgePublishFiles)"
+          DestinationFiles="@(BridgePublishFiles->'$(ProjectDir)Resources\BridgePublish\extension\%(RecursiveDir)%(Filename)%(Extension)')" />
+    <ZipDirectory SourceDirectory="$(ProjectDir)Resources\BridgePublish"
+                  DestinationFile="$(ProjectDir)Resources\Bridge.zip"
+                  Overwrite="true" />
+    <RemoveDir Directories="$(ProjectDir)Resources\BridgePublish" />
   </Target>
 
   <!-- 构建时拉取官方 Release 成品并验签：纯内联任务，不依赖外部脚本与 C++ 工具链 -->

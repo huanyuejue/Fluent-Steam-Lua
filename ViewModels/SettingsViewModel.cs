@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
@@ -9,6 +9,7 @@ using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using iNKORE.UI.WPF.Modern;
 using iNKORE.UI.WPF.Modern.Controls;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Win32;
 using SteamLuaManager.Models;
 using SteamLuaManager.Services;
@@ -24,6 +25,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     private readonly ISteamManifestRepoService _manifestRepoService;
     private readonly IDialogService _dialogService;
     private readonly IHttpClientProvider _httpClientProvider;
+    private readonly IBridgeServiceManager _bridgeServiceManager;
     private AppSettings _settings;
 
     [ObservableProperty]
@@ -37,6 +39,11 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private bool _minimizeToTray;
+
+    // 商店页一键入库：开启后由主程序负责部署并拉起桥接进程，
+    // 浏览器扩展才有接收方；关闭时立刻停掉进程释放端口
+    [ObservableProperty]
+    private bool _storePageImportEnabled;
 
     [ObservableProperty]
     private string _statusMessage = string.Empty;
@@ -205,7 +212,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     public SettingsViewModel(ISteamPathService steamPathService, ILuaFileManager luaFileManager,
         ISettingsService settingsService, ISteamApiService steamApiService,
         ISteamManifestRepoService manifestRepoService, IDialogService dialogService,
-        IHttpClientProvider httpClientProvider)
+        IHttpClientProvider httpClientProvider, IBridgeServiceManager bridgeServiceManager)
     {
         _steamPathService = steamPathService;
         _luaFileManager = luaFileManager;
@@ -214,6 +221,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         _manifestRepoService = manifestRepoService;
         _dialogService = dialogService;
         _httpClientProvider = httpClientProvider;
+        _bridgeServiceManager = bridgeServiceManager;
         _settings = settingsService.Load();
 
         SteamPath = _settings.SteamPath;
@@ -230,6 +238,11 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         IsShowCopyLogButton = _settings.ShowCopyLogButton;
         EnableLogging = _settings.EnableLogging;
         MinimizeToTray = _settings.MinimizeToTray;
+        // 构造期只是回填当前设置，不能触发启动桥接的副作用；
+        // 启动时的部署与版本核对统一由 App 负责，否则会抢在用户确认前就把旧版本覆盖掉
+        _suppressStoreImportSideEffects = true;
+        StorePageImportEnabled = _settings.StorePageImportEnabled;
+        _suppressStoreImportSideEffects = false;
 
         // 历史存档可能残留空值或旧码值（曾被下拉重建时的空回填污染），统一归一化到合法项
         SelectedTheme = ThemeOptions.Any(o => o.Value == _settings.SelectedTheme) ? _settings.SelectedTheme : "System";
@@ -425,6 +438,90 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         _settingsService.Save(_settings);
         StatusMessage = value ? L.Get("Settings_TrayOn") : L.Get("Settings_TrayOff");
         LogService.Info(L.Get("LogCat_Settings"), StatusMessage);
+    }
+
+    partial void OnStorePageImportEnabledChanged(bool value)
+    {
+        // 构造期回填不写盘也不启动服务，等用户真正操作开关时才走完整流程
+        if (_suppressStoreImportSideEffects) return;
+
+        _settings.StorePageImportEnabled = value;
+        _settingsService.Save(_settings);
+
+        if (value)
+        {
+            _ = StartBridgeAsync();
+        }
+        else
+        {
+            // 关闭时把自启动一并清掉，不给系统留下开机启动项
+            _bridgeServiceManager.DisableAutoStart();
+            _bridgeServiceManager.Stop();
+            StatusMessage = L.Get("Settings_StoreImportOff");
+            LogService.Info(L.Get("LogCat_Settings"), StatusMessage);
+        }
+    }
+
+    /// <summary>
+    /// 部署并拉起桥接进程。失败时把状态回滚成关闭，
+    /// 避免开关停在“已开启”却实际没有服务在跑。
+    /// </summary>
+    /// <summary>构造期回填设置时抑制副作用，避免属性赋值直接拉起部署。</summary>
+    private bool _suppressStoreImportSideEffects;
+
+    private async Task StartBridgeAsync()
+    {
+        try
+        {
+            var ok = await _bridgeServiceManager.EnsureStartedAsync();
+            if (ok)
+            {
+                // 服务起来后再登记自启动：部署失败时不会留下指向空路径的启动项
+                if (!_bridgeServiceManager.EnableAutoStart())
+                {
+                    LogService.Warn(L.Get("LogCat_Settings"), "开机自启动登记失败，功能本身仍可用");
+                }
+
+                StatusMessage = L.Get("Settings_StoreImportOn");
+                LogService.Info(L.Get("LogCat_Settings"), StatusMessage);
+            }
+            else
+            {
+                StorePageImportEnabled = false;
+                StatusMessage = L.Get("Settings_StoreImportFail");
+                LogService.Warn(L.Get("LogCat_Settings"), StatusMessage);
+            }
+        }
+        catch (Exception ex)
+        {
+            StorePageImportEnabled = false;
+            StatusMessage = L.Get("Settings_StoreImportFail");
+            LogService.Error(L.Get("LogCat_Settings"), ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// 打开扩展安装引导窗口。Steam 内嵌浏览器不允许用 URL 协议直达扩展页，
+    /// 只能在窗口里把每个动作拆开、提供一键复制，让用户少走弯路。
+    /// </summary>
+    [RelayCommand]
+    private void OpenBridgeGuide()
+    {
+        try
+        {
+            var window = new Views.BridgeGuideWindow(
+                _bridgeServiceManager,
+                App.ServiceProvider?.GetRequiredService<IExtensionStateService>()
+                    ?? new ExtensionStateService())
+            {
+                Owner = System.Windows.Application.Current?.MainWindow
+            };
+            window.ShowDialog();
+        }
+        catch (Exception ex)
+        {
+            LogService.Error(L.Get("LogCat_Settings"), ex.Message);
+        }
     }
 
     partial void OnSelectedBackdropChanged(string value)

@@ -1,0 +1,59 @@
+/* 一键入库按钮：沿用 Steam 的绿色购买按钮风格，但用渐变区分自身品牌 */
+.fluent-lua-btn {
+  display: block;
+  width: 100%;
+  margin: 0 0 10px 0;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(120deg, #22D3EE, #3B82F6 55%, #8B5CF6);
+  transition: filter .15s ease, opacity .15s ease;
+}
+
+.fluent-lua-btn:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.fluent-lua-btn:disabled {
+  cursor: default;
+}
+
+.fluent-lua-btn[data-state="working"] {
+  opacity: .75;
+}
+
+.fluent-lua-btn[data-state="done"] {
+  background: linear-gradient(120deg, #22C55E, #16A34A);
+}
+
+.fluent-lua-btn[data-state="error"] {
+  background: linear-gradient(120deg, #EF4444, #DC2626);
+}
+
+/* 桥接未启动时的提示条：跟随按钮宽度，视觉上与按钮同属一组 */
+.fluent-lua-hint {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 10px 0;
+  padding: 12px 16px;
+  border-radius: 4px;
+  border-left: 3px solid #EF4444;
+  background: rgba(239, 68, 68, 0.12);
+  font-size: 13px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.fluent-lua-hint strong {
+  color: #FF8A8A;
+  font-weight: 600;
+}
+
+.fluent-lua-hint span {
+  color: #D8DEE9;
+}

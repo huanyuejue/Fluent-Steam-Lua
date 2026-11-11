@@ -42,7 +42,13 @@ public class SteamDepotService : ISteamDepotService
         _appInfoService = appInfoService;
         _settingsService = settingsService;
 
-        _cacheFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "cache");
+        // 缓存目录可由外层指定：桥接进程与主程序共用同一份密钥库，
+        // 否则两边各存一份 depotkeys.json，白占几十兆还要各自联网更新
+        var cacheOverride = Environment.GetEnvironmentVariable("FLUENT_CACHE_DIR");
+        _cacheFolder = !string.IsNullOrWhiteSpace(cacheOverride)
+            ? cacheOverride
+            : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "cache");
+
         if (!Directory.Exists(_cacheFolder))
             Directory.CreateDirectory(_cacheFolder);
     }
@@ -419,6 +425,32 @@ public class SteamDepotService : ISteamDepotService
         return 0;
     }
 
+    /// <summary>
+    /// 判断本地 token 表里是否收录了该 app。
+    /// 仓储查询返回空时用它区分原因：有 token 说明要连 Steam 服务器查，
+    /// 没 token 说明这张表本身就不认识这个 app。
+    /// </summary>
+    public Task<bool> HasAppTokenAsync(int appId, CancellationToken ct = default)
+        => Task.FromResult(HasLocalAppToken(appId));
+
+    /// <summary>同步版本，仅供内部判断使用；文件不存在或解析失败一律当作没有。</summary>
+    private bool HasLocalAppToken(int appId)
+    {
+        try
+        {
+            var tokenPath = GetTokenKeysPath();
+            if (!File.Exists(tokenPath)) return false;
+            using var fs = File.OpenRead(tokenPath);
+            using var doc = JsonDocument.Parse(fs);
+            return doc.RootElement.TryGetProperty(appId.ToString(), out _);
+        }
+        catch (Exception ex)
+        {
+            LogService.Warn(L.Get("LogCat_Home"), L.Get("Depot_ReadTokenFailed", ex.Message));
+            return false;
+        }
+    }
+
     public Task<string?> GenerateLuaAsync(
         int appId, CancellationToken ct = default, bool pinManifest = false, bool fetchNames = false)
         => BuildLuaCoreAsync(appId, withDlc: false, pinManifest, ct, fetchNames: fetchNames);
@@ -753,6 +785,31 @@ public class SteamDepotService : ISteamDepotService
         _cachedDepotKeys = null;
         _cachedAppTokens = null;
         _cachedSource = null;
+    }
+
+    /// <summary>
+    /// 主动放掉常驻密钥字典。这些字典按文件时间戳校验，
+    /// 释放后下次用到会重新读取，语义与文件变更失效一致。
+    /// </summary>
+    public void ReleaseKeyCache()
+    {
+        try
+        {
+            _cacheLock.Wait();
+        }
+        catch
+        {
+            return;
+        }
+
+        try
+        {
+            InvalidateKeyCache();
+        }
+        finally
+        {
+            _cacheLock.Release();
+        }
     }
 
     public async Task<DlcFetchResult> FetchDlcAsync(string luaPath, int dlcAppId, bool hasOwnDepot, CancellationToken ct = default, string? dlcName = null)

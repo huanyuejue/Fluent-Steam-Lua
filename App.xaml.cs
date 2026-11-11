@@ -160,6 +160,7 @@ public partial class App : Application
         LogService.Info(L.Get("LogCat_System"), L.Get("App_SteamPathLog", steamPathService.DetectSteamPath() ?? L.Get("App_PathNotFound")));
         RegisterGlobalLogging();
         LogStartupEnvironment();
+
         var mainWindow = ServiceProvider.GetRequiredService<MainWindow>();
 
         switch (settings.SelectedTheme)
@@ -213,6 +214,12 @@ public partial class App : Application
 
         if (settings.AutoCheckKernelUpdateEnabled)
             _ = CheckKernelUpdateOnStartupAsync();
+
+        // 商店页入库已启用时，启动顺手拉起桥接并核对组件版本。
+        // 放在主窗口 Show 之后：更新确认要弹 ContentDialog，
+        // 它依赖 UI 线程上已就绪的窗口，早了会静默失败
+        if (settings.StorePageImportEnabled)
+            _ = StartBridgeOnStartupAsync(mainWindow);
 
         _ = Task.Run(async () =>
         {
@@ -335,6 +342,152 @@ public partial class App : Application
                 break;
         }
         return null;
+    }
+
+    /// <summary>
+    /// 组件版本落后时的更新确认。
+    /// 扩展被 Steam 内嵌浏览器加载后会常驻，替换文件必须重启 Steam 才生效，
+    /// 所以只有扩展需要更新时单独提示这一点；单纯桥接更新重启进程即可。
+    /// </summary>
+    /// <summary>
+    /// 启动时拉起桥接进程，并在组件版本落后时先征求用户意见。
+    /// 版本确认必须回到 UI 线程：ContentDialog 依附窗口的视觉树，
+    /// 后台线程直接调用会拿不到宿主而静默失败。
+    /// </summary>
+    private static async Task StartBridgeOnStartupAsync(Window owner)
+    {
+        try
+        {
+            // 等主窗口首帧落定，避免对话框抢在窗口之前创建
+            await Task.Delay(1500);
+
+            var bridge = ServiceProvider!.GetRequiredService<IBridgeServiceManager>();
+
+            if (bridge.NeedsUpdate || bridge.NeedsExtensionUpdate)
+            {
+                var extNeedsUpdate = bridge.NeedsExtensionUpdate;
+                // InvokeAsync 的结果是 Task<Task<bool>>：外层等派发完成，
+                // 内层等对话框关闭，两次 await 才拿到用户的选择
+                var accepted = await await owner.Dispatcher.InvokeAsync(
+                    () => ShowComponentUpdatePromptAsync(owner, bridge, extNeedsUpdate));
+
+                if (!accepted)
+                {
+                    LogService.Info(L.Get("LogCat_System"), "用户暂缓更新商店页入库组件");
+                    return;
+                }
+
+                var started = await bridge.EnsureStartedAsync().ConfigureAwait(false);
+
+                // 更新完给出明确反馈：扩展换了文件必须重启 Steam 才生效，
+                // 只换桥接则进程重启就已经是新版本，不需要额外动作
+                var newBridgeVersion = bridge.GetDeployedVersion();
+                var newExtVersion = bridge.GetDeployedExtensionVersion();
+                await owner.Dispatcher.InvokeAsync(() =>
+                    ShowComponentUpdatedNoticeAsync(owner, started, extNeedsUpdate, newBridgeVersion, newExtVersion));
+                return;
+            }
+
+            if (!await bridge.EnsureStartedAsync().ConfigureAwait(false))
+            {
+                LogService.Warn(L.Get("LogCat_System"), "桥接服务随主程序启动失败");
+            }
+        }
+        catch (Exception ex)
+        {
+            LogService.Warn(L.Get("LogCat_System"), $"拉起桥接服务异常: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 组件更新完成后的结果提示。
+    /// 扩展被 Steam 内嵌浏览器常驻加载，文件换了必须重启 Steam 才会用新版本，
+    /// 这一步只提示、不代替用户操作；桥接更新已随进程重启生效。
+    /// </summary>
+    private static async Task ShowComponentUpdatedNoticeAsync(
+        Window owner, bool started, bool extensionUpdated, string? bridgeVersion, string? extVersion)
+    {
+        try
+        {
+            var lines = new List<string>();
+
+            if (started)
+            {
+                lines.Add(L.Get("Bridge_UpdatedDone"));
+                if (!string.IsNullOrEmpty(bridgeVersion))
+                    lines.Add(L.Get("Bridge_UpdatedBridgeVersion", bridgeVersion));
+                if (extensionUpdated && !string.IsNullOrEmpty(extVersion))
+                    lines.Add(L.Get("Bridge_UpdatedExtVersion", extVersion));
+            }
+            else
+            {
+                // 部署成功但进程没起来：功能处于不可用状态，说清楚让用户知道该重启
+                lines.Add(L.Get("Bridge_UpdatedButNotStarted"));
+            }
+
+            if (extensionUpdated)
+            {
+                lines.Add(string.Empty);
+                lines.Add(L.Get("Bridge_UpdatedRestartSteam"));
+            }
+
+            await new ContentDialog
+            {
+                Title = L.Get("Bridge_UpdatedTitle"),
+                Content = new TextBlock
+                {
+                    Text = string.Join(Environment.NewLine, lines),
+                    TextWrapping = TextWrapping.Wrap,
+                    MaxWidth = 460,
+                    LineHeight = 20
+                },
+                CloseButtonText = L.Get("App_Close"),
+                DefaultButton = ContentDialogButton.Close
+            }.ShowAsync();
+        }
+        catch (Exception ex)
+        {
+            LogService.Warn(L.Get("LogCat_System"), $"显示组件更新结果失败: {ex.Message}");
+        }
+    }
+
+    /// <summary>组件版本落后时的确认对话框，只在 UI 线程调用。</summary>
+    private static async Task<bool> ShowComponentUpdatePromptAsync(
+        Window owner, IBridgeServiceManager bridge, bool extensionNeedsUpdate)
+    {
+        var lines = new List<string> { L.Get("Bridge_UpdatePromptIntro") };
+
+        if (bridge.NeedsUpdate)
+        {
+            lines.Add(L.Get("Bridge_UpdatePromptBridge",
+                bridge.GetDeployedVersion() ?? "-", bridge.GetBundledVersion() ?? "-"));
+        }
+
+        if (extensionNeedsUpdate)
+        {
+            lines.Add(L.Get("Bridge_UpdatePromptExtension",
+                bridge.GetDeployedExtensionVersion() ?? "-", bridge.GetBundledExtensionVersion() ?? "-"));
+            lines.Add(L.Get("Bridge_UpdatePromptRestartSteam"));
+        }
+
+        lines.Add(L.Get("Bridge_UpdatePromptConfirm"));
+
+        var result = await new ContentDialog
+        {
+            Title = L.Get("Bridge_UpdatePromptTitle"),
+            Content = new TextBlock
+            {
+                Text = string.Join(Environment.NewLine, lines),
+                TextWrapping = TextWrapping.Wrap,
+                MaxWidth = 460,
+                LineHeight = 20
+            },
+            PrimaryButtonText = L.Get("Bridge_UpdatePromptAccept"),
+            CloseButtonText = L.Get("Bridge_UpdatePromptLater"),
+            DefaultButton = ContentDialogButton.Primary
+        }.ShowAsync();
+
+        return result == ContentDialogResult.Primary;
     }
 
     private static async Task CheckUpdateOnStartupAsync(Window owner)
@@ -592,6 +745,8 @@ public partial class App : Application
         services.AddSingleton<ISteamApiService, SteamApiService>();
         services.AddSingleton<ISteamManifestService, SteamManifestService>();
         services.AddSingleton<ISettingsService, SettingsService>();
+        services.AddSingleton<IBridgeServiceManager, BridgeServiceManager>();
+        services.AddSingleton<IExtensionStateService, ExtensionStateService>();
         services.AddSingleton<IHttpClientProvider, HttpClientProvider>();
         services.AddSingleton<ISteamDepotService, SteamDepotService>();
         services.AddSingleton<ISteamManifestRepoService, SteamManifestRepoService>();

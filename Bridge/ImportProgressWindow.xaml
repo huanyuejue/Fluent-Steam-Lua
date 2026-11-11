@@ -1,0 +1,193 @@
+<Window x:Class="FluentLuaBridge.ImportProgressWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="入库"
+        Width="460" SizeToContent="Height"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        ResizeMode="NoResize" ShowInTaskbar="True" Topmost="True"
+        WindowStartupLocation="CenterScreen"
+        FontFamily="Microsoft YaHei UI, Segoe UI"
+        UseLayoutRounding="True"
+        TextOptions.TextFormattingMode="Display"
+        SnapsToDevicePixels="True">
+
+    <Window.Resources>
+        <SolidColorBrush x:Key="Surface" Color="#1C1F26" />
+        <SolidColorBrush x:Key="Divider" Color="#2C313A" />
+        <SolidColorBrush x:Key="TextPrimary" Color="#F2F4F7" />
+        <SolidColorBrush x:Key="TextSecondary" Color="#9AA3B0" />
+        <SolidColorBrush x:Key="TextTertiary" Color="#646C79" />
+        <SolidColorBrush x:Key="AccentBrush" Color="#22D3EE" />
+        <SolidColorBrush x:Key="OkBrush" Color="#3DDC84" />
+        <SolidColorBrush x:Key="BadBrush" Color="#FF6B6B" />
+
+        <!-- 右下角按钮：圆角、柔和悬停，与卡片弧度一致 -->
+        <Style x:Key="PillButton" TargetType="Button">
+            <Setter Property="Height" Value="30" />
+            <Setter Property="Padding" Value="18,0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FontSize" Value="12.5" />
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" CornerRadius="15"
+                                Background="#2E343D"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#3A424D" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#262B33" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.35" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="StepTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding State}" Value="Pending">
+                    <Setter Property="Foreground" Value="{StaticResource TextTertiary}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding State}" Value="Skipped">
+                    <Setter Property="Foreground" Value="{StaticResource TextTertiary}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding State}" Value="Failed">
+                    <Setter Property="Foreground" Value="{StaticResource BadBrush}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <!-- 阴影外扩需要留白：窗口的渲染面只覆盖自身矩形，
+         卡片贴边时模糊区域会被切出四角残影，因此外面套一层留白容器。
+         留白同时给双层阴影腾出空间：下层大范围柔和、上层贴边收紧 -->
+    <Grid Margin="20">
+        <!-- 外层：大范围弥散阴影，负责把卡片从背景里"托"起来 -->
+        <Border Background="#000000" CornerRadius="15" Opacity="0.55">
+            <Border.Effect>
+                <BlurEffect Radius="22" RenderingBias="Quality" />
+            </Border.Effect>
+            <Border Margin="4,5,4,4" />
+        </Border>
+
+        <!-- 内层：真实卡片，叠一层贴边阴影强化轮廓 -->
+        <Border Background="{StaticResource Surface}" CornerRadius="14"
+                BorderBrush="#2E343D" BorderThickness="1">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="10" ShadowDepth="1" Opacity="0.5"
+                                  Color="#000000" RenderingBias="Quality" />
+            </Border.Effect>
+
+        <Grid Margin="22,18,22,18">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />   <!-- 游戏名 / AppID -->
+                <RowDefinition Height="Auto" />   <!-- 行为链 -->
+                <RowDefinition Height="Auto" />   <!-- 状态说明 -->
+                <RowDefinition Height="Auto" />   <!-- 关闭按钮 -->
+            </Grid.RowDefinitions>
+
+            <!-- 顶部只放游戏身份信息，状态与操作都收在底部 -->
+            <StackPanel Grid.Row="0">
+                <TextBlock x:Name="GameNameText" Text="读取中…"
+                           FontSize="21" FontWeight="SemiBold"
+                           Foreground="{StaticResource TextPrimary}"
+                           TextTrimming="CharacterEllipsis" />
+                <TextBlock x:Name="AppIdText" Text=""
+                           FontSize="11" Foreground="{StaticResource TextTertiary}"
+                           Margin="0,3,0,0" />
+            </StackPanel>
+
+            <!-- 行为链：不画分割线，靠留白区分 -->
+            <ScrollViewer Grid.Row="1" MaxHeight="300" Margin="0,18,0,0"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <ItemsControl x:Name="StepsList">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="0,0,0,10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="14" />
+                                    <ColumnDefinition Width="14" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <Grid Grid.Column="0" Width="14" Height="14" VerticalAlignment="Top" Margin="0,2,0,0">
+                                    <Ellipse x:Name="Ring" Stroke="#333A44" StrokeThickness="1.4" Fill="Transparent" />
+                                    <Ellipse x:Name="Dot" Width="6" Height="6" Fill="Transparent" />
+                                </Grid>
+
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="{Binding Title}" Style="{StaticResource StepTitle}" />
+                                    <TextBlock Text="{Binding Detail}" FontSize="11"
+                                               Foreground="{StaticResource TextTertiary}"
+                                               Margin="0,1,0,0" TextWrapping="Wrap">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Detail}" Value="">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </StackPanel>
+                            </Grid>
+
+                            <DataTemplate.Triggers>
+                                <DataTrigger Binding="{Binding State}" Value="Running">
+                                    <Setter TargetName="Ring" Property="Stroke" Value="{StaticResource AccentBrush}" />
+                                    <Setter TargetName="Dot" Property="Fill" Value="{StaticResource AccentBrush}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding State}" Value="Done">
+                                    <Setter TargetName="Ring" Property="Stroke" Value="{StaticResource OkBrush}" />
+                                    <Setter TargetName="Dot" Property="Fill" Value="{StaticResource OkBrush}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding State}" Value="Failed">
+                                    <Setter TargetName="Ring" Property="Stroke" Value="{StaticResource BadBrush}" />
+                                    <Setter TargetName="Dot" Property="Fill" Value="{StaticResource BadBrush}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding State}" Value="Skipped">
+                                    <Setter TargetName="Ring" Property="Stroke" Value="#444C57" />
+                                </DataTrigger>
+                            </DataTemplate.Triggers>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <!-- 状态行：结果只在这里出现，顶部不显示。
+                 失败原因可能较长，这里允许换行而不是截断，圆点固定在首行对齐 -->
+            <Grid Grid.Row="2" Margin="0,16,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Ellipse x:Name="StatusDot" Grid.Column="0" Width="7" Height="7"
+                         Fill="{StaticResource AccentBrush}"
+                         VerticalAlignment="Top" Margin="0,6,0,0" />
+                <TextBlock x:Name="TitleText" Grid.Column="1" Text="正在入库" Margin="8,0,0,0"
+                           FontSize="12.5" Foreground="{StaticResource TextSecondary}"
+                           TextWrapping="Wrap" LineHeight="18" />
+            </Grid>
+
+            <!-- 关闭入口只在右下角，完成后才可用 -->
+            <Button x:Name="CloseButton" Grid.Row="3" Content="关闭"
+                    Style="{StaticResource PillButton}"
+                    HorizontalAlignment="Right" Margin="0,14,0,0"
+                    IsEnabled="False" Click="OnCloseClick" />
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

@@ -45,6 +45,9 @@ public bool ShowTrainerSections { get; set; } = true;
     public string CrackWebApiKey { get; set; } = string.Empty;
     // 入库页热门榜单开关（显示设置）：默认开，老配置缺键时反序列化保留 true
     public bool ShowRanking { get; set; } = true;
+    // 商店页一键入库：开启后由主程序拉起常驻桥接进程，浏览器扩展才能把请求送进来
+    /// <summary>商店页一键入库默认关闭：涉及部署常驻进程与浏览器扩展，需用户主动开启。</summary>
+    public bool StorePageImportEnabled { get; set; }
 }
 
 public interface ISettingsService
