@@ -16,32 +16,10 @@ public sealed class SteamCredentialStore
 
     public static string GetAppsKey(uint appId) => $@"{SteamKeyRoot}\{appId}";
 
-    /// <summary>读取注册表中已保存的 SteamID（可能存在也可能不存在）。</summary>
-    public static (bool Exists, ulong Value) GetStoredSteamId(uint appId)
-    {
-        if (!IsSupported) return (false, 0);
-        try
-        {
-            using var key = OpenAppsKey(appId, writable: false);
-            if (key?.GetValueKind("SteamID") is not RegistryValueKind kind ||
-                kind != RegistryValueKind.String)
-                return (false, 0);
-
-            if (key.GetValue("SteamID") is string raw &&
-                ulong.TryParse(raw, out var steamId) &&
-                steamId != 0)
-                return (true, steamId);
-
-            return (false, 0);
-        }
-        catch
-        {
-            return (false, 0);
-        }
-    }
-
     /// <summary>
     /// 写入 AppTicket / ETicket，并用本次导入的新值无条件覆盖旧值。
+    /// 注册表里原有的 SteamID 一并清除，让票据内嵌值成为唯一授权来源：
+    /// 内核启动时拿注册表 SteamID 校验票据，两者不同会以 88500012 拒绝启动。
     /// 支持补偿式回滚：写入过程中任一值失败或回读不一致时，恢复原值（原值不存在则删除）。
     /// </summary>
     public static (bool Ok, string? Error, string? Warning) WriteTickets(
@@ -50,10 +28,9 @@ public sealed class SteamCredentialStore
         if (!IsSupported)
             return (false, L.Get("Svc_CredNeed64"), null);
 
-        // SteamID 一致性仅检查提示，不自动修改注册表 SteamID（与 Lua setAppTicket 行为一致）
-        var warning = CheckSteamIdConsistency(appId, ticketSteamId);
-
         var existing = ReadExisting(appId);
+        var warning = DescribeSteamIdClear(existing.SteamId, ticketSteamId);
+
         try
         {
             using var key = OpenAppsKey(appId, writable: true);
@@ -62,6 +39,14 @@ public sealed class SteamCredentialStore
 
             key.SetValue("AppTicket", appTicket, RegistryValueKind.Binary);
             key.SetValue("ETicket", eticket, RegistryValueKind.Binary);
+
+            // 有旧值就删，不管是否与票据一致：留着它迟早和票据打架，
+            // 而且换票后容易忘记同步这一处
+            if (existing.SteamId.Exists)
+            {
+                DeleteValue(key, "SteamID");
+                Log("reg", L.Get("Svc_CredSteamIdCleared", appId));
+            }
 
             var verificationError = VerifyWrite(key, appTicket, eticket);
             if (verificationError == null)
@@ -87,13 +72,21 @@ public sealed class SteamCredentialStore
         }
     }
 
-    private static string? CheckSteamIdConsistency(uint appId, ulong ticketSteamId)
+    /// <summary>
+    /// 根据已读到的 SteamID 快照给出提示。存在就清，一致时也清，
+    /// 只是说法不同：用户需要知道注册表被动过。
+    /// </summary>
+    private static string? DescribeSteamIdClear(ExistingValue storedSteamId, ulong ticketSteamId)
     {
-        if (ticketSteamId == 0) return null;
-        var (exists, stored) = GetStoredSteamId(appId);
-        if (!exists || stored == ticketSteamId) return null;
+        if (!storedSteamId.Exists) return null;
 
-        return L.Get("Svc_CredSteamIdMismatch");
+        // 票据没解析出 SteamID 时照样清：留着旧值必然和票据打架
+        var same = ticketSteamId != 0
+                   && storedSteamId.Data is string raw
+                   && ulong.TryParse(raw, out var stored)
+                   && stored == ticketSteamId;
+
+        return L.Get(same ? "Svc_CredSteamIdSame" : "Svc_CredSteamIdMismatch");
     }
 
     private static RegistryKey? OpenAppsKey(uint appId, bool writable)
@@ -111,13 +104,13 @@ public sealed class SteamCredentialStore
         }
     }
 
-    /// <summary>AppTicket/ETicket 原值快照（用于回滚）。</summary>
-    private sealed record ExistingValue(bool Exists, RegistryValueKind Kind, byte[]? Data);
+    /// <summary>注册表原值快照（用于回滚）。Data 容纳二进制与字符串两种形态。</summary>
+    private sealed record ExistingValue(bool Exists, RegistryValueKind Kind, object? Data);
 
-    private static (ExistingValue AppTicket, ExistingValue ETicket) ReadExisting(uint appId)
+    private static (ExistingValue AppTicket, ExistingValue ETicket, ExistingValue SteamId) ReadExisting(uint appId)
     {
         using var key = OpenAppsKey(appId, writable: false);
-        return (ReadValue(key, "AppTicket"), ReadValue(key, "ETicket"));
+        return (ReadValue(key, "AppTicket"), ReadValue(key, "ETicket"), ReadValue(key, "SteamID"));
     }
 
     private static ExistingValue ReadValue(RegistryKey? key, string name)
@@ -129,10 +122,8 @@ public sealed class SteamCredentialStore
             if (kind == RegistryValueKind.None)
                 return new ExistingValue(false, RegistryValueKind.Unknown, null);
 
-            if (key.GetValue(name) is byte[] data)
-                return new ExistingValue(true, kind, data);
-
-            return new ExistingValue(true, kind, null);
+            // SteamID 是 REG_SZ，票据是 REG_BINARY，原值快照要能容纳两种
+            return new ExistingValue(true, kind, key.GetValue(name));
         }
         catch
         {
@@ -155,7 +146,8 @@ public sealed class SteamCredentialStore
         return null;
     }
 
-    private static string? Rollback(uint appId, (ExistingValue AppTicket, ExistingValue ETicket) existing)
+    private static string? Rollback(uint appId,
+        (ExistingValue AppTicket, ExistingValue ETicket, ExistingValue SteamId) existing)
     {
         try
         {
@@ -164,6 +156,7 @@ public sealed class SteamCredentialStore
 
             RestoreOrDelete(key, "AppTicket", existing.AppTicket);
             RestoreOrDelete(key, "ETicket", existing.ETicket);
+            RestoreOrDelete(key, "SteamID", existing.SteamId);
             return null;
         }
         catch (Exception ex)
@@ -181,8 +174,14 @@ public sealed class SteamCredentialStore
         }
         else
         {
-            try { key.DeleteValue(name, throwOnMissingValue: false); } catch { }
+            DeleteValue(key, name);
         }
+    }
+
+    /// <summary>删除指定值；原本就不存在时视为成功。</summary>
+    private static void DeleteValue(RegistryKey key, string name)
+    {
+        try { key.DeleteValue(name, throwOnMissingValue: false); } catch { }
     }
 
     private static void Log(string category, string message)

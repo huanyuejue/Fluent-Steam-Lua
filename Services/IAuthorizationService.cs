@@ -56,7 +56,8 @@ public interface IAuthorizationService
     string? RemoveLegacyTicketLines(string luaFilePath, uint appId);
 
     /// <summary>将票据写入注册表（AppTicket/ETicket REG_BINARY，新值覆盖旧值，含回读校验与失败回滚）。
-    /// SteamID 匹配冲突仅在返回值 Warning 中提示，不自动修改注册表 SteamID。</summary>
+    /// 注册表已有 SteamID 时会清除该项，让票据内嵌的 SteamID 成为唯一授权来源：
+    /// 两者不一致时内核会以 88500012 拒绝启动。</summary>
     TicketImportResult ImportTicket(TicketData ticket);
 
     /// <summary>通过 worker 子进程提取 AppTicket / ETicket，并落盘到 cache\denuvo\{appid}\tickets.txt。</summary>
