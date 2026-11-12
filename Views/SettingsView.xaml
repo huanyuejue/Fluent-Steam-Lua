@@ -142,6 +142,13 @@ Style="{StaticResource SettingsCardStyle}">
                                              OnContent="{l:Loc Common_On}" OffContent="{l:Loc Common_Off}"/>
                         </ui:SettingsCard>
 
+                        <ui:SettingsCard Header="{l:Loc Settings_DisableSteamUpdate}" Margin="0,0,0,8"
+                                         Description="{l:Loc Settings_DisableSteamUpdateDesc}"
+Style="{StaticResource SettingsCardStyle}">
+                            <ui:ToggleSwitch IsOn="{Binding DisableSteamAutoUpdate}"
+                                             OnContent="{l:Loc Common_On}" OffContent="{l:Loc Common_Off}"/>
+                        </ui:SettingsCard>
+
                         <ui:SettingsCard Header="{l:Loc Settings_MinTray}" Margin="0,0,0,8"
                                          Description="{l:Loc Settings_MinTrayDesc}"
 Style="{StaticResource SettingsCardStyle}">

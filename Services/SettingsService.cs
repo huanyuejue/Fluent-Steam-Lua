@@ -23,6 +23,9 @@ public class AppSettings
     public bool IsCardRefreshVisible { get; set; } = true;
     public string SelectedTheme { get; set; } = "System";
     public bool AutoCheckUpdateEnabled { get; set; } = true;
+
+    /// <summary>禁用 Steam 客户端自动更新。默认关闭：会改动 Steam 根目录的文件。</summary>
+    public bool DisableSteamAutoUpdate { get; set; }
     public bool AutoCheckKernelUpdateEnabled { get; set; } = true;
 public bool ShowTrainerSections { get; set; } = true;
     public bool ShowCopyLogButton { get; set; }

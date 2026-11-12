@@ -747,6 +747,7 @@ public partial class App : Application
         services.AddSingleton<ISettingsService, SettingsService>();
         services.AddSingleton<IBridgeServiceManager, BridgeServiceManager>();
         services.AddSingleton<IExtensionStateService, ExtensionStateService>();
+        services.AddSingleton<ISteamUpdateBlocker, SteamUpdateBlocker>();
         services.AddSingleton<IHttpClientProvider, HttpClientProvider>();
         services.AddSingleton<ISteamDepotService, SteamDepotService>();
         services.AddSingleton<ISteamManifestRepoService, SteamManifestRepoService>();

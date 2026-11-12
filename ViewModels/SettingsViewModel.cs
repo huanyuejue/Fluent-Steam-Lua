@@ -26,6 +26,10 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     private readonly IDialogService _dialogService;
     private readonly IHttpClientProvider _httpClientProvider;
     private readonly IBridgeServiceManager _bridgeServiceManager;
+    private readonly ISteamUpdateBlocker _steamUpdateBlocker;
+
+    /// <summary>构造期回填设置时抑制副作用，避免属性赋值直接去写 Steam 目录。</summary>
+    private bool _suppressSteamUpdateSideEffects;
     private AppSettings _settings;
 
     [ObservableProperty]
@@ -212,7 +216,8 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
     public SettingsViewModel(ISteamPathService steamPathService, ILuaFileManager luaFileManager,
         ISettingsService settingsService, ISteamApiService steamApiService,
         ISteamManifestRepoService manifestRepoService, IDialogService dialogService,
-        IHttpClientProvider httpClientProvider, IBridgeServiceManager bridgeServiceManager)
+        IHttpClientProvider httpClientProvider, IBridgeServiceManager bridgeServiceManager,
+        ISteamUpdateBlocker steamUpdateBlocker)
     {
         _steamPathService = steamPathService;
         _luaFileManager = luaFileManager;
@@ -222,6 +227,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         _dialogService = dialogService;
         _httpClientProvider = httpClientProvider;
         _bridgeServiceManager = bridgeServiceManager;
+        _steamUpdateBlocker = steamUpdateBlocker;
         _settings = settingsService.Load();
 
         SteamPath = _settings.SteamPath;
@@ -231,6 +237,11 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         ManifestMirror = GitHubMirror.NormalizePreferredHost(_settings.ManifestMirror);
         AutoFetchCovers = _settings.AutoFetchCovers;
         AutoCheckUpdateEnabled = _settings.AutoCheckUpdateEnabled;
+        // 开关状态以 Steam 目录里的实际文件为准：json 只是记录，
+        // 文件可能被用户手动删掉或 Steam 改回可写，两者不一致时应相信文件
+        _suppressSteamUpdateSideEffects = true;
+        DisableSteamAutoUpdate = _steamUpdateBlocker.IsEnabled;
+        _suppressSteamUpdateSideEffects = false;
         AutoCheckKernelUpdateEnabled = _settings.AutoCheckKernelUpdateEnabled;
         AutoRefreshKeyCache = _settings.AutoRefreshKeyCache;
         IsShowTrainerSections = _settings.ShowTrainerSections;
@@ -413,6 +424,33 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
         _settings.AutoCheckUpdateEnabled = value;
         _settingsService.Save(_settings);
         StatusMessage = value ? L.Get("Settings_UpdateCheckOn") : L.Get("Settings_UpdateCheckOff");
+        LogService.Info(L.Get("LogCat_Settings"), StatusMessage);
+    }
+
+    partial void OnDisableSteamAutoUpdateChanged(bool value)
+    {
+        // 构造期只回填开关状态，不碰 Steam 目录
+        if (_suppressSteamUpdateSideEffects) return;
+
+        // 先动文件，成功了再落盘设置：反过来会在失败时留下与实际不符的记录
+        var ok = value ? _steamUpdateBlocker.Enable() : _steamUpdateBlocker.Disable();
+        if (!ok)
+        {
+            // 写失败就把开关弹回去，避免界面显示已开启但实际没生效
+            _suppressSteamUpdateSideEffects = true;
+            DisableSteamAutoUpdate = !value;
+            _suppressSteamUpdateSideEffects = false;
+
+            // 用具体原因代替笼统的失败提示，用户才知道该关 Steam 还是提权
+            StatusMessage = _steamUpdateBlocker.FailReason ?? L.Get("Settings_DisableSteamUpdateFail");
+            LogService.Warn(L.Get("LogCat_Settings"), StatusMessage);
+            return;
+        }
+
+        _settings.DisableSteamAutoUpdate = value;
+        _settingsService.Save(_settings);
+
+        StatusMessage = value ? L.Get("Settings_DisableSteamUpdateOn") : L.Get("Settings_DisableSteamUpdateOff");
         LogService.Info(L.Get("LogCat_Settings"), StatusMessage);
     }
 
@@ -961,6 +999,9 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private bool _autoCheckUpdateEnabled = true;
+
+    [ObservableProperty]
+    private bool _disableSteamAutoUpdate;
 
     [ObservableProperty]
     private bool _autoCheckKernelUpdateEnabled = true;
