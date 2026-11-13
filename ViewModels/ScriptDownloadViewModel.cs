@@ -104,6 +104,7 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
     private bool _isRankingLoading;
 
     private CancellationTokenSource? _rankingCts;
+    private CancellationTokenSource? _rankingNamesCts;
 
     // 榜单与日志区互斥：开着开关、日志为空、任一榜单有数据时才展示榜单区
     public bool IsRankingVisible => ShowRanking && LogLines.Count == 0 &&
@@ -158,19 +159,24 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(IsRankingVisible));
         if (ShowRanking && (PopularRanking.Count == 0 || RecommendRanking.Count == 0) && !IsRankingLoading)
             _ = LoadRankingAsync();
+        else if (ShowRanking && !IsRankingLoading && _rankingNamesCts == null)
+            _ = RefreshRankingNamesAsync();
     }
 
     private async Task LoadRankingAsync()
     {
+        if (_disposed) return;
         try { _rankingCts?.Cancel(); } catch { }
         try { _rankingCts?.Dispose(); } catch { }
         var cts = new CancellationTokenSource();
+        var ct = cts.Token;
         _rankingCts = cts;
         IsRankingLoading = true;
         try
         {
             // 热门池按页拉满后切分：头部直出热门榜单，剩余洗牌抽取为你推荐，两排不重样
-            var pool = await XiaoHeiHeService.GetPopularPoolAsync(120, cts.Token);
+            var pool = await XiaoHeiHeService.GetPopularPoolAsync(120, ct);
+            ct.ThrowIfCancellationRequested();
             PopularRanking.Clear();
             foreach (var g in pool.Take(10))
                 PopularRanking.Add(g);
@@ -184,6 +190,7 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
             RecommendRanking.Clear();
             foreach (var g in rest.Take(10))
                 RecommendRanking.Add(g);
+            _ = RefreshRankingNamesAsync();
             // 只进 app.log 不进 LogLines：写 UI 日志会触发榜单隐藏规则
             LogService.Info(L.Get("LogCat_Home"), L.Get("Ruku_RankLoadedLog", PopularRanking.Count, RecommendRanking.Count));
             if (PopularRanking.Count == 0 && RecommendRanking.Count == 0)
@@ -228,12 +235,77 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
 
     private void OnLanguageChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
+        if (e.PropertyName != nameof(LocalizationService.CurrentLanguage)) return;
         OnPropertyChanged(nameof(CurrentDataSourceLabel));
         OnPropertyChanged(nameof(LastUpdateTimeText));
         RefreshRankingTexts();
+        _ = RefreshRankingNamesAsync();
     }
 
-    // 榜单项是不可变 record，原位重赋触发集合 Replace 通知让关注数文案重新取值
+    private async Task RefreshRankingNamesAsync()
+    {
+        try { _rankingNamesCts?.Cancel(); } catch { }
+        if (_disposed || LocalizationService.Instance.CurrentLanguage == "zh") return;
+
+        // Resolve only the displayed cards, retaining successful names across
+        // language switches without fetching or reshuffling the ranking again.
+        var games = PopularRanking.Concat(RecommendRanking)
+            .Where(g => string.IsNullOrWhiteSpace(g.EnglishName)).ToList();
+        if (games.Count == 0) return;
+
+        var cts = new CancellationTokenSource();
+        var ct = cts.Token;
+        _rankingNamesCts = cts;
+        using var gate = new SemaphoreSlim(4);
+        try
+        {
+            await Task.WhenAll(games.Select(async game =>
+            {
+                await gate.WaitAsync(ct);
+                try
+                {
+                    using var lookupCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    lookupCts.CancelAfter(TimeSpan.FromSeconds(15));
+                    var (name, _, _) = await GetAppNameAsync(game.AppId, lookupCts.Token, "en");
+                    if (string.IsNullOrWhiteSpace(name))
+                        name = await _steamApiService.GetFallbackGameNameAsync(game.AppId, lookupCts.Token);
+                    lookupCts.Token.ThrowIfCancellationRequested();
+                    ct.ThrowIfCancellationRequested();
+                    if (!string.IsNullOrWhiteSpace(name) && ReferenceEquals(_rankingNamesCts, cts))
+                    {
+                        SetRankingEnglishName(PopularRanking, game, name);
+                        SetRankingEnglishName(RecommendRanking, game, name);
+                    }
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    // An unavailable name must not prevent other cards from loading.
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    LogService.Warn(L.Get("LogCat_Home"), L.Get("Ruku_StoreApiFailed", game.AppId, "english", ex.Message));
+                }
+                finally
+                {
+                    gate.Release();
+                }
+            }));
+        }
+        catch (OperationCanceledException) { }
+        finally
+        {
+            if (ReferenceEquals(_rankingNamesCts, cts)) _rankingNamesCts = null;
+            cts.Dispose();
+        }
+    }
+
+    private static void SetRankingEnglishName(ObservableCollection<RankGame> ranking, RankGame game, string name)
+    {
+        var index = ranking.IndexOf(game);
+        if (index >= 0) ranking[index] = game with { EnglishName = name };
+    }
+
+    // Replace notifications refresh both the name and follower text for the language.
     private void RefreshRankingTexts()
     {
         for (var i = 0; i < PopularRanking.Count; i++) PopularRanking[i] = PopularRanking[i];
@@ -253,6 +325,8 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
         try { _rankingCts?.Cancel(); } catch { }
         try { _rankingCts?.Dispose(); } catch { }
         _rankingCts = null;
+        try { _rankingNamesCts?.Cancel(); } catch { }
+        _rankingNamesCts = null;
     }
 
     // 切页离开时由 MainWindow 调用：在飞的入库任务取消，UI 已清空不再有幽灵进度
@@ -389,12 +463,12 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
         }
     }
 
-    private async Task<(string? Name, string? HeaderImage, string ReleaseDate)> GetAppNameAsync(int appId, CancellationToken ct = default)
+    private async Task<(string? Name, string? HeaderImage, string ReleaseDate)> GetAppNameAsync(int appId, CancellationToken ct = default, string? language = null)
     {
         // Follow the app language, with English fallback for Chinese requests.
         // Steam 会对合服/改 ID 的游戏返回重定向后的 AppID 做 key，
         // 精确 key 命中失败时取首个 success 项（如 3669870 返回的 key 是 4760190）
-        foreach (var lang in LocalizationService.Instance.CurrentLanguage == "zh"
+        foreach (var lang in (language ?? LocalizationService.Instance.CurrentLanguage) == "zh"
                      ? new[] { "schinese", "english" } : new[] { "english" })
         {
             try
