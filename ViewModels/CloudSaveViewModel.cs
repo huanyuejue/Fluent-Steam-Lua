@@ -289,9 +289,16 @@ public partial class CloudSaveViewModel : ObservableObject, IDisposable
             foreach (var g in list)
                 RedirectedGames.Add(g);
             ApplySorting();
-            // 有名单隐藏提示行；空名单恢复闲置提示；有跳过项则常驻显示失败说明
+            // 有名单隐藏提示行；云端源空名单单独提示（远端还没有 CloudRedirect 目录），
+            // 避免被误读成“连接失败”或“本地源没存档”；有跳过项则常驻显示失败说明
             var listFails = _cloudService.GetLastListFailures();
-            if (listFails.Count > 0)
+            if (RedirectedGames.Count == 0 && SelectedProvider != "folder" && listFails.Count == 0)
+            {
+                ListStatusText = L.Get("Cloud_CloudListEmpty");
+                IsListHintVisible = true;
+                LogService.Info(L.Get("LogCat_Cloud"), L.Get("Cloud_LogCloudListEmpty"));
+            }
+            else if (listFails.Count > 0)
             {
                 var shown = listFails.Count <= 3
                     ? string.Join("，", listFails)
@@ -450,11 +457,20 @@ public partial class CloudSaveViewModel : ObservableObject, IDisposable
             IsBusy = true;
             var progress = new Progress<string>(msg => SetListStatus(msg));
             await _cloudService.DeleteAppSavesAsync(preview, progress);
+            // 删除后报告本地残留：云端已清，但游戏目录里的存档还在，Steam 下次启动会重新上传。
+            // 只读扫描，不删本地任何文件。
+            var remnants = isCloud ? await Task.Run(() => _cloudService.FindLocalRemnants(game.AppId)) : null;
             await RefreshCoreAsync();
-            await _dialogService.ShowAlertAsync(L.Get("Cloud_DeletedTitle"),
-                isCloud
-                    ? L.Get("Cloud_DeletedCloudBody", displayName, preview.BackupDir)
-                    : L.Get("Cloud_DeletedLocalBody", displayName, preview.BackupDir));
+            var body = isCloud
+                ? L.Get("Cloud_DeletedCloudBody", displayName, preview.BackupDir)
+                : L.Get("Cloud_DeletedLocalBody", displayName, preview.BackupDir);
+            if (remnants is { Count: > 0 })
+            {
+                var sample = string.Join("\n", remnants.Take(3).Select(r => "  " + r.FileName));
+                var more = remnants.Count > 3 ? L.Get("Cloud_EtAl", remnants.Count) : "";
+                body += "\n\n" + L.Get("Cloud_LocalRemnantBody", remnants.Count, sample, more);
+            }
+            await _dialogService.ShowAlertAsync(L.Get("Cloud_DeletedTitle"), body);
         }
         catch (Exception ex)
         {
