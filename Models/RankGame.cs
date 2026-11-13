@@ -5,6 +5,14 @@ namespace SteamLuaManager.Models;
 // 小黑盒热门榜单项：集合顺序即榜单名次
 public sealed record RankGame(int AppId, string Name, string CoverUrl, List<string> CoverCandidates, long Followers)
 {
+    public string? EnglishName { get; init; }
+
+    // Keep the source name for Chinese mode; do not show its Chinese translation
+    // while the English lookup is pending or unavailable.
+    public string DisplayName => LocalizationService.Instance.CurrentLanguage == "zh"
+        ? Name
+        : EnglishName ?? (Name.Any(c => c is >= '\u3400' and <= '\u9fff') ? $"AppID: {AppId}" : Name);
+
     // 中文环境关注数过万时折万展示，其余环境按原值展示
     public string FollowersText => Followers >= 10000 && LocalizationService.Instance.CurrentLanguage == "zh"
         ? L.Get("Rank_FollowersWan", (Followers / 10000.0).ToString("F1"))
