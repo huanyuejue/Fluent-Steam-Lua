@@ -72,11 +72,14 @@ public sealed class LocalizationService : INotifyPropertyChanged
         CurrentLanguage = code;
     }
 
-    public string GetString(string key)
+    public string GetString(string key) => GetStringForLanguage(key, CurrentLanguage);
+
+    public string GetStringForLanguage(string key, string language)
     {
-        if (GetDictionary(CurrentLanguage).TryGetValue(key, out var v))
+        language = Normalize(language);
+        if (GetDictionary(language).TryGetValue(key, out var v))
             return v;
-        if (!CurrentLanguage.Equals(FallbackLanguage, StringComparison.OrdinalIgnoreCase) &&
+        if (!language.Equals(FallbackLanguage, StringComparison.OrdinalIgnoreCase) &&
             GetDictionary(FallbackLanguage).TryGetValue(key, out var fallback))
             return fallback;
         return key;

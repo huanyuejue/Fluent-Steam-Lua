@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using SteamLuaManager.Models;
 using SteamLuaManager.Services;
+using SteamLuaManager;
 
 namespace FluentLuaBridge;
 
@@ -18,12 +19,14 @@ internal sealed class ImportRunner
     private readonly ISteamDepotService _depot;
     private readonly ISteamPathService _steamPath;
     private readonly ISettingsService _settings;
+    private readonly BridgeGameNameResolver _names;
 
-    public ImportRunner(ISteamDepotService depot, ISteamPathService steamPath, ISettingsService settings)
+    public ImportRunner(ISteamDepotService depot, ISteamPathService steamPath, ISettingsService settings, BridgeGameNameResolver names)
     {
         _depot = depot;
         _steamPath = steamPath;
         _settings = settings;
+        _names = names;
     }
 
     /// <summary>
@@ -32,11 +35,11 @@ internal sealed class ImportRunner
     /// </summary>
     public async Task RunAsync(ImportJob job, CancellationToken ct)
     {
-        var stepPrepare = new ImportStep("检查 Steam 目录");
-        var stepQuery = new ImportStep("查询游戏信息");
-        var stepBuild = new ImportStep("匹配仓库密钥");
-        var stepDlc = new ImportStep("补全 DLC");
-        var stepWrite = new ImportStep("写入入库文件");
+        var stepPrepare = new ImportStep("Bridge_ImportStepPrepare");
+        var stepQuery = new ImportStep("Bridge_ImportStepQuery");
+        var stepBuild = new ImportStep("Bridge_ImportStepBuild");
+        var stepDlc = new ImportStep("Bridge_ImportStepDlc");
+        var stepWrite = new ImportStep("Bridge_ImportStepWrite");
 
         foreach (var s in new[] { stepPrepare, stepQuery, stepBuild, stepDlc, stepWrite })
         {
@@ -51,8 +54,8 @@ internal sealed class ImportRunner
             if (string.IsNullOrEmpty(luaFolder))
             {
                 stepPrepare.State = StepState.Failed;
-                stepPrepare.Detail = "未找到 Steam Lua 目录";
-                Fail(job, "未检测到 Steam 安装目录，请先在主程序中确认路径");
+                stepPrepare.SetLocalizedDetail("Bridge_ImportLuaFolderMissing");
+                Fail(job, "Bridge_ImportSteamMissing");
                 return;
             }
             stepPrepare.State = StepState.Done;
@@ -65,26 +68,25 @@ internal sealed class ImportRunner
             if (!await _depot.EnsureKeyFilesAsync(ct))
             {
                 stepQuery.State = StepState.Failed;
-                stepQuery.Detail = "密钥文件获取失败";
-                Fail(job, "密钥文件获取失败，请检查网络后重试");
+                stepQuery.SetLocalizedDetail("Bridge_ImportKeysMissing");
+                Fail(job, "Bridge_ImportKeysFailed");
                 return;
             }
             var info = await _depot.QueryAppAsync(job.AppId, ct);
             if (info == null)
             {
                 stepQuery.State = StepState.Failed;
-                stepQuery.Detail = "查询接口无响应";
-                Fail(job, "查询游戏信息失败。请检查网络后重试；若持续失败，可在主程序中查询该游戏。");
+                stepQuery.SetLocalizedDetail("Bridge_ImportQueryNoResponse");
+                Fail(job, "Bridge_ImportQueryFailed");
                 return;
             }
-            // 商店页传来名字就直接用，避免为了标题再走一次接口，也避免中英文名混用。
-            // 只有调用方没带名字时，才用查询结果兜底
-            if (string.IsNullOrWhiteSpace(job.DisplayName) && !string.IsNullOrWhiteSpace(info.AppName))
-            {
-                job.DisplayName = info.AppName;
-            }
+            var nameLanguage = BridgeLocalization.Language;
+            var resolvedName = await _names.ResolveAsync(job.AppId,
+                string.IsNullOrWhiteSpace(job.DisplayName) ? info.AppName : job.DisplayName, ct);
+            if (nameLanguage == BridgeLocalization.Language) job.DisplayName = resolvedName;
             stepQuery.State = StepState.Done;
-            stepQuery.Detail = $"{(string.IsNullOrWhiteSpace(job.DisplayName) ? $"AppID {job.AppId}" : job.DisplayName)} · {info.GameDepots.Count} 个仓库";
+            // The title can be resolved again when the user changes language.
+            stepQuery.SetLocalizedDetail("Bridge_ImportDepotCount", new Func<object?>(() => job.DisplayName), info.GameDepots.Count);
 
             if (info.GameDepots.Count == 0)
             {
@@ -96,13 +98,13 @@ internal sealed class ImportRunner
                 var hasToken = await _depot.HasAppTokenAsync(job.AppId, ct);
                 if (hasToken)
                 {
-                    stepBuild.Detail = "需要访问令牌";
-                    Fail(job, "该游戏受访问令牌保护，桥接进程无法直接查询。请打开主程序，在游戏列表中对该游戏重试入库。");
+                    stepBuild.SetLocalizedDetail("Bridge_ImportTokenRequired");
+                    Fail(job, "Bridge_ImportTokenProtected");
                 }
                 else
                 {
-                    stepBuild.Detail = "仓库信息为空";
-                    Fail(job, "该游戏没有公开的仓库信息，密钥库未收录。常见于尚未发售、已下架或需要账号权限的游戏。");
+                    stepBuild.SetLocalizedDetail("Bridge_ImportDepotsEmpty");
+                    Fail(job, "Bridge_ImportDepotsUnavailable");
                 }
                 return;
             }
@@ -125,11 +127,11 @@ internal sealed class ImportRunner
                 if (string.IsNullOrEmpty(luaPath))
                 {
                     stepDlc.State = StepState.Failed;
-                    Fail(job, "生成入库文件失败，请稍后重试");
+                    Fail(job, "Bridge_ImportGenerateFailed");
                     return;
                 }
                 stepDlc.State = StepState.Done;
-                stepDlc.Detail = $"{dlcCount} 个 DLC";
+                stepDlc.SetLocalizedDetail("Bridge_ImportDlcCount", dlcCount);
 
                 stepWrite.State = StepState.Done;
                 stepWrite.Detail = Path.GetFileName(luaPath);
@@ -138,14 +140,14 @@ internal sealed class ImportRunner
             else
             {
                 stepDlc.State = StepState.Skipped;
-                stepDlc.Detail = "无 DLC";
+                stepDlc.SetLocalizedDetail("Bridge_ImportNoDlc");
 
                 var luaPath = await _depot.GenerateLuaAsync(
                     job.AppId, ct, pinManifest: false, fetchNames: true);
                 if (string.IsNullOrEmpty(luaPath))
                 {
                     stepWrite.State = StepState.Failed;
-                    Fail(job, "生成入库文件失败，请稍后重试");
+                    Fail(job, "Bridge_ImportGenerateFailed");
                     return;
                 }
                 stepWrite.State = StepState.Done;
@@ -161,7 +163,7 @@ internal sealed class ImportRunner
             }
             job.IsFinished = true;
             job.IsSuccess = false;
-            job.ErrorMessage = "已取消";
+            job.SetLocalizedError("Bridge_ImportCancelled");
         }
         catch (Exception ex)
         {
@@ -172,16 +174,16 @@ internal sealed class ImportRunner
             job.IsFinished = true;
             job.IsSuccess = false;
             job.ErrorMessage = ex.Message;
-            BridgeLog.Write($"AppID {job.AppId} 入库异常: {ex}");
+            BridgeLog.Write(L.Get("Bridge_LogImportException", job.AppId, ex));
         }
     }
 
-    private static void Fail(ImportJob job, string message)
+    private static void Fail(ImportJob job, string messageKey, params object?[] arguments)
     {
         job.IsFinished = true;
         job.IsSuccess = false;
-        job.ErrorMessage = message;
-        BridgeLog.Write($"AppID {job.AppId} 入库失败: {message}");
+        job.SetLocalizedError(messageKey, arguments);
+        BridgeLog.Write(L.Get("Bridge_LogImportFailed", job.AppId, job.ErrorMessage));
     }
 
     private static void Succeed(ImportJob job, string detail)
@@ -189,7 +191,7 @@ internal sealed class ImportRunner
         job.IsFinished = true;
         job.IsSuccess = true;
         job.ErrorMessage = null;
-        BridgeLog.Write($"AppID {job.AppId} 入库成功: {detail}");
+        BridgeLog.Write(L.Get("Bridge_LogImportSuccess", job.AppId, detail));
     }
 
 

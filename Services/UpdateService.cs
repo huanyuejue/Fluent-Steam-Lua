@@ -39,7 +39,7 @@ public class UpdateService : IUpdateService
         var releaseNotes = ExtractUpdateContent(
             doc.RootElement.TryGetProperty("body", out var bodyElem)
                 ? bodyElem.GetString() ?? string.Empty
-                : string.Empty);
+                : string.Empty, tagName);
         var (looseAssetUrl, singleAssetUrl) = ExtractAssetUrls(doc.RootElement);
 
         var (latestNumeric, latestSuffix) = ParseReleaseVersion(tagName)
@@ -93,35 +93,9 @@ public class UpdateService : IUpdateService
     }
 
     // 仅提取 "## 更新内容" 到首个分隔线之间的区域，跳过标题行
-    private static string ExtractUpdateContent(string body)
+    private static string ExtractUpdateContent(string body, string? tag = null)
     {
-        if (string.IsNullOrWhiteSpace(body)) return string.Empty;
-
-        var lines = body.Replace("\r\n", "\n").Split('\n');
-
-        var startIndex = -1;
-        for (int i = 0; i < lines.Length; i++)
-        {
-            if (lines[i].Trim().Equals("## 更新内容", StringComparison.OrdinalIgnoreCase))
-            {
-                startIndex = i + 1;
-                break;
-            }
-        }
-
-        if (startIndex < 0) return FormatPlainText(body);
-
-        var endIndex = lines.Length;
-        for (int i = startIndex; i < lines.Length; i++)
-        {
-            if (IsHorizontalRule(lines[i]))
-            {
-                endIndex = i;
-                break;
-            }
-        }
-
-        return FormatPlainText(string.Join('\n', lines[startIndex..endIndex]));
+        return FormatPlainText(ReleaseNotesLocalization.Select(body, "Fluent-Steam-Lua", tag));
     }
 
     // 去除 Markdown 标记，仅保留文字；列表项 "- / *" 转为 "•"

@@ -16,6 +16,11 @@ public partial class GameInfo : ObservableObject
     [ObservableProperty]
     private string _gameName = string.Empty;
 
+    // Lua comments have no language provenance; only localized metadata/cache
+    // lookups mark a name as suitable for the selected application language.
+    public string GameNameLanguage { get; internal set; } = string.Empty;
+    partial void OnGameNameChanged(string value) => GameNameLanguage = string.Empty;
+
     [ObservableProperty]
     private string _coverImagePath = string.Empty;
 

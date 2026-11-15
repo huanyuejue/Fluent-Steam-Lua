@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using SteamLuaManager;
 
 namespace FluentLuaBridge;
 
@@ -71,6 +72,6 @@ internal static class MemoryTrimmer
         }
 
         var after = WorkingSetMb();
-        BridgeLog.Write($"内存回收({reason}): {before:F1} MB -> {after:F1} MB");
+        BridgeLog.Write(L.Get("Bridge_LogMemoryTrim", reason, before, after));
     }
 }

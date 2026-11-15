@@ -6,6 +6,10 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Threading;
+using System.Threading.Tasks;
+using SteamLuaManager;
+using SteamLuaManager.Services;
 
 namespace FluentLuaBridge;
 
@@ -17,21 +21,29 @@ namespace FluentLuaBridge;
 public partial class ImportProgressWindow : Window
 {
     private readonly ImportJob _job;
+    private readonly BridgeGameNameResolver _names;
     private NotifyCollectionChangedEventHandler? _stepsChanged;
     private bool _finished;
+    private bool _closed;
+    private int _nameRefreshVersion;
+    private CancellationTokenSource? _nameRefreshCancellation;
 
-    public ImportProgressWindow(ImportJob job)
+    internal ImportProgressWindow(ImportJob job, BridgeGameNameResolver names)
     {
         _job = job;
+        _names = names;
         InitializeComponent();
 
         StepsList.ItemsSource = job.Steps;
-        GameNameText.Text = string.IsNullOrWhiteSpace(job.DisplayName) ? "读取中…" : job.DisplayName;
+        GameNameText.Text = string.IsNullOrWhiteSpace(job.DisplayName) ? L.Get("Bridge_ImportLoading") : job.DisplayName;
+        TitleText.Text = L.Get("Bridge_ImportWorking");
         AppIdText.Text = $"AppID {job.AppId}";
 
         // 保存委托实例，关闭时精确退订；匿名 lambda 会让窗口被任务长期引用
         _stepsChanged = (_, _) => SyncHeader();
         job.Steps.CollectionChanged += _stepsChanged;
+        job.PropertyChanged += OnJobPropertyChanged;
+        LocalizationService.Instance.PropertyChanged += OnLanguageChanged;
 
         // 无边框窗口自行处理拖动，判定放在按下时，避免吞掉按钮点击
         MouseLeftButtonDown += OnWindowMouseDown;
@@ -100,23 +112,72 @@ public partial class ImportProgressWindow : Window
         }
     }
 
+    private void OnJobPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ImportJob.DisplayName))
+        {
+            SyncHeader();
+            foreach (var step in _job.Steps) step.RefreshLocalizedTexts();
+        }
+        else if (e.PropertyName == nameof(ImportJob.ErrorMessage)) UpdateStatusText();
+    }
+
+    private void OnLanguageChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(LocalizationService.CurrentLanguage)) return;
+        _job.RefreshLocalizedTexts();
+        UpdateStatusText();
+        _ = RefreshNameAsync();
+    }
+
+    private async Task RefreshNameAsync()
+    {
+        _nameRefreshCancellation?.Cancel();
+        using var cancellation = new CancellationTokenSource();
+        _nameRefreshCancellation = cancellation;
+        var version = ++_nameRefreshVersion;
+        var language = LocalizationService.Instance.CurrentLanguage;
+        GameNameText.Text = L.Get("Bridge_ImportLoading");
+        try
+        {
+            var name = await _names.ResolveAsync(_job.AppId, _job.DisplayName, cancellation.Token);
+            if (!_closed && version == _nameRefreshVersion
+                && language == LocalizationService.Instance.CurrentLanguage)
+            {
+                _job.DisplayName = name;
+                // An untranslated brand name may be identical in both locales.
+                SyncHeader();
+            }
+        }
+        catch (OperationCanceledException) { }
+        finally
+        {
+            if (ReferenceEquals(_nameRefreshCancellation, cancellation)) _nameRefreshCancellation = null;
+        }
+    }
+
+    private void UpdateStatusText()
+    {
+        TitleText.Text = !_finished ? L.Get("Bridge_ImportWorking")
+            : _job.IsSuccess ? L.Get("Bridge_ImportDone")
+            : string.IsNullOrWhiteSpace(_job.ErrorMessage) ? L.Get("Bridge_ImportFailed")
+            : L.Get("Bridge_ImportFailedDetail", _job.ErrorMessage);
+    }
+
     /// <summary>由外层在任务结束后调用，切换到结果态并放开关闭入口。</summary>
     public void Finish()
     {
         _finished = true;
         SyncHeader();
+        UpdateStatusText();
 
         if (_job.IsSuccess)
         {
-            TitleText.Text = "入库完成";
             TitleText.Foreground = new SolidColorBrush(Color.FromRgb(0x3D, 0xDC, 0x84));
             StatusDot.Fill = new SolidColorBrush(Color.FromRgb(0x3D, 0xDC, 0x84));
         }
         else
         {
-            TitleText.Text = string.IsNullOrWhiteSpace(_job.ErrorMessage)
-                ? "入库失败"
-                : "入库失败 · " + _job.ErrorMessage;
             TitleText.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x6B));
             StatusDot.Fill = new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x6B));
         }
@@ -148,6 +209,12 @@ public partial class ImportProgressWindow : Window
             _stepsChanged = null;
         }
         StepsList.ItemsSource = null;
+        _job.PropertyChanged -= OnJobPropertyChanged;
+        LocalizationService.Instance.PropertyChanged -= OnLanguageChanged;
+        _closed = true;
+        _nameRefreshVersion++;
+        _nameRefreshCancellation?.Cancel();
+        _nameRefreshCancellation = null;
 
         base.OnClosing(e);
     }

@@ -59,7 +59,7 @@ public sealed class SteamUpdateBlocker : ISteamUpdateBlocker
         var file = GetConfigPath();
         if (file == null)
         {
-            LogService.Warn(L.Get("LogCat_Settings"), "未找到 Steam 目录，无法写入 steam.cfg");
+            LogService.Warn(L.Get("LogCat_Settings"), L.Get("Settings_SteamUpdateNoDirectory"));
             return false;
         }
 
@@ -87,13 +87,13 @@ public sealed class SteamUpdateBlocker : ISteamUpdateBlocker
             EnsureReadOnly(file);
 
             FailReason = null;
-            LogService.Info(L.Get("LogCat_Settings"), "已写入 steam.cfg 禁用 Steam 自动更新");
+            LogService.Info(L.Get("LogCat_Settings"), L.Get("Settings_SteamUpdateBlocked"));
             return true;
         }
         catch (Exception ex)
         {
             FailReason = DescribeError(ex);
-            LogService.Warn(L.Get("LogCat_Settings"), $"写入 steam.cfg 失败{DescribeError(ex)}: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Settings"), L.Get("Settings_SteamUpdateWriteFailed", DescribeError(ex), ex.Message));
             return false;
         }
     }
@@ -174,13 +174,13 @@ public sealed class SteamUpdateBlocker : ISteamUpdateBlocker
             File.Delete(file);
 
             FailReason = null;
-            LogService.Info(L.Get("LogCat_Settings"), "已删除 steam.cfg，恢复 Steam 自动更新");
+            LogService.Info(L.Get("LogCat_Settings"), L.Get("Settings_SteamUpdateRestored"));
             return true;
         }
         catch (Exception ex)
         {
             FailReason = DescribeError(ex);
-            LogService.Warn(L.Get("LogCat_Settings"), $"删除 steam.cfg 失败{DescribeError(ex)}: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Settings"), L.Get("Settings_SteamUpdateDeleteFailed", DescribeError(ex), ex.Message));
             return false;
         }
     }

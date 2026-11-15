@@ -25,6 +25,7 @@ internal static class BridgeServices
         services.AddSingleton<ISteamAppInfoService, NullAppInfoService>();
 
         services.AddSingleton<ISteamDepotService, SteamDepotService>();
+        services.AddSingleton<BridgeGameNameResolver>();
         services.AddSingleton<ImportRunner>();
 
         return services.BuildServiceProvider();

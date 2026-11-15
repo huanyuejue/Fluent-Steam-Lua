@@ -28,6 +28,7 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
     private readonly ITrainerAutoLaunchService _autoLaunchService;
     private readonly IDialogService _dialogService;
     private bool _disposed;
+    private readonly CancellationTokenSource _metadataCts = new();
 
     [ObservableProperty]
     private string _searchQuery = string.Empty;
@@ -218,6 +219,9 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
     // 绑定卡片的自动激活摘要含本地化文案，切语言后逐项刷新
     private void OnLanguageChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
+        if (e.PropertyName != nameof(LocalizationService.CurrentLanguage)) return;
+        foreach (var item in DownloadedTrainers)
+            item.DisplayName = LoadCachedGameName(item.FilePath) ?? ExtractGameName(item.FileName);
         foreach (var b in TrainerBindings) b.RefreshLocalizedTexts();
     }
 
@@ -225,6 +229,8 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        _metadataCts.Cancel();
+        _metadataCts.Dispose();
         TrainerBindings.CollectionChanged -= OnBindingsChanged;
         foreach (var b in TrainerBindings)
             b.PropertyChanged -= OnBindingPropertyChanged;
@@ -296,8 +302,9 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
         catch (Exception ex) { LogService.Warn(L.Get("LogCat_Trainer"), L.Get("Trainer_LogNewReleaseFailed", ex.Message)); }
     }
 
-    private Task LoadDownloadedTrainersAsync()
+    private async Task LoadDownloadedTrainersAsync()
     {
+        if (_disposed) return;
         DownloadedTrainers.Clear();
         try
         {
@@ -305,7 +312,7 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
             if (!Directory.Exists(dir))
             {
                 SyncDownloadedStates(new List<DownloadedTrainerItem>());
-                return Task.CompletedTask;
+                return;
             }
 
             var files = Directory.GetFiles(dir, "*.exe")
@@ -323,7 +330,7 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
 
             foreach (var item in items)
             {
-                // 优先使用缓存的中文名，否则从文件名提取英文名
+                // Select the cached language, falling back to the original filename.
                 item.DisplayName = LoadCachedGameName(item.FilePath) ?? ExtractGameName(item.FileName);
             }
 
@@ -331,11 +338,15 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
                 DownloadedTrainers.Add(item);
 
             SyncDownloadedStates(items);
-
+            await Task.WhenAll(items.Select(async item =>
+            {
+                var metadata = await TrainerMetadataCache.LoadAsync(item.FilePath, _metadataCts.Token);
+                if (!_disposed && DownloadedTrainers.Contains(item) && !string.IsNullOrWhiteSpace(metadata?.DisplayGameName))
+                    item.DisplayName = metadata.DisplayGameName;
+            }));
         }
         catch (Exception ex) { LogService.Warn(L.Get("LogCat_Trainer"), L.Get("Trainer_LogDownloadedListFailed", ex.Message)); }
 
-        return Task.CompletedTask;
     }
 
     [RelayCommand]
@@ -367,7 +378,7 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
     }
 
     // ── 修改器选项缓存 ──
-    public static string CheatOptionsCacheDir => Path.Combine(CacheDir, "options");
+    public static string CheatOptionsCacheDir => TrainerMetadataCache.DirectoryPath;
 
     private async Task<string?> CacheCheatOptionsAsync(TrainerInfo trainer)
     {
@@ -376,22 +387,16 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
             if (string.IsNullOrWhiteSpace(trainer.DownloadUrl) || !File.Exists(trainer.DownloadUrl))
                 return L.Get("Trainer_NoFile", trainer.GameName);
 
-            var (gameName, options) = TrainerExeParser.Parse(trainer.DownloadUrl);
-            if (options.Count == 0)
+            var metadata = await TrainerMetadataCache.LoadAsync(trainer.DownloadUrl, _metadataCts.Token);
+            if (metadata == null) return L.Get("Trainer_NoOptions", trainer.GameName);
+            if (string.IsNullOrWhiteSpace(metadata.EnglishGameName) && !TrainerExeParser.HasChinese(trainer.GameName))
+                metadata.EnglishGameName = trainer.GameName;
+            if (metadata.Options.Count == 0)
                 return L.Get("Trainer_NoOptions", trainer.GameName);
-
-            Directory.CreateDirectory(CheatOptionsCacheDir);
-            var key = SanitizeFileName(Path.GetFileNameWithoutExtension(trainer.DownloadUrl));
-            var file = Path.Combine(CheatOptionsCacheDir, $"{key}.json");
-            var json = JsonSerializer.Serialize(options, new JsonSerializerOptions { WriteIndented = true });
-            await File.WriteAllTextAsync(file, json);
-
-            // 缓存中文名（供列表加载时读取）
+            await Task.Run(() => TrainerMetadataCache.Save(trainer.DownloadUrl, metadata));
+            var gameName = metadata.DisplayGameName;
             if (!string.IsNullOrWhiteSpace(gameName))
             {
-                var nameFile = Path.Combine(CheatOptionsCacheDir, $"{key}.name.txt");
-                await File.WriteAllTextAsync(nameFile, gameName);
-
                 // 更新列表中已有项的 DisplayName
                 var item = DownloadedTrainers.FirstOrDefault(d =>
                     d.FilePath?.Equals(trainer.DownloadUrl, StringComparison.OrdinalIgnoreCase) == true);
@@ -399,7 +404,7 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
                     item.DisplayName = gameName;
             }
 
-            return L.Get("Trainer_Extracted", trainer.GameName, options.Count) +
+            return L.Get("Trainer_Extracted", trainer.GameName, metadata.Options.Count) +
                    (string.IsNullOrWhiteSpace(gameName) ? "" : L.Get("Trainer_ExtractedNamed", gameName));
         }
         catch (Exception ex)
@@ -412,11 +417,7 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
     {
         try
         {
-            var key = SanitizeFileName(Path.GetFileNameWithoutExtension(trainerFilePath));
-            var file = Path.Combine(CheatOptionsCacheDir, $"{key}.json");
-            if (!File.Exists(file)) return null;
-            var json = File.ReadAllText(file);
-            return JsonSerializer.Deserialize<List<CheatOption>>(json);
+            return TrainerMetadataCache.TryLoadCached(trainerFilePath)?.Options;
         }
         catch (Exception ex) { LogService.Warn(L.Get("LogCat_Trainer"), L.Get("Trainer_LogOptionsCacheFailed", ex.Message)); return null; }
     }
@@ -426,11 +427,12 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
         try
         {
             var key = SanitizeFileName(Path.GetFileNameWithoutExtension(trainerFilePath));
-            foreach (var ext in new[] { ".json", ".name.txt" })
+            foreach (var ext in new[] { ".json", ".name.txt", ".metadata.json" })
             {
                 var file = Path.Combine(CheatOptionsCacheDir, $"{key}{ext}");
                 if (File.Exists(file)) File.Delete(file);
             }
+            TrainerMetadataCache.Invalidate(trainerFilePath);
         }
         catch (Exception ex) { LogService.Warn(L.Get("LogCat_Trainer"), L.Get("Trainer_LogDeleteOptionsFailed", ex.Message)); }
     }
@@ -439,9 +441,8 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
     {
         try
         {
-            var key = SanitizeFileName(Path.GetFileNameWithoutExtension(trainerFilePath));
-            var file = Path.Combine(CheatOptionsCacheDir, $"{key}.name.txt");
-            return File.Exists(file) ? File.ReadAllText(file).Trim() : null;
+            var name = TrainerMetadataCache.TryLoadCached(trainerFilePath)?.DisplayGameName;
+            return string.IsNullOrWhiteSpace(name) ? null : name;
         }
         catch (Exception ex) { LogService.Warn(L.Get("LogCat_Trainer"), L.Get("Trainer_LogNameCacheFailed", ex.Message)); return null; }
     }
@@ -455,6 +456,23 @@ public partial class TrainerViewModel : ObservableObject, IDisposable
         foreach (var b in bindings)
             TrainerBindings.Add(b);
         EnsureBindingsHooked();
+        _ = WarmBindingMetadataAsync();
+    }
+
+    private async Task WarmBindingMetadataAsync()
+    {
+        try
+        {
+            var bindings = TrainerBindings.ToList();
+            await Task.WhenAll(bindings.Select(b => b.TrainerFilePath).Distinct(StringComparer.OrdinalIgnoreCase)
+                .Select(path => TrainerMetadataCache.LoadAsync(path, _metadataCts.Token)));
+            if (!_disposed)
+                foreach (var binding in bindings.Where(TrainerBindings.Contains)) binding.RefreshLocalizedTexts();
+        }
+        catch (Exception ex)
+        {
+            LogService.Warn(L.Get("LogCat_Trainer"), L.Get("Trainer_LogOptionsCacheFailed", ex.Message));
+        }
     }
 
     private static string SharedBindingsPath => Path.Combine(

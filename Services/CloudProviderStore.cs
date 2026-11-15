@@ -707,7 +707,7 @@ public sealed class CloudProviderStore
             if (resp.StatusCode == HttpStatusCode.NotFound && notFoundAsNull) return null;
             var body = await resp.Content.ReadAsStringAsync(ct);
             if (!resp.IsSuccessStatusCode)
-                throw new InvalidOperationException(L.Get("Cloud_ReadSourceFailed", "OneDrive", (int)resp.StatusCode) + "：" + GraphError(body));
+                throw new InvalidOperationException(L.Get("Cloud_ReadSourceFailed", "OneDrive", (int)resp.StatusCode) + ": " + GraphError(body));
             using var doc = JsonDocument.Parse(body);
             if (doc.RootElement.TryGetProperty("value", out var value))
             {
@@ -740,12 +740,42 @@ public sealed class CloudProviderStore
         try
         {
             using var doc = JsonDocument.Parse(body);
-            if (doc.RootElement.TryGetProperty("error", out var err) &&
-                err.TryGetProperty("message", out var msg))
-                return msg.GetString() ?? "";
+            if (doc.RootElement.TryGetProperty("error", out var err))
+            {
+                var code = err.TryGetProperty("code", out var c) && c.ValueKind == JsonValueKind.String
+                    ? c.GetString() ?? "" : "";
+                var message = err.TryGetProperty("message", out var msg) && msg.ValueKind == JsonValueKind.String
+                    ? msg.GetString() ?? "" : "";
+                var hint = ProviderErrorHint(code, message);
+                return string.IsNullOrEmpty(code) ? hint : $"{hint} ({code})";
+            }
         }
         catch { }
-        return body.Length > 200 ? body[..200] : body;
+        return ProviderErrorHint("", body.Length > 200 ? body[..200] : body);
+    }
+
+    private static string ProviderErrorHint(string code, string message)
+    {
+        var key = code.ToLowerInvariant() switch
+        {
+            "accessdenied" or "authorizationrequestdenied" => "Cloud_ProviderAccessDenied",
+            "invalidauthenticationtoken" or "unauthenticated" or "authenticationfailure" or
+                "expiredtoken" or "invalidtoken" or "requestexpired" => "Cloud_ProviderSignInRequired",
+            "itemnotfound" or "resourcenotfound" => "Cloud_ProviderItemMissing",
+            "quotalimitreached" or "insufficientstorage" => "Cloud_ProviderStorageFull",
+            "activitylimitreached" or "toomanyrequests" or "slowdown" or "throttling" => "Cloud_ProviderRateLimited",
+            "invalidrequest" or "badrequest" or "invalidargument" => "Cloud_ProviderInvalidRequest",
+            "namealreadyexists" or "resourcemodified" => "Cloud_ProviderConflict",
+            "serviceunavailable" or "servicenotavailable" or "temporarilyunavailable" or
+                "internalerror" or "generalexception" => "Cloud_ProviderUnavailable",
+            _ => null
+        };
+        if (key != null) return L.Get(key);
+        if (string.IsNullOrWhiteSpace(message) ||
+            (LocalizationService.Instance.CurrentLanguage != "zh" &&
+             message.Any(c => c is >= '\u3400' and <= '\u9fff')))
+            return L.Get("Cloud_ProviderRequestFailed");
+        return message;
     }
 
     private async Task<DateTime?> GetOneDriveAppTimeAsync(string appFolderId, string token, CancellationToken ct)
@@ -1139,9 +1169,9 @@ public sealed class CloudProviderStore
             "SignatureDoesNotMatch" => L.Get("Cloud_SigMismatch"),
             "AccessDenied" => L.Get("Cloud_AccessDenied"),
             "NoSuchKey" => L.Get("Cloud_NoSuchKey"),
-            _ => string.IsNullOrEmpty(message) ? $"HTTP {(int)status}" : message,
+            _ => ProviderErrorHint(code, string.IsNullOrEmpty(message) ? $"HTTP {(int)status}" : message),
         };
-        return string.IsNullOrEmpty(code) ? hint : $"{hint}（{code}）";
+        return string.IsNullOrEmpty(code) ? hint : $"{hint} ({code})";
     }
 
     private sealed record S3Object(string Key, long Size, DateTime? LastModified);

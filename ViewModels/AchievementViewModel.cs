@@ -123,8 +123,14 @@ public partial class AchievementViewModel : ObservableObject, IDisposable
         LocalizationService.Instance.PropertyChanged += OnLocalizationChanged;
     }
 
-    private void OnLocalizationChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e) =>
+    private int _languageVersion;
+    private void OnLocalizationChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(LocalizationService.CurrentLanguage) || _disposed) return;
+        _languageVersion++;
         RefreshLocalizedOptions();
+        if (_allGames.Count > 0 && !IsLoadingGames) _ = LoadGamesAsync();
+    }
 
     partial void OnSelectedViewModeChanged(string value)
     {
@@ -262,7 +268,8 @@ public partial class AchievementViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task LoadGamesAsync()
     {
-        if (IsLoadingGames) return;
+        if (IsLoadingGames || _disposed) return;
+        var languageVersion = _languageVersion;
 
         IsLoadingGames = true;
         StatusMessage = L.Get("Ach_Loading");
@@ -277,6 +284,7 @@ public partial class AchievementViewModel : ObservableObject, IDisposable
             }
 
             var candidates = await _achievementService.ParseOwnedGamesAsync();
+            if (_disposed || languageVersion != _languageVersion) return;
             var games = _achievementService.FilterSubscribed(candidates);
             _allGames = games;
             LogService.Info(L.Get("LogCat_Achieve"), L.Get("Ach_LogLoaded", candidates.Count, games.Count));
@@ -305,6 +313,7 @@ public partial class AchievementViewModel : ObservableObject, IDisposable
         finally
         {
             IsLoadingGames = false;
+            if (!_disposed && languageVersion != _languageVersion) _ = LoadGamesAsync();
         }
     }
 }

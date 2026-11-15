@@ -194,6 +194,7 @@ public sealed class SteamAchievementService : ISteamAchievementService
 
     public Task<List<AchievementGameInfo>> ParseOwnedGamesAsync()
     {
+        var language = LocalizationService.Instance.CurrentLanguage;
         return Task.Run(() =>
         {
             var result = new List<AchievementGameInfo>();
@@ -208,7 +209,7 @@ public sealed class SteamAchievementService : ISteamAchievementService
                     return result;
                 }
 
-                var entries = AppInfoVdf.Parse(appInfoPath);
+                var entries = AppInfoVdf.Parse(appInfoPath, language);
                 foreach (var entry in entries)
                 {
                     if (AppTypes.Contains(entry.Type) == false)
@@ -269,9 +270,9 @@ public sealed class SteamAchievementService : ISteamAchievementService
 
         try
         {
-            var language = _client.SteamApps008.GetCurrentGameLanguage() ?? "english";
+            var language = LocalizationService.Instance.CurrentLanguage == "zh" ? "schinese" : "english";
 
-            var schema = LoadSchema(appId, language);
+            var schema = LoadSchema(_steamPath, appId, language);
             if (schema == null)
             {
                 LastError = L.Get("Svc_AchSchemaMissing");
@@ -362,9 +363,25 @@ public sealed class SteamAchievementService : ISteamAchievementService
     private sealed record SchemaData(
         List<AchievementDefinition> AchievementDefinitions);
 
-    private SchemaData? LoadSchema(uint appId, string language)
+    public static List<AchievementDefinition> ReadLocalizedDefinitions(uint appId, string? language = null)
     {
-        var path = Path.Combine(_steamPath, "appcache", "stats", $"UserGameStatsSchema_{appId}.bin");
+        var steamPath = Steam.GetInstallPath();
+        if (string.IsNullOrEmpty(steamPath)) return new();
+        var steamLanguage = (language ?? LocalizationService.Instance.CurrentLanguage) == "zh" ? "schinese" : "english";
+        return LoadSchema(steamPath, appId, steamLanguage)?.AchievementDefinitions ?? new();
+    }
+
+    public static string? ReadLocalizedGameName(uint appId, string? language = null)
+    {
+        var steamPath = Steam.GetInstallPath();
+        if (string.IsNullOrEmpty(steamPath)) return null;
+        return AppInfoVdf.Parse(Path.Combine(steamPath, "appcache", "appinfo.vdf"), language)
+            .FirstOrDefault(e => e.AppId == appId)?.Name;
+    }
+
+    private static SchemaData? LoadSchema(string steamPath, uint appId, string language)
+    {
+        var path = Path.Combine(steamPath, "appcache", "stats", $"UserGameStatsSchema_{appId}.bin");
         var kv = KeyValue.LoadAsBinary(path);
         if (kv == null) return null;
 
@@ -453,6 +470,8 @@ public sealed class SteamAchievementService : ISteamAchievementService
 
         if (language != "english")
         {
+            name = kv["tchinese"].AsString("");
+            if (!string.IsNullOrEmpty(name)) return name;
             name = kv["english"].AsString("");
             if (string.IsNullOrEmpty(name) == false)
             {

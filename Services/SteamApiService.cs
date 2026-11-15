@@ -197,7 +197,11 @@ public class SteamApiService : ISteamApiService
 		{
 			// 缓存里的毒名字（历史版本误存的 "Error" 等）不采用，留给正文重取
 			if (_nameCache.TryGetValue(NameCacheKey(game.AppId, language), out var name) && !name.StartsWith("AppID:") && !IsJunkGameName(name))
-				game.GameName = name;
+			{
+				AssignGameName(game, name, language, true, default);
+			}
+			else if (game.GameNameLanguage != language)
+				AssignGameName(game, $"AppID: {game.AppId}", language, false, default);
 
 			var coverPath = Path.Combine(_coversDir, $"{game.AppId}.jpg");
 			if (IsValidCoverFile(coverPath))
@@ -209,21 +213,20 @@ public class SteamApiService : ISteamApiService
 
 	public async Task RefreshGameInfoAsync(List<GameInfo> games, CancellationToken cancellationToken = default, bool fetchCover = true)
 	{
+		var language = LocalizationService.Instance.CurrentLanguage;
 		Directory.CreateDirectory(_coversDir);
 		_selectedCdnFailCount = 0;
 
 		// 过滤含同步文件 IO（Exists + 读头 12 字节），N 个游戏时扔后台线程，不占 UI；
 		// ConfigureAwait(false) 让后续扇出与回调用都留在池线程，整文件序列化落盘也不回 UI
 		var needInfo = await Task.Run(() => games.Where(g =>
-			string.IsNullOrEmpty(g.GameName) ||
-			g.GameName == $"AppID: {g.AppId}" ||
-			IsJunkGameName(g.GameName) ||
+			NeedsLocalizedName(g, language) ||
 			(fetchCover && !IsValidCoverFile(Path.Combine(_coversDir, $"{g.AppId}.jpg"))))
 			.ToList(), cancellationToken).ConfigureAwait(false);
 
 		if (needInfo.Count == 0) return;
 
-		var tasks = needInfo.Select(game => RefreshOneGameAsync(game, cancellationToken, fetchCover));
+		var tasks = needInfo.Select(game => RefreshOneGameAsync(game, cancellationToken, fetchCover, language));
 		await Task.WhenAll(tasks);
 
 		SaveCache();
@@ -231,25 +234,28 @@ public class SteamApiService : ISteamApiService
 
 	public async Task RefreshSingleGameAsync(GameInfo game, CancellationToken cancellationToken = default)
 	{
-		var cacheKey = NameCacheKey(game.AppId, LocalizationService.Instance.CurrentLanguage);
+		var language = LocalizationService.Instance.CurrentLanguage;
+		var cacheKey = NameCacheKey(game.AppId, language);
 		Directory.CreateDirectory(_coversDir);
 		var coverPath = Path.Combine(_coversDir, $"{game.AppId}.jpg");
 		if (File.Exists(coverPath))
 			File.Delete(coverPath);
 
 		var oldName = game.GameName;
+		var oldNameLanguage = game.GameNameLanguage;
 		_nameCache.TryRemove(cacheKey, out _);
 
 		game.GameName = string.Empty;
 		game.CoverImagePath = string.Empty;
 
-		await RefreshOneGameAsync(game, cancellationToken);
+		await RefreshOneGameAsync(game, cancellationToken, true, language);
 
 		if (string.IsNullOrEmpty(game.GameName) || game.GameName == $"AppID: {game.AppId}" || IsJunkGameName(game.GameName))
 		{
-			if (!string.IsNullOrEmpty(oldName) && !oldName.StartsWith("AppID:") && !IsJunkGameName(oldName))
+			if (oldNameLanguage == language && LocalizationService.Instance.CurrentLanguage == language &&
+				!cancellationToken.IsCancellationRequested && !string.IsNullOrEmpty(oldName) && !oldName.StartsWith("AppID:") && !IsJunkGameName(oldName))
 			{
-				game.GameName = oldName;
+				AssignGameName(game, oldName, language, true, cancellationToken);
 				_nameCache[cacheKey] = oldName;
 			}
 		}
@@ -257,13 +263,16 @@ public class SteamApiService : ISteamApiService
 		SaveCache();
 	}
 
-	private async Task RefreshOneGameAsync(GameInfo game, CancellationToken cancellationToken, bool fetchCover = true)
+	private async Task RefreshOneGameAsync(GameInfo game, CancellationToken cancellationToken, bool fetchCover = true, string? language = null)
 	{
+		language ??= LocalizationService.Instance.CurrentLanguage;
 		try
 		{
 			game.IsLoading = true;
 
-			var needName = string.IsNullOrEmpty(game.GameName) || game.GameName == $"AppID: {game.AppId}" || IsJunkGameName(game.GameName);
+			var needName = NeedsLocalizedName(game, language);
+			if (needName && LocalizationService.Instance.CurrentLanguage == language)
+				AssignGameName(game, $"AppID: {game.AppId}", language, false, cancellationToken);
 			var coverPath = Path.Combine(_coversDir, $"{game.AppId}.jpg");
 			var needCover = fetchCover && !IsValidCoverFile(coverPath);
 			if (needCover && File.Exists(coverPath))
@@ -274,7 +283,7 @@ public class SteamApiService : ISteamApiService
 			string? heiheCover = null;
 			if (needCover || needName)
 			{
-				(headerUrl, heiheCover) = await FetchMetaSectionAsync(game, needName, needCover, cancellationToken);
+				(headerUrl, heiheCover) = await FetchMetaSectionAsync(game, needName, needCover, cancellationToken, language);
 			}
 
 			// 2. 封面下载：选中 CDN（Heybox 选中时走接口直链优先）→ 小黑盒 → Store header_image → 其余 CDN（独立闸门）
@@ -307,33 +316,56 @@ public class SteamApiService : ISteamApiService
 	}
 
 	// Localized metadata with an independent concurrency gate.
-	private async Task<(string? HeaderUrl, string? HeiheCover)> FetchMetaSectionAsync(
-		GameInfo game, bool needName, bool needCover, CancellationToken cancellationToken)
+	private static bool NeedsLocalizedName(GameInfo game, string language) =>
+		game.GameNameLanguage != language || IsJunkGameName(game.GameName) || game.GameName.StartsWith("AppID:");
+
+	private void SetLocalizedName(GameInfo game, string name, string language, CancellationToken ct)
 	{
-		var language = LocalizationService.Instance.CurrentLanguage;
+		if (ct.IsCancellationRequested || IsJunkGameName(name)) return;
+		_nameCache[NameCacheKey(game.AppId, language)] = name;
+		AssignGameName(game, name, language, true, ct);
+	}
+
+	private static void AssignGameName(GameInfo game, string name, string language, bool localized, CancellationToken ct)
+	{
+		void Apply()
+		{
+			if (ct.IsCancellationRequested || LocalizationService.Instance.CurrentLanguage != language) return;
+			game.GameName = name;
+			game.GameNameLanguage = localized ? language : string.Empty;
+		}
+		// Locale changes and UI row updates share the dispatcher, so a language
+		// switch cannot occur between the stale-result check and assigning a name.
+		var dispatcher = System.Windows.Application.Current?.Dispatcher;
+		if (dispatcher == null || dispatcher.CheckAccess()) Apply();
+		else if (!dispatcher.HasShutdownStarted && !dispatcher.HasShutdownFinished) dispatcher.Invoke(Apply);
+	}
+
+	private async Task<(string? HeaderUrl, string? HeiheCover)> FetchMetaSectionAsync(
+		GameInfo game, bool needName, bool needCover, CancellationToken cancellationToken, string language)
+	{
 		var useChinese = language == "zh";
-		var cacheKey = NameCacheKey(game.AppId, language);
 		await _metaGate.WaitAsync(cancellationToken);
 		string? headerUrl = null;
 		string? heiheCover = null;
 		try
 		{
+			if (LocalizationService.Instance.CurrentLanguage != language) return (null, null);
 			// Heybox names are Chinese-only; a cover lookup must not replace a name.
 			if ((needName && useChinese) || needCover)
 			{
 				var (heiName, heiCover, _) = await XiaoHeiHeService.GetGameDetailAsync(game.AppId, cancellationToken);
 				if (needName && useChinese && !string.IsNullOrWhiteSpace(heiName))
 				{
-					game.GameName = heiName;
-					_nameCache[cacheKey] = heiName;
+					SetLocalizedName(game, heiName, language, cancellationToken);
 				}
 				if (!string.IsNullOrWhiteSpace(heiCover))
 					heiheCover = heiCover;
 			}
 
 			// 小黑盒已补到真名后不再用 Store 覆盖；仍缺名才继续原有链路
-			var stillNeedName = needName && (string.IsNullOrEmpty(game.GameName) ||
-				game.GameName == $"AppID: {game.AppId}" || IsJunkGameName(game.GameName));
+			if (LocalizationService.Instance.CurrentLanguage != language) return (null, heiheCover);
+			var stillNeedName = needName && NeedsLocalizedName(game, language);
 
 			// 小黑盒名+封面双全时直接跳过 Store API（Heybox 选中下的常见情形，不再刷超时日志）
 			if (stillNeedName || (needCover && heiheCover == null))
@@ -341,8 +373,7 @@ public class SteamApiService : ISteamApiService
 				var storeResult = await TryStoreApi(game.AppId, useChinese ? "schinese" : "english", cancellationToken);
 				if (stillNeedName && storeResult.Name != null)
 				{
-					game.GameName = storeResult.Name;
-					_nameCache[cacheKey] = storeResult.Name;
+					SetLocalizedName(game, storeResult.Name, language, cancellationToken);
 				}
 				if (needCover)
 					headerUrl = storeResult.HeaderUrl;
@@ -354,8 +385,7 @@ public class SteamApiService : ISteamApiService
 					triedEnglish = true;
 					if (storeResult.Name != null)
 					{
-						game.GameName = storeResult.Name;
-						_nameCache[cacheKey] = storeResult.Name;
+						SetLocalizedName(game, storeResult.Name, language, cancellationToken);
 					}
 					if (needCover && headerUrl == null)
 						headerUrl = storeResult.HeaderUrl;
@@ -369,21 +399,20 @@ public class SteamApiService : ISteamApiService
 			}
 
 			// 名称后备来源（SteamSpy / SteamCommunity）
-			if (stillNeedName && (string.IsNullOrEmpty(game.GameName) || game.GameName == $"AppID: {game.AppId}" || IsJunkGameName(game.GameName)))
+			if (LocalizationService.Instance.CurrentLanguage != language) return (headerUrl, heiheCover);
+			if (stillNeedName && NeedsLocalizedName(game, language))
 			{
 				var spyName = await TrySteamSpy(game.AppId, cancellationToken);
 				if (spyName != null)
 				{
-					game.GameName = spyName;
-					_nameCache[cacheKey] = spyName;
+					SetLocalizedName(game, spyName, language, cancellationToken);
 				}
 				else
 				{
 					var communityName = await TrySteamCommunity(game.AppId, cancellationToken);
 					if (communityName != null)
 					{
-						game.GameName = communityName;
-						_nameCache[cacheKey] = communityName;
+						SetLocalizedName(game, communityName, language, cancellationToken);
 					}
 				}
 			}

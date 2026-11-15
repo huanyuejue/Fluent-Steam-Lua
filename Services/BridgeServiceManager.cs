@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.ComponentModel;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -101,14 +102,45 @@ public sealed class BridgeServiceManager : IBridgeServiceManager
         if (!string.IsNullOrWhiteSpace(overrideDir) && CanWriteTo(overrideDir))
         {
             _dataRoot = overrideDir;
-            return;
+        }
+        else
+        {
+            // 优先部署在程序自身目录下，受保护目录退回用户数据目录。
+            var appDir = Path.Combine(AppDirectory(), BridgeDirName);
+            _dataRoot = CanWriteTo(appDir) ? appDir : GetFallbackRoot();
         }
 
-        // 优先部署在程序自身目录下：与主程序同级的 cache 等数据保持一致，
-        // 用户把整个目录搬走后功能仍然可用，不会在系统盘留下残留。
-        // 但程序装在 Program Files 这类受保护位置时目录不可写，退回到用户数据目录
-        var appDir = Path.Combine(AppDirectory(), BridgeDirName);
-        _dataRoot = CanWriteTo(appDir) ? appDir : GetFallbackRoot();
+        LocalizationService.Instance.PropertyChanged += OnLanguageChanged;
+        PersistLanguage();
+    }
+
+    private void OnLanguageChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(LocalizationService.CurrentLanguage)) PersistLanguage();
+    }
+
+    private void PersistLanguage()
+    {
+        lock (_gate)
+        {
+            // Do not create a bridge directory until the user enables the component.
+            if (!Directory.Exists(_dataRoot)) return;
+            try
+            {
+                var path = Path.Combine(_dataRoot, "bridge-language.json");
+                var json = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    language = LocalizationService.Instance.CurrentLanguage,
+                    settingsFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.json")
+                });
+                File.WriteAllText(path + ".tmp", json);
+                File.Move(path + ".tmp", path, overwrite: true);
+            }
+            catch (Exception ex)
+            {
+                LogService.Warn(L.Get("LogCat_Settings"), L.Get("Bridge_LogLanguageSyncFailed", ex.Message));
+            }
+        }
     }
 
     /// <summary>
@@ -167,6 +199,7 @@ public sealed class BridgeServiceManager : IBridgeServiceManager
             {
                 return false;
             }
+            PersistLanguage();
 
             var exe = Path.Combine(_dataRoot, ProcessName + ".exe");
             if (!File.Exists(exe)) return false;
@@ -180,7 +213,7 @@ public sealed class BridgeServiceManager : IBridgeServiceManager
         }
         catch (Exception ex)
         {
-            LogService.Warn(L.Get("LogCat_Settings"), $"写入开机自启动失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Settings"), L.Get("Bridge_LogAutoStartEnableFailed", ex.Message));
             return false;
         }
     }
@@ -198,7 +231,7 @@ public sealed class BridgeServiceManager : IBridgeServiceManager
         }
         catch (Exception ex)
         {
-            LogService.Warn(L.Get("LogCat_Settings"), $"移除开机自启动失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Settings"), L.Get("Bridge_LogAutoStartDisableFailed", ex.Message));
         }
     }
 
@@ -285,6 +318,7 @@ public sealed class BridgeServiceManager : IBridgeServiceManager
             {
                 return false;
             }
+            PersistLanguage();
         }
 
         if (IsRunning)
@@ -311,6 +345,8 @@ public sealed class BridgeServiceManager : IBridgeServiceManager
 
             // 日志与主程序放在一起，排查时不用去用户目录里找
             psi.Environment["FLUENT_LOG_DIR"] = AppDirectory();
+            psi.Environment["FLUENT_SETTINGS_FILE"] = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.json");
+            psi.Environment["FLUENT_LANGUAGE"] = LocalizationService.Instance.CurrentLanguage;
 
             Process.Start(psi);
 
@@ -412,7 +448,7 @@ public sealed class BridgeServiceManager : IBridgeServiceManager
         catch (Exception ex)
         {
             // 部署失败必须留痕：否则开关点了没反应时无从判断原因
-            LogService.Warn(L.Get("LogCat_Settings"), $"部署桥接程序失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Settings"), L.Get("Bridge_LogDeployFailed", ex.Message));
             return false;
         }
     }

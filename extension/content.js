@@ -7,6 +7,31 @@
   const BUTTON_ID = 'fluent-lua-import-btn';
   const PURCHASE_SELECTOR = '#game_area_purchase';
   const INJECTED_FLAG = 'fluentLuaInjected';
+  let messages = {};
+
+  function t(key) {
+    return messages[key] || chrome.i18n.getMessage(key) || key;
+  }
+
+  function applyLocale(response) {
+    if (!response || !response.messages) return;
+    messages = response.messages;
+    const btn = document.getElementById(BUTTON_ID);
+    if (btn) {
+      btn.textContent = t(btn.dataset.textKey || 'buttonImport');
+      if (btn.dataset.titleKey) btn.title = t(btn.dataset.titleKey);
+    }
+    const hint = document.getElementById('fluent-lua-hint');
+    if (hint) {
+      hint.querySelector('strong').textContent = t('hintTitle');
+      hint.querySelector('span').textContent = t('hintBody');
+    }
+  }
+
+  async function refreshLocale() {
+    try { applyLocale(await chrome.runtime.sendMessage({ type: 'fluent-locale' })); }
+    catch { /* Use the browser locale or the most recently received app language. */ }
+  }
 
   // 主商店页判定：路径必须是 /app/<数字> 或 /app/<数字>/<名字>/
   function resolveAppId() {
@@ -38,14 +63,17 @@
     btn.id = BUTTON_ID;
     btn.type = 'button';
     btn.className = 'fluent-lua-btn';
-    btn.textContent = '一键入库';
-    btn.title = '调用 Fluent Steam Lua 生成入库文件';
+    btn.dataset.textKey = 'buttonImport';
+    btn.dataset.titleKey = 'buttonTooltip';
+    btn.textContent = t('buttonImport');
+    btn.title = t('buttonTooltip');
     return btn;
   }
 
-  function setState(btn, state, text) {
+  function setState(btn, state, key) {
     btn.dataset.state = state;
-    btn.textContent = text;
+    btn.dataset.textKey = key;
+    btn.textContent = t(key);
   }
 
   // 把后台返回的错误码翻译成用户能照着做的提示。
@@ -53,51 +81,53 @@
   function describeError(code) {
     const map = {
       bridge_unavailable: {
-        text: '桥接服务未启动',
-        detail: '请打开 Fluent Steam Lua，在设置中开启「商店页一键入库」'
+        text: 'errorUnavailable', detail: 'errorUnavailableDetail'
       },
-      method_not_allowed: { text: '请求被拒绝', detail: '桥接服务不接受当前请求方式' },
-      invalid_appid: { text: 'AppID 无效', detail: '无法从当前页面识别游戏，请确认是游戏主页' },
-      not_found: { text: '接口不存在', detail: '桥接版本过旧，请更新后再试' },
-      job_not_found: { text: '任务已失效', detail: '入库任务已被清理，请重新点击' },
-      no_ui_thread: { text: '桥接窗口异常', detail: '桥接进程未能创建窗口，请重启该功能' }
+      method_not_allowed: { text: 'errorMethod', detail: 'errorMethodDetail' },
+      invalid_appid: { text: 'errorAppId', detail: 'errorAppIdDetail' },
+      not_found: { text: 'errorNotFound', detail: 'errorNotFoundDetail' },
+      job_not_found: { text: 'errorJob', detail: 'errorJobDetail' },
+      no_ui_thread: { text: 'errorWindow', detail: 'errorWindowDetail' }
     };
 
-    if (!code) return { text: '入库失败', detail: '未知原因' };
+    if (!code) return { text: 'errorFailed', detail: 'errorUnknown' };
     if (map[code]) return map[code];
 
     // 网络类错误：fetch 失败通常是桥接没起来或端口被占
     if (/Failed to fetch|NetworkError|ECONNREFUSED/i.test(code)) {
       return {
-        text: '无法连接桥接服务',
-        detail: '桥接进程可能已退出，请在设置中关闭再重新开启该功能'
+        text: 'errorConnection', detail: 'errorConnectionDetail'
       };
     }
 
     // 其余情况保留原始信息，方便用户反馈问题
-    return { text: '入库失败', detail: String(code) };
+    return { text: 'errorFailed', rawDetail: String(code) };
   }
 
   async function doImport(btn, appId) {
     if (btn.disabled) return;
     btn.disabled = true;
-    setState(btn, 'working', '入库中…');
+    setState(btn, 'working', 'statusWorking');
+    await refreshLocale();
 
     let holdMs = 3200;
     try {
       const resp = await chrome.runtime.sendMessage({
         type: 'fluent-import',
         appId: appId,
-        name: readGameName()
+        name: readGameName(),
+        nameLanguage: document.documentElement.lang || ''
       });
 
+      applyLocale(resp);
       if (resp && resp.ok) {
-        setState(btn, 'done', resp.duplicate ? '已在入库' : '已提交');
+        setState(btn, 'done', resp.duplicate ? 'statusDuplicate' : 'statusSubmitted');
       } else {
         // 把后台带回的具体原因显示出来，否则用户只知道失败却不知道怎么办
         const reason = describeError(resp && resp.error);
         setState(btn, 'error', reason.text);
-        btn.title = reason.detail;
+        btn.dataset.titleKey = reason.detail || '';
+        btn.title = reason.rawDetail || t(reason.detail);
         holdMs = 6000;   // 出错了多停留一会，让用户看清
 
         // 桥接没起来是最高频的失败原因，额外弹一次明显提示，
@@ -108,7 +138,8 @@
       }
     } catch (e) {
       // service worker 未响应：多半是扩展刚被重载，提示重试而不是笼统失败
-      setState(btn, 'error', '扩展未就绪，请重试');
+      setState(btn, 'error', 'statusExtensionNotReady');
+      btn.dataset.titleKey = '';
       btn.title = String(e && e.message ? e.message : e);
       holdMs = 6000;
     }
@@ -116,8 +147,9 @@
     // 结果提示留一会儿再复原，避免按钮永久卡在结果态
     setTimeout(() => {
       btn.disabled = false;
-      btn.title = '调用 Fluent Steam Lua 生成入库文件';
-      setState(btn, '', '一键入库');
+      btn.dataset.titleKey = 'buttonTooltip';
+      btn.title = t('buttonTooltip');
+      setState(btn, '', 'buttonImport');
     }, holdMs);
   }
 
@@ -129,9 +161,12 @@
     const box = document.createElement('div');
     box.id = 'fluent-lua-hint';
     box.className = 'fluent-lua-hint';
-    box.innerHTML =
-      '<strong>桥接服务未运行</strong>' +
-      '<span>打开 Fluent Steam Lua，在「设置」里开启「商店页一键入库」后重试。</span>';
+    const title = document.createElement('strong');
+    title.textContent = t('hintTitle');
+    const body = document.createElement('span');
+    body.textContent = t('hintBody');
+    box.appendChild(title);
+    box.appendChild(body);
 
     const btn = document.getElementById(BUTTON_ID);
     if (btn && btn.parentNode) {
@@ -179,6 +214,10 @@
     if (!document.getElementById(BUTTON_ID)) tryInject();
   });
   observer.observe(document.documentElement, { childList: true, subtree: true });
+
+  refreshLocale();
+  setInterval(() => { if (!document.hidden) refreshLocale(); }, 30000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshLocale(); });
 
   // 单页内跳转时 URL 会变，重新判定一次
   let lastPath = location.pathname;

@@ -1,7 +1,8 @@
 <Window x:Class="FluentLuaBridge.ImportProgressWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="入库"
+        xmlns:services="clr-namespace:SteamLuaManager.Services"
+        Title="{Binding [Bridge_ImportTitle], Source={x:Static services:LocalizationService.Instance}}"
         Width="460" SizeToContent="Height"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         ResizeMode="NoResize" ShowInTaskbar="True" Topmost="True"
@@ -99,7 +100,7 @@
 
             <!-- 顶部只放游戏身份信息，状态与操作都收在底部 -->
             <StackPanel Grid.Row="0">
-                <TextBlock x:Name="GameNameText" Text="读取中…"
+                <TextBlock x:Name="GameNameText"
                            FontSize="21" FontWeight="SemiBold"
                            Foreground="{StaticResource TextPrimary}"
                            TextTrimming="CharacterEllipsis" />
@@ -177,13 +178,13 @@
                 <Ellipse x:Name="StatusDot" Grid.Column="0" Width="7" Height="7"
                          Fill="{StaticResource AccentBrush}"
                          VerticalAlignment="Top" Margin="0,6,0,0" />
-                <TextBlock x:Name="TitleText" Grid.Column="1" Text="正在入库" Margin="8,0,0,0"
+                <TextBlock x:Name="TitleText" Grid.Column="1" Margin="8,0,0,0"
                            FontSize="12.5" Foreground="{StaticResource TextSecondary}"
                            TextWrapping="Wrap" LineHeight="18" />
             </Grid>
 
             <!-- 关闭入口只在右下角，完成后才可用 -->
-            <Button x:Name="CloseButton" Grid.Row="3" Content="关闭"
+            <Button x:Name="CloseButton" Grid.Row="3" Content="{Binding [App_Close], Source={x:Static services:LocalizationService.Instance}}"
                     Style="{StaticResource PillButton}"
                     HorizontalAlignment="Right" Margin="0,14,0,0"
                     IsEnabled="False" Click="OnCloseClick" />

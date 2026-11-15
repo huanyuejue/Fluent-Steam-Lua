@@ -14,13 +14,14 @@ namespace SteamLuaManager.ViewModels;
 public partial class AchievementEditViewModel : ObservableObject, IDisposable
 {
     private readonly uint _appId;
-    private readonly string _gameName;
+    private string _gameName;
     private WorkerSession? _session;
     private bool _loading;
 
     public ObservableCollection<AchievementEntry> Achievements { get; } = new();
 
     public string GameName => _gameName;
+    public string WindowTitle => $"{L.Get("AchEdit_Title")} - {GameName}";
     public string AppIdText => $"AppID: {_appId}";
 
     [ObservableProperty]
@@ -55,6 +56,44 @@ public partial class AchievementEditViewModel : ObservableObject, IDisposable
     {
         _appId = appId;
         _gameName = gameName;
+        LocalizationService.Instance.PropertyChanged += OnLanguageChanged;
+    }
+
+    private int _metadataVersion;
+    private void OnLanguageChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(LocalizationService.CurrentLanguage) || _disposed) return;
+        OnPropertyChanged(nameof(WindowTitle));
+        _ = RefreshLocalizedMetadataAsync();
+    }
+
+    private async Task RefreshLocalizedMetadataAsync()
+    {
+        var version = ++_metadataVersion;
+        var language = LocalizationService.Instance.CurrentLanguage;
+        try
+        {
+            // Read display metadata locally; language changes never reload stats
+            // or discard the user's pending achievement edits.
+            var metadata = await Task.Run(() => (
+                Name: SteamAchievementService.ReadLocalizedGameName(_appId, language),
+                Definitions: SteamAchievementService.ReadLocalizedDefinitions(_appId, language)));
+            if (_disposed || version != _metadataVersion) return;
+            _gameName = metadata.Name ?? $"AppID: {_appId}";
+            OnPropertyChanged(nameof(GameName));
+            OnPropertyChanged(nameof(WindowTitle));
+            var definitions = metadata.Definitions.ToDictionary(d => d.Id, StringComparer.Ordinal);
+            for (var i = 0; i < Achievements.Count; i++)
+            {
+                var old = Achievements[i];
+                if (!definitions.TryGetValue(old.Id, out var definition)) continue;
+                old.UpdateDefinition(definition);
+            }
+        }
+        catch (Exception ex)
+        {
+            LogService.Warn(L.Get("LogCat_Achieve"), L.Get("AchEdit_AutoLoadError", ex.Message));
+        }
     }
 
     public async Task LoadAsync()
@@ -114,8 +153,8 @@ public partial class AchievementEditViewModel : ObservableObject, IDisposable
         // 会话为空（子进程未启动或已退出）不再静默返回，给一行提示免得界面干等
         if (_session == null)
         {
-            StatusMessage = L.Get("AchEdit_SessionUnavailable") + "，" + L.Get("AchEdit_RetryHint", L.Get("AchEdit_Reload"));
-            EmptyHintText = L.Get("AchEdit_SessionUnavailable") + "，" + L.Get("AchEdit_RetryHint", L.Get("AchEdit_Reload"));
+            StatusMessage = L.Get("AchEdit_SessionUnavailable") + Environment.NewLine + L.Get("AchEdit_RetryHint", L.Get("AchEdit_Reload"));
+            EmptyHintText = StatusMessage;
             return false;
         }
 
@@ -138,6 +177,7 @@ public partial class AchievementEditViewModel : ObservableObject, IDisposable
             {
                 Achievements.Add(entry);
             }
+            await RefreshLocalizedMetadataAsync();
 
             LogService.Info(L.Get("LogCat_Achieve"), L.Get("AchEdit_LogLoaded", Achievements.Count, _gameName, _appId));
             StatusMessage = L.Get("AchEdit_LoadedStatus", Achievements.Count);
@@ -233,6 +273,8 @@ public partial class AchievementEditViewModel : ObservableObject, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        _metadataVersion++;
+        LocalizationService.Instance.PropertyChanged -= OnLanguageChanged;
         if (_statusTimer != null)
         {
             _statusTimer.Stop();

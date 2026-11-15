@@ -13,8 +13,8 @@
     <AssemblyName Condition="'$(AppExeName)' == ''">SteamLuaManager</AssemblyName>
     <RootNamespace>SteamLuaManager</RootNamespace>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
-    <Title>Fluent Steam Lua 管理工具</Title>
-    <Product>Fluent Steam Lua 管理工具</Product>
+    <Title>Fluent Steam Lua</Title>
+    <Product>Fluent Steam Lua</Product>
     <Version>1.5.5.2</Version>
   </PropertyGroup>
 

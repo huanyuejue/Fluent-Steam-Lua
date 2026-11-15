@@ -373,7 +373,7 @@ public partial class App : Application
 
                 if (!accepted)
                 {
-                    LogService.Info(L.Get("LogCat_System"), "用户暂缓更新商店页入库组件");
+                    LogService.Info(L.Get("LogCat_System"), L.Get("Bridge_LogUpdateDeferred"));
                     return;
                 }
 
@@ -390,12 +390,12 @@ public partial class App : Application
 
             if (!await bridge.EnsureStartedAsync().ConfigureAwait(false))
             {
-                LogService.Warn(L.Get("LogCat_System"), "桥接服务随主程序启动失败");
+                LogService.Warn(L.Get("LogCat_System"), L.Get("Bridge_LogStartupFailed"));
             }
         }
         catch (Exception ex)
         {
-            LogService.Warn(L.Get("LogCat_System"), $"拉起桥接服务异常: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_System"), L.Get("Bridge_LogStartupError", ex.Message));
         }
     }
 
@@ -447,7 +447,7 @@ public partial class App : Application
         }
         catch (Exception ex)
         {
-            LogService.Warn(L.Get("LogCat_System"), $"显示组件更新结果失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_System"), L.Get("Bridge_LogUpdateNoticeFailed", ex.Message));
         }
     }
 

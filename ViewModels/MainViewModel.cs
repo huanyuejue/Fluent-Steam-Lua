@@ -674,7 +674,7 @@ namespace SteamLuaManager.ViewModels;
 		if (r.LuaCount > 0) lines.Add(L.Get("Home_ImportGameOk", r.LuaCount));
 		if (r.BinCount > 0) lines.Add(L.Get("Home_ImportBinOk", r.BinCount));
 		if (r.ManifestCount > 0) lines.Add(L.Get("Home_ImportManifestOk", r.ManifestCount));
-		if (r.SkippedCount > 0) lines.Add(L.Get("Home_ImportSkip", r.SkippedCount, string.Join("、", r.SkippedFiles.Take(5)), r.SkippedFiles.Count > 5 ? "…" : ""));
+		if (r.SkippedCount > 0) lines.Add(L.Get("Home_ImportSkip", r.SkippedCount, string.Join(L.Get("Common_ListSep"), r.SkippedFiles.Take(5)), r.SkippedFiles.Count > 5 ? "…" : ""));
 		foreach (var f in r.FailedFiles) lines.Add(L.Get("Home_ImportFailFile", f));
 		if (lines.Count == 0) lines.Add(L.Get("Home_ImportArchiveEmpty"));
 	}

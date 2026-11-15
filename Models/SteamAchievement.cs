@@ -23,7 +23,18 @@ public partial class AchievementDefinition
 
 public partial class AchievementEntry : ObservableObject
 {
-    public AchievementDefinition Definition { get; init; } = new();
+    public AchievementDefinition Definition { get; private set; } = new();
+
+    public void UpdateDefinition(AchievementDefinition definition)
+    {
+        Definition = definition;
+        OnPropertyChanged(nameof(Definition));
+        OnPropertyChanged(nameof(Name));
+        OnPropertyChanged(nameof(Description));
+        OnPropertyChanged(nameof(IsProtected));
+        OnPropertyChanged(nameof(IsHidden));
+        OnPropertyChanged(nameof(IconUrl));
+    }
 
     public string Id => Definition.Id;
     public string Name => Definition.Name;
