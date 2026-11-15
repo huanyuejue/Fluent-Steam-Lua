@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.IO;
+using System.Net;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
@@ -653,7 +654,10 @@ public class SteamApiService : ISteamApiService
 				HttpHeaderHelper.ConfigureBrowserJson);
 			using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
 			if (doc.RootElement.TryGetProperty("name", out var name))
-				return name.GetString();
+			{
+				var gameName = name.GetString()?.Trim();
+				return IsJunkGameName(gameName) ? null : gameName;
+			}
 		}
 		catch (Exception ex) { LogService.Warn(L.Get("LogCat_SteamApi"), L.Get("Svc_ApiSpyFailed", appId, ex.Message)); }
 		return null;
@@ -664,6 +668,9 @@ public class SteamApiService : ISteamApiService
 		string.IsNullOrWhiteSpace(name) ||
 		name.Equals("Error", StringComparison.OrdinalIgnoreCase) ||
 		name.Equals("Steam Community", StringComparison.OrdinalIgnoreCase) ||
+		name.Equals("Welcome to Steam", StringComparison.OrdinalIgnoreCase) ||
+		name.Equals("欢迎来到 Steam", StringComparison.Ordinal) ||
+		name.Equals("歡迎來到 Steam", StringComparison.Ordinal) ||
 		name.Contains("Just a moment", StringComparison.OrdinalIgnoreCase) ||
 		name.Contains("Access Denied", StringComparison.OrdinalIgnoreCase) ||
 		name.Contains("Attention Required", StringComparison.OrdinalIgnoreCase);
@@ -674,11 +681,29 @@ public class SteamApiService : ISteamApiService
 		try
 		{
 			var url = $"https://steamcommunity.com/app/{appId}?l=english";
-			var html = await _httpClientProvider.SendWithProxyRetryAsync(
-				"steam-api-json",
+			using var response = await _httpClientProvider.SendWithProxyRetryAsync(
+				"steam-api-community",
 				TimeSpan.FromSeconds(8),
-				client => client.GetStringAsync(url, cancellationToken),
-				HttpHeaderHelper.ConfigureBrowserJson);
+				client => client.GetAsync(url, cancellationToken),
+				client =>
+				{
+					HttpHeaderHelper.ConfigureBrowserJson(client);
+					// Community redirects may drop l=english, so preserve the language in headers.
+					client.DefaultRequestHeaders.AcceptLanguage.Clear();
+					client.DefaultRequestHeaders.AcceptLanguage.ParseAdd("en-US,en;q=0.9");
+				});
+			response.EnsureSuccessStatusCode();
+
+			// Invalid AppIDs can redirect to the Store homepage. Only game pages
+			// on Steam Community may supply a fallback name, including /games aliases.
+			var pageUri = response.RequestMessage?.RequestUri;
+			if (pageUri == null || !pageUri.Host.Equals("steamcommunity.com", StringComparison.OrdinalIgnoreCase))
+				return null;
+			if (!pageUri.AbsolutePath.StartsWith("/app/", StringComparison.OrdinalIgnoreCase) &&
+				!pageUri.AbsolutePath.StartsWith("/games/", StringComparison.OrdinalIgnoreCase))
+				return null;
+
+			var html = await response.Content.ReadAsStringAsync(cancellationToken);
 
 			var tag = "<title>";
 			var start = html.IndexOf(tag, StringComparison.OrdinalIgnoreCase);
@@ -688,19 +713,11 @@ public class SteamApiService : ISteamApiService
 			var end = html.IndexOf("</title>", start, StringComparison.OrdinalIgnoreCase);
 			if (end < 0) return null;
 
-			var title = html[start..end];
-			// 社区游戏页标题固定为 "Steam Community :: 游戏名"，取 :: 之后才是真名；
-			// 之前取之前会把所有游戏都解析成 "Steam Community"
-			string? name = null;
-			var sep = title.IndexOf(" :: ", StringComparison.OrdinalIgnoreCase);
-			if (sep >= 0)
-				name = title[(sep + 4)..].Trim();
-
-			if (string.IsNullOrEmpty(name))
-			{
-				sep = title.LastIndexOf(" - ", StringComparison.OrdinalIgnoreCase);
-				name = sep > 0 ? title[..sep].Trim() : title.Trim();
-			}
+			var title = WebUtility.HtmlDecode(html[start..end]).Trim();
+			const string prefix = "Steam Community :: ";
+			if (!title.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+				return null;
+			var name = title[prefix.Length..].Trim();
 			return IsJunkGameName(name) ? null : name;
 		}
 		catch (Exception ex)
