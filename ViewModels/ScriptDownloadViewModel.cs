@@ -549,9 +549,10 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
 
     private async Task SearchByNameAsync(string name, CancellationToken ct, string language)
     {
-        // Heybox results contain Chinese names, so only use them in Chinese mode.
+        // 中文名搜索走 keylol 的 Steam 数据库镜像：小黑盒搜索已加登录校验不可用，
+        // 它同样返回中文名，且不需要登录
         var heiHe = language == "zh"
-            ? await XiaoHeiHeService.SearchByNameAsync(name, ct) : new List<HeiHeGame>();
+            ? await SteamDbKeylolService.SearchByNameAsync(name, ct) : new List<HeiHeGame>();
         ct.ThrowIfCancellationRequested();
         if (heiHe.Count > 0)
         {

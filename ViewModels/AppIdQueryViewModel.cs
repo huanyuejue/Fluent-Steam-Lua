@@ -82,11 +82,11 @@ public partial class AppIdQueryViewModel : ObservableObject, IDisposable
         StatusMessage = "";
         try
         {
-            // 小黑盒优先：只要主游戏，DLC/试玩/软件等统统不要（type 缺失的保留，免得误杀）
+            // 中文搜索源优先：只要主游戏，DLC/试玩/软件等统统不要（type 缺失的保留，免得误杀）
             List<HeiHeGame> found;
             try
             {
-                found = (language == "zh" ? await XiaoHeiHeService.SearchByNameAsync(keyword, ct) : new List<HeiHeGame>())
+                found = (language == "zh" ? await SteamDbKeylolService.SearchByNameAsync(keyword, ct) : new List<HeiHeGame>())
                     .Where(g => !IsNonGameType(g.Type))
                     .ToList();
             }
