@@ -16,7 +16,10 @@ public static class AppInfoVdf
     private const int EntryMetadataSize = 60;
     private const int MaxDepth = 64;
 
-    public sealed record AppEntry(uint AppId, string? Type, string? Name);
+    public sealed record AppEntry(uint AppId, string? Type, string? Name)
+    {
+        public string? ChineseName { get; init; }
+    }
 
     // 跨服务共享缓存：同一文件同 mtime 直接复用，调用方拿到的是浅拷贝，各自过滤互不影响
     private static readonly object _cacheLock = new();
@@ -25,8 +28,9 @@ public static class AppInfoVdf
     private static long _cachedLength;
     private static List<AppEntry>? _cachedEntries;
 
-    public static List<AppEntry> Parse(string path)
+    public static List<AppEntry> Parse(string path, string? language = null)
     {
+        language ??= LocalizationService.Instance.CurrentLanguage;
         DateTime mtime;
         long length;
         try
@@ -43,7 +47,7 @@ public static class AppInfoVdf
         lock (_cacheLock)
         {
             if (_cachedEntries != null && _cachedPath == path && _cachedMtime == mtime && _cachedLength == length)
-                return new List<AppEntry>(_cachedEntries);
+                return SelectNames(_cachedEntries, language);
         }
 
         var result = ParseUncached(path);
@@ -54,8 +58,12 @@ public static class AppInfoVdf
             _cachedLength = length;
             _cachedEntries = result;
         }
-        return new List<AppEntry>(result);
+        return SelectNames(result, language);
     }
+
+    private static List<AppEntry> SelectNames(List<AppEntry> entries, string language) =>
+        entries.Select(e => language == "zh" && !string.IsNullOrWhiteSpace(e.ChineseName)
+            ? e with { Name = e.ChineseName } : e).ToList();
 
     private static List<AppEntry> ParseUncached(string path)
     {
@@ -97,30 +105,31 @@ public static class AppInfoVdf
             }
 
             var payload = ReadBytes(fs, payloadLen);
-            var (type, name) = ParsePayload(payload, strings);
+            var (type, name, chineseName) = ParsePayload(payload, strings);
 
-            result.Add(new AppEntry(appId, type, name));
+            result.Add(new AppEntry(appId, type, name) { ChineseName = chineseName });
             fs.Position = entryEnd;
         }
 
         return result;
     }
 
-    private static (string? Type, string? Name) ParsePayload(byte[] payload, List<string>? strings)
+    private static (string? Type, string? Name, string? ChineseName) ParsePayload(byte[] payload, List<string>? strings)
     {
         using var ms = new MemoryStream(payload);
-        if (ms.Length < 1) return (null, null);
+        if (ms.Length < 1) return (null, null, null);
 
         var rootType = ms.ReadByte();
         var rootName = ReadKey(ms, strings);
-        if (rootType == -1 || rootName == null) return (null, null);
+        if (rootType == -1 || rootName == null) return (null, null, null);
 
         var root = new Node { Name = rootName, Children = ReadChildren(ms, strings, 0) };
-        if (root.Children == null) return (null, null);
+        if (root.Children == null) return (null, null, null);
 
         string? type = null;
         string? name = null;
         string? zhName = null;
+        string? enName = null;
 
         foreach (var child in root.Children)
         {
@@ -133,6 +142,8 @@ public static class AppInfoVdf
             }
             else if (string.Equals(child.Name, "localization", StringComparison.OrdinalIgnoreCase))
             {
+                var english = FindChild(child.Children, "english");
+                if (english?.Children != null) enName = FindValue(english.Children, "name");
                 var zh = FindChild(child.Children, "schinese") ?? FindChild(child.Children, "tchinese");
                 if (zh?.Children != null)
                 {
@@ -141,7 +152,7 @@ public static class AppInfoVdf
             }
         }
 
-        return (type, zhName ?? name);
+        return (type, string.IsNullOrWhiteSpace(enName) ? name : enName, zhName);
     }
 
     private static Node? FindChild(List<Node> children, string key)

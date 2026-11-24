@@ -38,10 +38,12 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
     private string _currentDownloadMode = "DepotKey";
     private bool _disposed;
     private CancellationTokenSource? _downloadCts;
+    private CancellationTokenSource? _searchCts;
+    private int _searchLanguageVersion;
 
     // Chinese search retains its English fallback; English requests English names.
-    private static (string Cc, string Lang)[] StoreSearchLocales =>
-        LocalizationService.Instance.CurrentLanguage == "zh"
+    private static (string Cc, string Lang)[] StoreSearchLocales(string language) =>
+        language == "zh"
             ? new[] { ("cn", "schinese"), ("us", "english") }
             : new[] { ("us", "english") };
 
@@ -104,6 +106,7 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
     private bool _isRankingLoading;
 
     private CancellationTokenSource? _rankingCts;
+    private CancellationTokenSource? _rankingNamesCts;
 
     // 榜单与日志区互斥：开着开关、日志为空、任一榜单有数据时才展示榜单区
     public bool IsRankingVisible => ShowRanking && LogLines.Count == 0 &&
@@ -158,19 +161,24 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(IsRankingVisible));
         if (ShowRanking && (PopularRanking.Count == 0 || RecommendRanking.Count == 0) && !IsRankingLoading)
             _ = LoadRankingAsync();
+        else if (ShowRanking && !IsRankingLoading && _rankingNamesCts == null)
+            _ = RefreshRankingNamesAsync();
     }
 
     private async Task LoadRankingAsync()
     {
+        if (_disposed) return;
         try { _rankingCts?.Cancel(); } catch { }
         try { _rankingCts?.Dispose(); } catch { }
         var cts = new CancellationTokenSource();
+        var ct = cts.Token;
         _rankingCts = cts;
         IsRankingLoading = true;
         try
         {
             // 热门池按页拉满后切分：头部直出热门榜单，剩余洗牌抽取为你推荐，两排不重样
-            var pool = await XiaoHeiHeService.GetPopularPoolAsync(120, cts.Token);
+            var pool = await XiaoHeiHeService.GetPopularPoolAsync(120, ct);
+            ct.ThrowIfCancellationRequested();
             PopularRanking.Clear();
             foreach (var g in pool.Take(10))
                 PopularRanking.Add(g);
@@ -184,6 +192,7 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
             RecommendRanking.Clear();
             foreach (var g in rest.Take(10))
                 RecommendRanking.Add(g);
+            _ = RefreshRankingNamesAsync();
             // 只进 app.log 不进 LogLines：写 UI 日志会触发榜单隐藏规则
             LogService.Info(L.Get("LogCat_Home"), L.Get("Ruku_RankLoadedLog", PopularRanking.Count, RecommendRanking.Count));
             if (PopularRanking.Count == 0 && RecommendRanking.Count == 0)
@@ -228,12 +237,81 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
 
     private void OnLanguageChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
+        if (e.PropertyName != nameof(LocalizationService.CurrentLanguage)) return;
+        _searchLanguageVersion++;
+        try { _searchCts?.Cancel(); } catch { }
+        SearchResults.Clear();
+        if (HasSearched && !IsSearching && !IsDownloading) _ = SearchAsync();
         OnPropertyChanged(nameof(CurrentDataSourceLabel));
         OnPropertyChanged(nameof(LastUpdateTimeText));
         RefreshRankingTexts();
+        _ = RefreshRankingNamesAsync();
     }
 
-    // 榜单项是不可变 record，原位重赋触发集合 Replace 通知让关注数文案重新取值
+    private async Task RefreshRankingNamesAsync()
+    {
+        try { _rankingNamesCts?.Cancel(); } catch { }
+        if (_disposed || LocalizationService.Instance.CurrentLanguage == "zh") return;
+
+        // Resolve only the displayed cards, retaining successful names across
+        // language switches without fetching or reshuffling the ranking again.
+        var games = PopularRanking.Concat(RecommendRanking)
+            .Where(g => string.IsNullOrWhiteSpace(g.EnglishName)).ToList();
+        if (games.Count == 0) return;
+
+        var cts = new CancellationTokenSource();
+        var ct = cts.Token;
+        _rankingNamesCts = cts;
+        using var gate = new SemaphoreSlim(4);
+        try
+        {
+            await Task.WhenAll(games.Select(async game =>
+            {
+                await gate.WaitAsync(ct);
+                try
+                {
+                    using var lookupCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    lookupCts.CancelAfter(TimeSpan.FromSeconds(15));
+                    var (name, _, _) = await GetAppNameAsync(game.AppId, lookupCts.Token, "en");
+                    if (string.IsNullOrWhiteSpace(name))
+                        name = await _steamApiService.GetFallbackGameNameAsync(game.AppId, lookupCts.Token);
+                    lookupCts.Token.ThrowIfCancellationRequested();
+                    ct.ThrowIfCancellationRequested();
+                    if (!string.IsNullOrWhiteSpace(name) && ReferenceEquals(_rankingNamesCts, cts))
+                    {
+                        SetRankingEnglishName(PopularRanking, game, name);
+                        SetRankingEnglishName(RecommendRanking, game, name);
+                    }
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    // An unavailable name must not prevent other cards from loading.
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    LogService.Warn(L.Get("LogCat_Home"), L.Get("Ruku_StoreApiFailed", game.AppId, "english", ex.Message));
+                }
+                finally
+                {
+                    gate.Release();
+                }
+            }));
+        }
+        catch (OperationCanceledException) { }
+        finally
+        {
+            if (ReferenceEquals(_rankingNamesCts, cts)) _rankingNamesCts = null;
+            cts.Dispose();
+        }
+    }
+
+    private static void SetRankingEnglishName(ObservableCollection<RankGame> ranking, RankGame game, string name)
+    {
+        var index = ranking.IndexOf(game);
+        if (index >= 0) ranking[index] = game with { EnglishName = name };
+    }
+
+    // Replace notifications refresh both the name and follower text for the language.
     private void RefreshRankingTexts()
     {
         for (var i = 0; i < PopularRanking.Count; i++) PopularRanking[i] = PopularRanking[i];
@@ -244,6 +322,7 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        try { _searchCts?.Cancel(); } catch { }
         _settingsService.SettingsChanged -= OnSettingsChanged;
         _depotService.AllSourcesUpdated -= OnAllSourcesUpdated;
         LocalizationService.Instance.PropertyChanged -= OnLanguageChanged;
@@ -253,6 +332,8 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
         try { _rankingCts?.Cancel(); } catch { }
         try { _rankingCts?.Dispose(); } catch { }
         _rankingCts = null;
+        try { _rankingNamesCts?.Cancel(); } catch { }
+        _rankingNamesCts = null;
     }
 
     // 切页离开时由 MainWindow 调用：在飞的入库任务取消，UI 已清空不再有幽灵进度
@@ -284,17 +365,20 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
         return list;
     }
 
-    private static void ConfigureSteamStoreHeaders(HttpClient client)
+    private static void ConfigureSteamStoreHeaders(HttpClient client, string language)
     {
         client.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "*/*");
-        client.DefaultRequestHeaders.TryAddWithoutValidation("Accept-Language", "zh-CN,zh;q=0.9");
+        client.DefaultRequestHeaders.AcceptLanguage.Clear();
+        client.DefaultRequestHeaders.AcceptLanguage.ParseAdd(language == "schinese" ? "zh-CN,zh;q=0.9" : "en-US,en;q=0.9");
         client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
     }
 
     [RelayCommand]
     private async Task SearchAsync()
     {
-        if (IsSearching) return;
+        if (IsSearching || _disposed) return;
+        var language = LocalizationService.Instance.CurrentLanguage;
+        var languageVersion = _searchLanguageVersion;
 
         var query = GameId?.Trim();
         if (string.IsNullOrEmpty(query))
@@ -310,6 +394,7 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
 
         // Localized Store and fallback sources share a 15-second timeout.
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        _searchCts = cts;
 
         try
         {
@@ -330,17 +415,20 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
             {
                 // Heybox supplies Chinese names; English uses the localized Steam Store.
                 (string? name, string? headerImage, string releaseDate) = (null, null, "");
-                if (LocalizationService.Instance.CurrentLanguage == "zh")
+                if (language == "zh")
                     (name, headerImage, releaseDate) = await XiaoHeiHeService.GetGameDetailAsync(appId, cts.Token);
                 if (name == null)
-                    (name, headerImage, releaseDate) = await GetAppNameAsync(appId, cts.Token);
+                    (name, headerImage, releaseDate) = await GetAppNameAsync(appId, cts.Token, language);
                 // 商店下架的游戏 appdetails 无数据，用备用源再捞一次名字
                 if (name == null)
                 {
                     name = await _steamApiService.GetFallbackGameNameAsync(appId, cts.Token);
+                    cts.Token.ThrowIfCancellationRequested();
                     if (name != null)
                         AddLog(L.Get("Ruku_FallbackName", name));
                 }
+                cts.Token.ThrowIfCancellationRequested();
+                if (_disposed || languageVersion != _searchLanguageVersion) return;
                 if (name != null)
                 {
                     // header_image 为哈希 CDN 完整 URL；缺失时回退老模板（对早期游戏仍有效）
@@ -367,17 +455,19 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
             }
             else
             {
-                await SearchByNameAsync(query, cts.Token);
+                await SearchByNameAsync(query, cts.Token, language);
             }
         }
         catch (OperationCanceledException)
         {
+            if (_disposed || languageVersion != _searchLanguageVersion) return;
             AddLog(L.Get("Ruku_SearchTimeoutLog"));
             AddLog(L.Get("Ruku_SearchTimeoutTip"));
             StatusMessage = L.Get("Ruku_SearchTimeoutStatus");
         }
         catch (Exception ex)
         {
+            if (_disposed || languageVersion != _searchLanguageVersion) return;
             AddLog(L.Get("Ruku_SearchError", ex.Message));
             StatusMessage = L.Get("Ruku_SearchError", ex.Message);
         }
@@ -386,25 +476,27 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
             IsSearching = false;
             HasSearched = true;
             RefreshSearchEmptyVisible();
+            if (ReferenceEquals(_searchCts, cts)) _searchCts = null;
+            if (!_disposed && languageVersion != _searchLanguageVersion && !IsDownloading) _ = SearchAsync();
         }
     }
 
-    private async Task<(string? Name, string? HeaderImage, string ReleaseDate)> GetAppNameAsync(int appId, CancellationToken ct = default)
+    private async Task<(string? Name, string? HeaderImage, string ReleaseDate)> GetAppNameAsync(int appId, CancellationToken ct = default, string? language = null)
     {
         // Follow the app language, with English fallback for Chinese requests.
         // Steam 会对合服/改 ID 的游戏返回重定向后的 AppID 做 key，
         // 精确 key 命中失败时取首个 success 项（如 3669870 返回的 key 是 4760190）
-        foreach (var lang in LocalizationService.Instance.CurrentLanguage == "zh"
+        foreach (var lang in (language ?? LocalizationService.Instance.CurrentLanguage) == "zh"
                      ? new[] { "schinese", "english" } : new[] { "english" })
         {
             try
             {
                 var url = $"https://store.steampowered.com/api/appdetails?appids={appId}&l={lang}";
                 var json = await _httpClientProvider.SendWithProxyRetryAsync(
-                    "script-steam-store",
+                    $"script-steam-store-{lang}",
                     TimeSpan.FromSeconds(10),
                     client => client.GetStringAsync(url, ct),
-                    ConfigureSteamStoreHeaders);
+                    client => ConfigureSteamStoreHeaders(client, lang));
 
                 using var doc = JsonDocument.Parse(json);
                 if (doc.RootElement.ValueKind == JsonValueKind.Object)
@@ -455,11 +547,12 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
         return (null, null, "");
     }
 
-    private async Task SearchByNameAsync(string name, CancellationToken ct)
+    private async Task SearchByNameAsync(string name, CancellationToken ct, string language)
     {
         // Heybox results contain Chinese names, so only use them in Chinese mode.
-        var heiHe = LocalizationService.Instance.CurrentLanguage == "zh"
+        var heiHe = language == "zh"
             ? await XiaoHeiHeService.SearchByNameAsync(name, ct) : new List<HeiHeGame>();
+        ct.ThrowIfCancellationRequested();
         if (heiHe.Count > 0)
         {
             var heiCount = Math.Min(heiHe.Count, 10);
@@ -471,17 +564,17 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
         }
 
         // Query locales in the order selected for the current app language.
-        foreach (var (cc, lang) in StoreSearchLocales)
+        foreach (var (cc, lang) in StoreSearchLocales(language))
         {
             var url = $"https://store.steampowered.com/api/storesearch/?term={Uri.EscapeDataString(name)}&cc={cc}&l={lang}";
             string json;
             try
             {
                 json = await _httpClientProvider.SendWithProxyRetryAsync(
-                    "script-steam-store",
+                    $"script-steam-store-{lang}",
                     TimeSpan.FromSeconds(10),
                     client => client.GetStringAsync(url, ct),
-                    ConfigureSteamStoreHeaders);
+                    client => ConfigureSteamStoreHeaders(client, lang));
             }
             catch (OperationCanceledException)
             {
@@ -493,6 +586,7 @@ public partial class ScriptDownloadViewModel : ObservableObject, IDisposable
                 continue;
             }
 
+            ct.ThrowIfCancellationRequested();
             using var doc = JsonDocument.Parse(json);
             var items = doc.RootElement.GetProperty("items");
 

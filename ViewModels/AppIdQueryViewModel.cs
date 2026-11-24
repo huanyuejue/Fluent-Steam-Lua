@@ -14,6 +14,7 @@ public partial class AppIdQueryViewModel : ObservableObject, IDisposable
     private readonly IHttpClientProvider _httpClientProvider;
     private bool _disposed;
     private CancellationTokenSource? _cts;
+    private int _languageVersion;
 
     [ObservableProperty]
     private string _searchText = string.Empty;
@@ -36,12 +37,23 @@ public partial class AppIdQueryViewModel : ObservableObject, IDisposable
     public AppIdQueryViewModel(IHttpClientProvider httpClientProvider)
     {
         _httpClientProvider = httpClientProvider;
+        LocalizationService.Instance.PropertyChanged += OnLanguageChanged;
+    }
+
+    private void OnLanguageChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(LocalizationService.CurrentLanguage) || _disposed) return;
+        _languageVersion++;
+        try { _cts?.Cancel(); } catch { }
+        Results.Clear();
+        if (HasSearched && !IsSearching) _ = SearchAsync();
     }
 
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
+        LocalizationService.Instance.PropertyChanged -= OnLanguageChanged;
         try { _cts?.Cancel(); } catch { }
         try { _cts?.Dispose(); } catch { }
         _cts = null;
@@ -50,6 +62,9 @@ public partial class AppIdQueryViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task SearchAsync()
     {
+        if (_disposed) return;
+        var language = LocalizationService.Instance.CurrentLanguage;
+        var languageVersion = _languageVersion;
         var keyword = SearchText?.Trim();
         if (string.IsNullOrWhiteSpace(keyword))
         {
@@ -71,7 +86,7 @@ public partial class AppIdQueryViewModel : ObservableObject, IDisposable
             List<HeiHeGame> found;
             try
             {
-                found = (await XiaoHeiHeService.SearchByNameAsync(keyword, ct))
+                found = (language == "zh" ? await XiaoHeiHeService.SearchByNameAsync(keyword, ct) : new List<HeiHeGame>())
                     .Where(g => !IsNonGameType(g.Type))
                     .ToList();
             }
@@ -84,7 +99,8 @@ public partial class AppIdQueryViewModel : ObservableObject, IDisposable
             // 商店兜底：中文区 + 英文区各一次
             if (found.Count == 0)
             {
-                foreach (var (cc, lang) in new[] { ("cn", "schinese"), ("us", "english") })
+                foreach (var (cc, lang) in language == "zh"
+                    ? new[] { ("cn", "schinese"), ("us", "english") } : new[] { ("us", "english") })
                 {
                     ct.ThrowIfCancellationRequested();
                     try
@@ -96,15 +112,17 @@ public partial class AppIdQueryViewModel : ObservableObject, IDisposable
                     catch { }
                 }
                 // 商店结果无类型信息：批量问一次 appdetails，按 data.type 只留主游戏；查不到的不拦
-                await DropNonGamesByAppDetailsAsync(found, ct);
+                await DropNonGamesByAppDetailsAsync(found, ct, language);
             }
+            ct.ThrowIfCancellationRequested();
+            if (_disposed || languageVersion != _languageVersion) return;
             foreach (var g in found.Take(10))
                 Results.Add(g);
             StatusMessage = Results.Count == 0 ? L.Get("AppId_NoMatch") : L.Get("AppId_FoundCount", Results.Count);
         }
         catch (OperationCanceledException)
         {
-            StatusMessage = L.Get("AppId_SearchCancelled");
+            if (!_disposed && languageVersion == _languageVersion) StatusMessage = L.Get("AppId_SearchCancelled");
         }
         catch (Exception ex)
         {
@@ -119,6 +137,7 @@ public partial class AppIdQueryViewModel : ObservableObject, IDisposable
                 _cts = null;
             }
             cts.Dispose();
+            if (!_disposed && languageVersion != _languageVersion) _ = SearchAsync();
         }
     }
 
@@ -129,7 +148,7 @@ public partial class AppIdQueryViewModel : ObservableObject, IDisposable
     };
 
     // 无类型候选逐个定性：appdetails 不支持一次传多个 id，只能逐个问；查不到的不拦
-    private async Task DropNonGamesByAppDetailsAsync(List<HeiHeGame> list, CancellationToken ct)
+    private async Task DropNonGamesByAppDetailsAsync(List<HeiHeGame> list, CancellationToken ct, string language)
     {
         var unknowns = list.Where(g => string.IsNullOrEmpty(g.Type)).Select(g => g.AppId).Distinct().ToList();
         if (unknowns.Count == 0) return;
@@ -139,7 +158,7 @@ public partial class AppIdQueryViewModel : ObservableObject, IDisposable
             ct.ThrowIfCancellationRequested();
             try
             {
-                var url = $"https://store.steampowered.com/api/appdetails?appids={id}";
+                var url = $"https://store.steampowered.com/api/appdetails?appids={id}&l={(language == "zh" ? "schinese" : "english")}";
                 var json = await _httpClientProvider.SendWithProxyRetryAsync(
                     "crack-appid-detail", TimeSpan.FromSeconds(8),
                     client => client.GetStringAsync(url, ct));

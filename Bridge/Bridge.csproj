@@ -13,8 +13,8 @@
     <ApplicationIcon>..\Assets\app.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
-    <AssemblyTitle>Fluent Steam Lua 商店页入库桥接服务</AssemblyTitle>
-    <Product>Fluent Steam Lua 管理工具</Product>
+    <AssemblyTitle>Fluent Steam Lua Store Import Bridge</AssemblyTitle>
+    <Product>Fluent Steam Lua</Product>
     <!-- 桥接与浏览器扩展共用同一个组件版本：两者必须成对部署，
          版本号统一才能在启动时只做一次比对就判断整套组件是否需要更新 -->
     <Version>1.0.0</Version>
@@ -48,10 +48,14 @@
     <Compile Include="..\Services\L.cs" Link="Linked\L.cs" />
     <Compile Include="..\Services\GitHubMirror.cs" Link="Linked\GitHubMirror.cs" />
     <Compile Include="..\Services\XiaoHeiHeService.cs" Link="Linked\XiaoHeiHeService.cs" />
+    <Compile Include="..\Services\TrainerMetadataCache.cs" Link="Linked\TrainerMetadataCache.cs" />
+    <Compile Include="..\Services\TrainerExeParser.cs" Link="Linked\TrainerExeParser.cs" />
     <Compile Include="..\Models\DepotQueryResult.cs" Link="Linked\DepotQueryResult.cs" />
     <Compile Include="..\Models\CdnEndpoint.cs" Link="Linked\CdnEndpoint.cs" />
     <Compile Include="..\Models\DepotInfo.cs" Link="Linked\DepotInfo.cs" />
     <Compile Include="..\Models\TrainerBinding.cs" Link="Linked\TrainerBinding.cs" />
+    <Compile Include="..\Models\CheatOption.cs" Link="Linked\CheatOption.cs" />
+    <Compile Include="..\Models\TrainerMetadata.cs" Link="Linked\TrainerMetadata.cs" />
     <Compile Include="..\Models\TrainerInfo.cs" Link="Linked\TrainerInfo.cs" />
     <Compile Include="..\Models\RankGame.cs" Link="Linked\RankGame.cs" />
   </ItemGroup>
@@ -73,6 +77,9 @@
 
   <ItemGroup>
     <None Include="app.manifest" />
+    <EmbeddedResource Include="..\Resources\Lang\*.json"
+                      Link="Resources\Lang\%(Filename)%(Extension)"
+                      LogicalName="SteamLuaManager.Resources.Lang.%(Filename)%(Extension)" />
     <Resource Include="..\Assets\app.ico" Link="Assets\app.ico" />
     <Resource Include="..\Assets\app.png" Link="Assets\app.png" />
   </ItemGroup>

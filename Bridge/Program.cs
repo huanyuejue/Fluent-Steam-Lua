@@ -20,6 +20,8 @@ internal static class Program
             return;
         }
 
+        BridgeLocalization.Refresh();
+
         // 常驻进程只处理偶尔几次入库，不需要为吞吐预留内存。
         // 交互式延迟模式配合紧凑 GC，能让密钥字典这类大对象在空闲时尽快被收回。
         System.Runtime.GCSettings.LatencyMode = System.Runtime.GCLatencyMode.Interactive;

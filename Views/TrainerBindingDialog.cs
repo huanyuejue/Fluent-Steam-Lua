@@ -30,6 +30,9 @@ public class TrainerBindingDialog : Window
     private readonly ObservableCollection<string> _autoKeys = new();
     private readonly ObservableCollection<CheatOptionItem> _cheatOptions = new();
     private readonly ObservableCollection<DownloadedTrainerItem> _trainers;
+    private int _optionsLoadVersion;
+    private bool _closed;
+    private CancellationTokenSource? _optionsCts;
 
     public TrainerBinding? Result { get; private set; }
     public TrainerBinding? EditingBinding { get; }
@@ -53,6 +56,14 @@ public class TrainerBindingDialog : Window
 
         if (existing != null)
             LoadExistingData(existing);
+        LocalizationService.Instance.PropertyChanged += OnLanguageChanged;
+        Closed += (_, _) =>
+        {
+            _closed = true;
+            _optionsLoadVersion++;
+            _optionsCts?.Cancel();
+            LocalizationService.Instance.PropertyChanged -= OnLanguageChanged;
+        };
     }
 
     private void SetupWindowStyle()
@@ -85,6 +96,7 @@ public class TrainerBindingDialog : Window
         factory.SetValue(FrameworkElement.MarginProperty, new Thickness(4, 3, 4, 3));
         factory.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Stretch);
         factory.SetBinding(CheckBox.IsCheckedProperty, new System.Windows.Data.Binding("IsSelected"));
+        factory.SetBinding(CheckBox.IsEnabledProperty, new System.Windows.Data.Binding("Option.SupportsAutomaticKey"));
         factory.AddHandler(CheckBox.ClickEvent, new RoutedEventHandler(CheatOptionCheckBox_Click));
         // Bind Content to self so ContentTemplate renders the inner layout
         factory.SetBinding(CheckBox.ContentProperty, new System.Windows.Data.Binding());
@@ -96,7 +108,8 @@ public class TrainerBindingDialog : Window
 
         var desc = new FrameworkElementFactory(typeof(TextBlock));
         desc.SetValue(TextBlock.TextWrappingProperty, TextWrapping.Wrap);
-        desc.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding("Option.Description"));
+        desc.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding("Option.DisplayDescription"));
+        desc.SetBinding(TextBlock.ToolTipProperty, new System.Windows.Data.Binding("Option.SourceDescription"));
 
         var key = new FrameworkElementFactory(typeof(TextBlock));
         key.SetValue(TextBlock.FontSizeProperty, 11.0);
@@ -112,26 +125,44 @@ public class TrainerBindingDialog : Window
         return new DataTemplate { VisualTree = factory };
     }
 
-    private void LoadCheatOptionsForSelectedTrainer()
+    private async void LoadCheatOptionsForSelectedTrainer()
     {
+        var version = ++_optionsLoadVersion;
         _cheatOptions.Clear();
         _cheatOptionsPanel.Visibility = Visibility.Collapsed;
 
         if (_trainerCombo.SelectedItem is not DownloadedTrainerItem item) return;
         if (string.IsNullOrWhiteSpace(item.FilePath)) return;
 
-        var options = TrainerViewModel.LoadCachedOptions(item.FilePath);
-        if (options == null || options.Count == 0) return;
-
-        foreach (var opt in options)
+        _optionsCts?.Cancel();
+        using var cts = new CancellationTokenSource();
+        _optionsCts = cts;
+        try
         {
-            _cheatOptions.Add(new CheatOptionItem
+            var metadata = TrainerMetadataCache.TryLoadCached(item.FilePath);
+            if (metadata is not { FormatVersion: 2 })
+                metadata = await TrainerMetadataCache.LoadAsync(item.FilePath, cts.Token);
+            if (_closed || version != _optionsLoadVersion || metadata == null || metadata.Options.Count == 0) return;
+
+            foreach (var opt in metadata.Options)
             {
-                Option = opt,
-                IsSelected = _autoKeys.Contains(opt.FullKey) || _autoKeys.Contains(opt.DisplayText)
-            });
+                _cheatOptions.Add(new CheatOptionItem
+                {
+                    Option = opt,
+                    IsSelected = _autoKeys.Any(k => CheatOption.HotkeyFromStoredValue(k).Equals(opt.FullKey, StringComparison.OrdinalIgnoreCase))
+                });
+            }
+            _cheatOptionsPanel.Visibility = Visibility.Visible;
         }
-        _cheatOptionsPanel.Visibility = Visibility.Visible;
+        catch (OperationCanceledException) when (cts.IsCancellationRequested) { }
+        catch (Exception ex)
+        {
+            LogService.Warn(L.Get("LogCat_Trainer"), L.Get("Trainer_LogOptionsCacheFailed", ex.Message));
+        }
+        finally
+        {
+            if (ReferenceEquals(_optionsCts, cts)) _optionsCts = null;
+        }
     }
 
     private void CheatOptionCheckBox_Click(object sender, RoutedEventArgs e)
@@ -139,15 +170,22 @@ public class TrainerBindingDialog : Window
         if (sender is CheckBox cb && cb.DataContext is CheatOptionItem item)
         {
             item.IsSelected = cb.IsChecked == true;
-            if (item.IsSelected && !_autoKeys.Contains(item.Option.DisplayText))
+            if (item.IsSelected && !_autoKeys.Any(k => CheatOption.HotkeyFromStoredValue(k).Equals(item.Option.FullKey, StringComparison.OrdinalIgnoreCase)))
             {
-                _autoKeys.Add(item.Option.DisplayText);
+                _autoKeys.Add(item.Option.FullKey);
             }
             else if (!item.IsSelected)
             {
-                _autoKeys.Remove(item.Option.DisplayText);
+                foreach (var stored in _autoKeys.Where(k => CheatOption.HotkeyFromStoredValue(k).Equals(item.Option.FullKey, StringComparison.OrdinalIgnoreCase)).ToList())
+                    _autoKeys.Remove(stored);
             }
         }
+    }
+
+    private void OnLanguageChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(LocalizationService.CurrentLanguage)) return;
+        foreach (var item in _cheatOptions) item.Option.RefreshLocalizedTexts();
     }
 
     private Grid BuildLayout()

@@ -140,6 +140,7 @@ public partial class CloudSaveViewModel : ObservableObject, IDisposable
 
     private void OnLanguageChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
+        if (e.PropertyName != nameof(LocalizationService.CurrentLanguage) || _disposed) return;
         // 选项列表保持同一实例，只刷新显示名；列表不重建，选择器选中项不受影响
         foreach (var o in SortOptions) o.RefreshDisplay();
         foreach (var o in CloudProviders) o.RefreshDisplay();
@@ -149,6 +150,9 @@ public partial class CloudSaveViewModel : ObservableObject, IDisposable
         SetIdleListHint();
         RefreshCloudDllState();
         foreach (var g in RedirectedGames) g.RefreshLocalizedTexts();
+        var games = RedirectedGames.ToList();
+        _steamApiService.PopulateFromCache(games);
+        _ = RefreshMissingInfoAsync(games);
     }
 
     public void OnNavigatedTo() => _ = RefreshAsync();
@@ -358,17 +362,30 @@ public partial class CloudSaveViewModel : ObservableObject, IDisposable
     }
 
     // 后台补齐缺失的名称与封面，失败静默（本地已有内容不受影响）
+    private CancellationTokenSource? _infoCts;
     private async Task RefreshMissingInfoAsync(List<GameInfo> games)
     {
+        try { _infoCts?.Cancel(); } catch { }
+        if (_disposed) return;
+        var cts = new CancellationTokenSource();
+        _infoCts = cts;
+        var language = LocalizationService.Instance.CurrentLanguage;
         try
         {
-            await _steamApiService.RefreshGameInfoAsync(games);
+            await _steamApiService.RefreshGameInfoAsync(games, cts.Token);
             // 后台补到的名字可能改变按名排序，收尾重排一次
-            ApplySorting();
+            if (!_disposed && !cts.IsCancellationRequested && language == LocalizationService.Instance.CurrentLanguage)
+                ApplySorting();
         }
+        catch (OperationCanceledException) { }
         catch (Exception ex)
         {
             LogService.Warn(L.Get("LogCat_Cloud"), L.Get("Cloud_InfoFillFailed", ex.Message));
+        }
+        finally
+        {
+            if (ReferenceEquals(_infoCts, cts)) _infoCts = null;
+            cts.Dispose();
         }
     }
 
@@ -1190,7 +1207,7 @@ public partial class CloudSaveViewModel : ObservableObject, IDisposable
         if (string.IsNullOrWhiteSpace(R2Bucket)) missingR2.Add("Bucket");
         if (missingR2.Count > 0)
         {
-            SetListStatus(L.Get("Cloud_FillMissing", string.Join("、", missingR2)));
+            SetListStatus(L.Get("Cloud_FillMissing", string.Join(L.Get("Common_ListSep"), missingR2)));
             return;
         }
         try
@@ -1225,7 +1242,7 @@ public partial class CloudSaveViewModel : ObservableObject, IDisposable
         if (string.IsNullOrWhiteSpace(S3Region)) missingS3.Add("Region");
         if (missingS3.Count > 0)
         {
-            SetListStatus(L.Get("Cloud_FillMissing", string.Join("、", missingS3)));
+            SetListStatus(L.Get("Cloud_FillMissing", string.Join(L.Get("Common_ListSep"), missingS3)));
             return;
         }
         try
@@ -1274,7 +1291,7 @@ public partial class CloudSaveViewModel : ObservableObject, IDisposable
             missing.Add(L.Get("Cloud_WebDavToken"));
         if (missing.Count > 0)
         {
-            SetListStatus(L.Get("Cloud_FillMissing", string.Join("、", missing)));
+            SetListStatus(L.Get("Cloud_FillMissing", string.Join(L.Get("Common_ListSep"), missing)));
             return;
         }
         if (!int.TryParse(WebDavTimeout.Trim(), out var timeout) || timeout < 0 || timeout > 300)
@@ -1400,6 +1417,10 @@ public partial class CloudSaveViewModel : ObservableObject, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        LocalizationService.Instance.PropertyChanged -= OnLanguageChanged;
+        try { _refreshCts?.Cancel(); } catch { }
+        try { _signInCts?.Cancel(); } catch { }
+        try { _infoCts?.Cancel(); } catch { }
         if (_statusTimer != null)
         {
             _statusTimer.Stop();

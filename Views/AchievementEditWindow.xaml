@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:l="clr-namespace:SteamLuaManager.Markup"
         xmlns:ui="http://schemas.inkore.net/lib/ui/wpf/modern"
-        Title="{l:Loc AchEdit_Title}"
+        Title="{Binding WindowTitle}"
         Height="720" Width="840"
         MinHeight="480" MinWidth="640"
         MaxHeight="1600" MaxWidth="1600"

@@ -517,7 +517,7 @@ public partial class SettingsViewModel : ObservableObject, IDisposable
                 // 服务起来后再登记自启动：部署失败时不会留下指向空路径的启动项
                 if (!_bridgeServiceManager.EnableAutoStart())
                 {
-                    LogService.Warn(L.Get("LogCat_Settings"), "开机自启动登记失败，功能本身仍可用");
+                    LogService.Warn(L.Get("LogCat_Settings"), L.Get("Bridge_LogAutoStartUnavailable"));
                 }
 
                 StatusMessage = L.Get("Settings_StoreImportOn");

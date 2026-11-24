@@ -35,6 +35,13 @@ public sealed class HttpClientProvider : IHttpClientProvider, IDisposable
         // 注册表代理项变化无系统事件，靠短 TTL + 连接失败强制刷新兜底。
         NetworkChange.NetworkAddressChanged += OnNetworkChanged;
         NetworkChange.NetworkAvailabilityChanged += OnNetworkChanged;
+        LocalizationService.Instance.PropertyChanged += OnLanguageChanged;
+    }
+
+    private void OnLanguageChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(LocalizationService.CurrentLanguage))
+            Reset();
     }
 
     private void OnNetworkChanged(object? sender, EventArgs e)
@@ -190,6 +197,7 @@ public sealed class HttpClientProvider : IHttpClientProvider, IDisposable
     {
         NetworkChange.NetworkAddressChanged -= OnNetworkChanged;
         NetworkChange.NetworkAvailabilityChanged -= OnNetworkChanged;
+        LocalizationService.Instance.PropertyChanged -= OnLanguageChanged;
         lock (_lock)
         {
             foreach (var entry in _clients.Values)
@@ -223,7 +231,10 @@ public sealed class HttpClientProvider : IHttpClientProvider, IDisposable
             client.DefaultRequestHeaders.UserAgent.ParseAdd(
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36");
         client.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8");
-        client.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN,zh;q=0.9,en;q=0.8");
+        client.DefaultRequestHeaders.AcceptLanguage.ParseAdd(
+            LocalizationService.Instance.CurrentLanguage == "zh"
+                ? "zh-CN,zh;q=0.9,en;q=0.8"
+                : "en-US,en;q=0.9");
 
         return client;
     }

@@ -98,7 +98,7 @@ public sealed class ExtensionStateService : IExtensionStateService
         }
         catch (Exception ex)
         {
-            LogService.Warn(L.Get("LogCat_Settings"), $"读取 Steam 扩展状态失败: {ex.Message}");
+            LogService.Warn(L.Get("LogCat_Settings"), L.Get("Bridge_LogExtensionStateFailed", ex.Message));
             return new ExtensionInstallState(false, false, null, null, null);
         }
     }

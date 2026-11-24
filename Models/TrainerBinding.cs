@@ -26,10 +26,16 @@ public partial class TrainerBinding : ObservableObject
         get
         {
             if (AutoKeys.Count == 0) return string.Empty;
+            var options = TrainerMetadataCache.TryLoadCached(TrainerFilePath)?.Options;
             var descs = AutoKeys.Select(k =>
             {
+                var hotkey = CheatOption.HotkeyFromStoredValue(k);
+                var option = options?.FirstOrDefault(o => o.FullKey.Equals(hotkey, StringComparison.OrdinalIgnoreCase));
+                if (option != null) return option.DisplayDescription;
                 var idx = k.LastIndexOf(" - ", StringComparison.Ordinal);
-                return idx > 0 ? k[(idx + 3)..] : k;
+                var description = idx > 0 ? k[(idx + 3)..] : k;
+                return LocalizationService.Instance.CurrentLanguage == "en" && TrainerExeParser.HasChinese(description)
+                    ? L.Get("Trainer_OptionEnglishUnavailable") + $" ({hotkey})" : description;
             });
             return L.Get("Trainer_AutoKeysSummary", string.Join(L.Get("Common_ListSep"), descs));
         }

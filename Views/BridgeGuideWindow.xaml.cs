@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Controls;
@@ -43,6 +44,16 @@ public partial class BridgeGuideWindow : Window
         NoteText.Text = L.Get("Bridge_NoteBody");
 
         // 打开窗口时自动检测一次；之后由用户手动刷新
+        RefreshStatus();
+        LocalizationService.Instance.PropertyChanged += OnLanguageChanged;
+        Closed += (_, _) => LocalizationService.Instance.PropertyChanged -= OnLanguageChanged;
+    }
+
+    private void OnLanguageChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(LocalizationService.CurrentLanguage)) return;
+        BuildSteps();
+        NoteText.Text = L.Get("Bridge_NoteBody");
         RefreshStatus();
     }
 
@@ -336,18 +347,18 @@ public partial class BridgeGuideWindow : Window
         else if (!state.Enabled)
         {
             SetPill(ExtStatePill, ExtStateText, L.Get("Bridge_ExtDisabled"), false);
-            ExtDetailText.Text = state.Name ?? extName;
+            ExtDetailText.Text = extName;
         }
         else
         {
             SetPill(ExtStatePill, ExtStateText, L.Get("Bridge_ExtReady"), true);
-            ExtDetailText.Text = state.Name ?? extName;
+            ExtDetailText.Text = extName;
         }
 
         // 组件版本：桥接与扩展分开显示，更新后能直观看出是否已换版
         var bridgeVersion = _bridgeManager.GetDeployedVersion() ?? "-";
         var extVersion = _bridgeManager.GetDeployedExtensionVersion() ?? "-";
-        VersionSummaryText.Text = $"桥接 {bridgeVersion} / 扩展 {extVersion}";
+        VersionSummaryText.Text = L.Get("Bridge_VersionSummary", bridgeVersion, extVersion);
 
         // 总体结论
         var allOk = bridgeRunning && extOk;
@@ -372,7 +383,19 @@ public partial class BridgeGuideWindow : Window
             var manifest = System.IO.Path.Combine(_extensionDir, "manifest.json");
             if (!System.IO.File.Exists(manifest)) return null;
             using var doc = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(manifest));
-            return doc.RootElement.TryGetProperty("name", out var n) ? n.GetString() : null;
+            var name = doc.RootElement.TryGetProperty("name", out var n) ? n.GetString() : null;
+            // Old deployed manifests had a fixed Chinese name. Our component's
+            // display name follows the app language, including after an upgrade.
+            if (string.IsNullOrEmpty(name) || !name.StartsWith("__MSG_", StringComparison.Ordinal)
+                || !name.EndsWith("__", StringComparison.Ordinal)) return L.Get("Bridge_ExtName");
+
+            var key = name[6..^2];
+            var language = LocalizationService.Instance.CurrentLanguage == "zh" ? "zh_CN" : "en";
+            var messages = System.IO.Path.Combine(_extensionDir, "_locales", language, "messages.json");
+            if (!System.IO.File.Exists(messages)) return L.Get("Bridge_ExtName");
+            using var localized = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(messages));
+            return localized.RootElement.TryGetProperty(key, out var entry)
+                   && entry.TryGetProperty("message", out var message) ? message.GetString() : L.Get("Bridge_ExtName");
         }
         catch
         {

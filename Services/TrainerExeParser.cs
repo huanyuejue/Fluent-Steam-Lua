@@ -1,4 +1,6 @@
 using System.IO;
+using System.Net;
+using System.Text;
 using System.Text.RegularExpressions;
 using SteamLuaManager.Models;
 
@@ -6,237 +8,158 @@ namespace SteamLuaManager.Services;
 
 public static class TrainerExeParser
 {
-    private const long MaxFileSizeBytes = 100L * 1024 * 1024; // 100 MB
+    private const long MaxFileSizeBytes = 100L * 1024 * 1024;
 
     public static (string gameName, List<CheatOption> options) Parse(string exePath)
     {
+        var metadata = ReadMetadata(exePath);
+        return (metadata.DisplayGameName, metadata.Options);
+    }
+
+    // Read embedded text as data; trainer executables are never loaded or run.
+    public static TrainerMetadata ReadMetadata(string exePath, CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
         var fileInfo = new FileInfo(exePath);
+        var metadata = new TrainerMetadata
+        {
+            SourceLength = fileInfo.Length,
+            SourceWriteTimeUtcTicks = fileInfo.LastWriteTimeUtc.Ticks
+        };
         if (fileInfo.Length > MaxFileSizeBytes)
         {
             LogService.Warn(L.Get("LogCat_Trainer"), L.Get("Svc_TlaFileTooLarge", exePath, fileInfo.Length / (1024 * 1024)));
-            return ("", new List<CheatOption>());
+            return metadata;
         }
-        var bytes = File.ReadAllBytes(exePath);
-        var strings = ExtractUtf16Strings(bytes);
-        var gameName = ExtractGameName(strings);
-        var options = ExtractOptions(strings);
-        return (gameName, options);
+
+        var strings = ExtractStrings(File.ReadAllBytes(exePath), ct);
+        metadata.ChineseGameName = ExtractChineseGameName(strings);
+        metadata.EnglishGameName = ExtractEnglishGameName(strings);
+        metadata.OriginalGameName = string.IsNullOrEmpty(metadata.ChineseGameName)
+            ? metadata.EnglishGameName : metadata.ChineseGameName;
+        metadata.Options = ExtractOptions(strings, ct);
+        return metadata;
     }
 
-    private static HashSet<string> ExtractUtf16Strings(byte[] bytes)
+    private static HashSet<string> ExtractStrings(byte[] bytes, CancellationToken ct)
     {
-        var result = new HashSet<string>();
-        int n = bytes.Length / 2;
-
-        for (int i = 0; i < n; i++)
+        var result = new HashSet<string>(StringComparer.Ordinal);
+        // Resource strings can start on either byte alignment.
+        for (var alignment = 0; alignment < 2; alignment++)
         {
-            int cp = bytes[i * 2] + bytes[i * 2 + 1] * 256;
-            if (cp == 0) continue;
-
-            bool okStart = IsValidStart(cp);
-            if (!okStart) continue;
-
-            var chars = new List<char>();
-            while (i < n)
+            var text = new StringBuilder();
+            for (var offset = alignment; offset + 1 < bytes.Length; offset += 2)
             {
-                int c = bytes[i * 2] + bytes[i * 2 + 1] * 256;
-                if (c == 0) break;
-                if (!IsValidChar(c)) break;
-                chars.Add((char)c);
-                i++;
+                if ((offset & 0xffff) == alignment) ct.ThrowIfCancellationRequested();
+                var c = (char)(bytes[offset] | bytes[offset + 1] << 8);
+                if (IsTextCharacter(c)) text.Append(c);
+                else FlushText(text, result);
             }
-
-            if (chars.Count >= 6)
-                result.Add(new string(chars.ToArray()));
+            FlushText(text, result);
         }
-
+        // Some native trainers store their English labels as ASCII.
+        var ascii = new StringBuilder();
+        for (var i = 0; i < bytes.Length; i++)
+        {
+            if ((i & 0xffff) == 0) ct.ThrowIfCancellationRequested();
+            var b = bytes[i];
+            if (b is >= 0x20 and <= 0x7e || b is 10 or 13) ascii.Append((char)b);
+            else FlushText(ascii, result);
+        }
+        FlushText(ascii, result);
         return result;
     }
 
-    private static bool IsValidStart(int cp)
+    private static void FlushText(StringBuilder text, HashSet<string> strings)
     {
-        return (cp >= 0x20 && cp <= 0x7E)
-            || (cp >= 0x4E00 && cp <= 0x9FFF)
-            || (cp >= 0x3400 && cp <= 0x4DBF);
+        if (text.Length >= 6) strings.Add(text.ToString());
+        text.Clear();
     }
 
-    private static bool IsValidChar(int cp)
+    private static bool IsTextCharacter(char c) =>
+        c is >= ' ' and <= '~' or '\n' or '\r' or '\t'
+            or >= '\u3400' and <= '\u9fff'
+            or >= '\u3000' and <= '\u303f'
+            or >= '\uff00' and <= '\uffef'
+            or >= '\u00a0' and <= '\u024f'
+            or >= '\u2010' and <= '\u2026' or '\u2122';
+
+    private static string ExtractChineseGameName(IEnumerable<string> strings)
     {
-        return (cp >= 0x20 && cp <= 0x7E)
-            || (cp >= 0x4E00 && cp <= 0x9FFF)
-            || (cp >= 0x3400 && cp <= 0x4DBF)
-            || (cp >= 0x3000 && cp <= 0x303F)
-            || (cp >= 0xFF00 && cp <= 0xFFEF)
-            || cp == 0xB7;
+        var title = strings.Where(s => s.Contains("项修改器", StringComparison.Ordinal))
+            .OrderByDescending(s => s.Length).FirstOrDefault();
+        if (title == null) return "";
+        var bracketed = Regex.Match(title, @"《(.+?)》");
+        var name = bracketed.Success ? bracketed.Groups[1].Value.Trim() : title;
+        name = Regex.Split(name, @"[（(]|\s*[vV]\d+\.\d+|\d+\s*项修改器")[0].Trim();
+        return HasChinese(name) ? name : "";
     }
 
-    private static string ExtractGameName(HashSet<string> strings)
+    private static string ExtractEnglishGameName(IEnumerable<string> strings)
     {
-        // Find string containing "项修改器"
-        var titleStr = strings
-            .Where(s => s.Contains("项修改器"))
-            .OrderByDescending(s => s.Length)
-            .FirstOrDefault();
-
-        if (string.IsNullOrEmpty(titleStr)) return "";
-
-        string? gameName = null;
-
-        // Pattern 1: 《中文名》vX.X
-        var m = Regex.Match(titleStr, @"《(.+?)》");
-        if (m.Success) gameName = m.Groups[1].Value.Trim();
-
-        // Pattern 2: 中文名（English）》vX.X
-        if (string.IsNullOrEmpty(gameName))
+        foreach (var title in strings.Where(s => !HasChinese(s) && s.Contains("Trainer", StringComparison.OrdinalIgnoreCase))
+                     .OrderByDescending(s => Regex.IsMatch(s, @"\b[vV]\d|\bPlus\s+\d"))
+                     .ThenByDescending(s => s.Length))
         {
-            m = Regex.Match(titleStr, @"^(.+?)[（(]");
-            if (m.Success) gameName = m.Groups[1].Value.Trim();
+            var match = Regex.Match(title.Trim(), @"^(?<name>.+?)(?:\s+[vV]\d|\s+Plus\s+\d+|\s+\+\d+|\s+Trainer\b)", RegexOptions.IgnoreCase);
+            if (!match.Success) continue;
+            var name = match.Groups["name"].Value.Trim();
+            if (name.Equals("FLiNG", StringComparison.OrdinalIgnoreCase) || name.Contains('\n') || name.Contains('\r')) continue;
+            return name;
         }
-
-        // Pattern 3: anything before version number
-        if (string.IsNullOrEmpty(gameName))
-        {
-            m = Regex.Match(titleStr, @"^(.+?)[vV]\d+\.\d+");
-            if (m.Success) gameName = m.Groups[1].Value.Trim();
-        }
-
-        // Pattern 4: CJK chars only
-        if (string.IsNullOrEmpty(gameName))
-        {
-            m = Regex.Match(titleStr, @"^([\u4e00-\u9fff\u3400-\u4dbf：，·]+)");
-            if (m.Success) gameName = m.Groups[1].Value.Trim();
-        }
-
-        // Clean up common suffixes
-        if (!string.IsNullOrEmpty(gameName))
-        {
-            gameName = Regex.Replace(gameName, @"[\d]+项修改器.*$", "");
-            gameName = Regex.Replace(gameName, @" 项修改器.*$", "");
-            gameName = Regex.Replace(gameName, @" Plus [\d]+ Trainer.*$", "");
-            gameName = Regex.Replace(gameName, @" v[\d.]+.*$", "");
-            gameName = Regex.Replace(gameName, @"[\d]+[ ]*[Tt]rainer.*$", "");
-            gameName = gameName.Trim();
-        }
-
-        return gameName ?? "";
-    }
-
-    private static List<CheatOption> ExtractOptions(HashSet<string> strings)
-    {
-        var records = new List<(string key, string name)>();
-
-        foreach (var s in strings)
-        {
-            var cleaned = s.Replace("\\n", " ").Replace("\\r", "");
-
-            var m = Regex.Match(cleaned, @"^((?:Ctrl|Alt|Shift)\+)?(数字键|Num|F)\s*([\d+*./-]+)\s*-\s*(.+)$");
-            if (!m.Success) continue;
-
-            var mod = m.Groups[1].Value;
-            var keyType = m.Groups[2].Value;
-            var keyNum = m.Groups[3].Value;
-            var rest = m.Groups[4].Value;
-
-            // Build key display
-            string keyDisplay = keyType switch
+        // Bilingual titles sometimes embed the English name in parentheses
+        // instead of storing a separate English window title.
+        foreach (var title in strings.Where(s => s.Contains("项修改器", StringComparison.Ordinal)))
+            foreach (Match match in Regex.Matches(title, @"[（(]([^）)]+)[）)]"))
             {
-                "数字键" => mod + "Num " + keyNum,
-                "F" => mod + "F" + keyNum,
-                _ => mod + keyType + " " + keyNum
-            };
-
-            // Remove HTML tags
-            rest = Regex.Replace(rest, "<[^>]+>", "").Trim();
-
-            // Extract Chinese name (remove --cmd suffix)
-            var m2 = Regex.Match(rest, @"^(.+?)\s*--\S+");
-            var chName = m2.Success ? m2.Groups[1].Value.Trim() : rest.Trim();
-
-            // Skip if no CJK chars
-            if (!HasCjk(chName)) continue;
-
-            records.Add((keyDisplay, chName));
-        }
-
-        // Deduplicate: prefer modified version (Ctrl+/Alt+/Shift+) over plain
-        var nameMap = new Dictionary<string, (string key, string name)>();
-        foreach (var r in records)
-        {
-            bool hasMod = Regex.IsMatch(r.key, @"^(Ctrl|Alt|Shift)\+");
-            if (nameMap.TryGetValue(r.name, out var existing))
-            {
-                bool existingHasMod = Regex.IsMatch(existing.key, @"^(Ctrl|Alt|Shift)\+");
-                if (hasMod && !existingHasMod)
-                    nameMap[r.name] = r;
+                var name = match.Groups[1].Value.Trim();
+                if (!HasChinese(name) && name.Any(char.IsLetter) && !Regex.IsMatch(name, @"^[vV]?\d")) return name;
             }
-            else
-            {
-                nameMap[r.name] = r;
-            }
-        }
+        return "";
+    }
 
-        // Sort: plain keys first, then combos; numeric order
-        var numOrder = new Dictionary<string, string>
+    private static List<CheatOption> ExtractOptions(IEnumerable<string> strings, CancellationToken ct)
+    {
+        var byKey = new Dictionary<string, CheatOption>(StringComparer.OrdinalIgnoreCase);
+        foreach (var text in strings)
         {
-            ["1"] = "0001", ["2"] = "0002", ["3"] = "0003", ["4"] = "0004",
-            ["5"] = "0005", ["6"] = "0006", ["7"] = "0007", ["8"] = "0008",
-            ["9"] = "0009", ["0"] = "0010", ["+"] = "0011", ["-"] = "0012",
-            ["*"] = "0013", ["/"] = "0014", ["."] = "0015"
-        };
-
-        var sorted = nameMap.Values
-            .OrderBy(r =>
+            ct.ThrowIfCancellationRequested();
+            var cleaned = Regex.Replace(text.Replace("\\n", "\n").Replace("\\r", ""), @"<br\s*/?>", "\n", RegexOptions.IgnoreCase);
+            foreach (var line in cleaned.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
             {
-                bool hasMod = Regex.IsMatch(r.key, @"^(Ctrl|Alt|Shift)\+");
-                var valMatch = Regex.Match(r.key, @"(?:Num |F)([\d+*./-]+)$");
-                var val = valMatch.Success ? valMatch.Groups[1].Value : "";
-                var order = numOrder.GetValueOrDefault(val, val.PadLeft(4, '0'));
-                var prefix = Regex.Replace(r.key, @"[\d+*./-]+$", "");
-                return $"{ (hasMod ? 1 : 0) }|{prefix}|{order}";
-            })
-            .ToList();
-
-        var result = new List<CheatOption>();
-        foreach (var r in sorted)
-        {
-            string? modifier = null;
-            string keyName;
-            var plusIdx = r.key.IndexOf('+');
-            if (plusIdx > 0)
-            {
-                var possibleMod = r.key[..plusIdx];
-                if (possibleMod is "Ctrl" or "Alt" or "Shift")
+                var match = Regex.Match(line.Trim(), @"^(?<mod>(?:Ctrl|Alt|Shift)\+)?(?<type>数字键|Num(?:pad)?|F)\s*(?<num>[\d+*./-]+)\s*[-–—]\s*(?<desc>.+)$", RegexOptions.IgnoreCase);
+                if (!match.Success) continue;
+                var mod = string.Join('+', match.Groups["mod"].Value.TrimEnd('+')
+                    .Split('+', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(part => part.Equals("ctrl", StringComparison.OrdinalIgnoreCase) ? "Ctrl"
+                        : part.Equals("alt", StringComparison.OrdinalIgnoreCase) ? "Alt" : "Shift"));
+                var type = match.Groups["type"].Value.Equals("F", StringComparison.OrdinalIgnoreCase) ? "F" : "Num ";
+                var key = type + match.Groups["num"].Value;
+                var fullKey = string.IsNullOrEmpty(mod) ? key : mod + "+" + key;
+                var description = WebUtility.HtmlDecode(Regex.Replace(match.Groups["desc"].Value, "<[^>]+>", ""));
+                description = Regex.Replace(description, @"\s+--\S+.*$", "").Trim();
+                if (string.IsNullOrWhiteSpace(description)) continue;
+                if (!byKey.TryGetValue(fullKey, out var option))
+                    byKey[fullKey] = option = new CheatOption { Modifiers = mod, KeyName = key, Description = description };
+                if (HasChinese(description))
                 {
-                    modifier = possibleMod;
-                    keyName = r.key[(plusIdx + 1)..];
+                    if (string.IsNullOrEmpty(option.ChineseDescription)) option.ChineseDescription = description;
                 }
-                else
-                {
-                    keyName = r.key;
-                }
+                else if (string.IsNullOrEmpty(option.EnglishDescription)) option.EnglishDescription = description;
             }
-            else
-            {
-                keyName = r.key;
-            }
-
-            result.Add(new CheatOption
-            {
-                Modifiers = modifier ?? "",
-                KeyName = keyName,
-                Description = r.name
-            });
         }
-
-        return result;
+        // Pair by hotkey, retaining separate actions even when descriptions match.
+        return byKey.Values.OrderBy(o => string.IsNullOrEmpty(o.Modifiers) ? 0 : 1)
+            .ThenBy(o => o.Modifiers, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(o => o.KeyName.StartsWith("F", StringComparison.OrdinalIgnoreCase) ? 1 : 0)
+            .ThenBy(o => KeyOrder(o.KeyName)).ToList();
     }
 
-    private static bool HasCjk(string text)
+    private static int KeyOrder(string key)
     {
-        return text.Any(c =>
-        {
-            int cp = (int)c;
-            return (cp >= 0x4E00 && cp <= 0x9FFF) || (cp >= 0x3400 && cp <= 0x4DBF);
-        });
+        var value = key.StartsWith("Num ", StringComparison.OrdinalIgnoreCase) ? key[4..] : key[1..];
+        return int.TryParse(value, out var number) ? number == 0 ? 10 : number : value.Length == 1 ? 100 + value[0] : 999;
     }
+
+    public static bool HasChinese(string? text) => text?.Any(c => c is >= '\u3400' and <= '\u9fff') == true;
 }

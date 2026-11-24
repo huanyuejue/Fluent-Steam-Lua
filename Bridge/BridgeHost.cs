@@ -12,6 +12,7 @@ using System.Windows;
 using System.Windows.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using SteamLuaManager.Services;
+using SteamLuaManager;
 
 namespace FluentLuaBridge;
 
@@ -54,7 +55,7 @@ internal sealed class BridgeHost : IDisposable
         }
 
         _acceptLoop = Task.Run(() => AcceptLoopAsync(_cts.Token));
-        BridgeLog.Write($"桥接服务已启动，监听 127.0.0.1:{BridgeConstants.Port}");
+        BridgeLog.Write(L.Get("Bridge_LogListening", BridgeConstants.Port));
         return Task.FromResult(true);
     }
 
@@ -132,10 +133,12 @@ internal sealed class BridgeHost : IDisposable
         switch (path)
         {
             case "/api/health":
+                BridgeLocalization.Refresh();
                 return (200, JsonSerializer.Serialize(
-                    new { ok = true, version = BridgeInfo.Version }, BridgeJson.Options));
+                    new { ok = true, version = BridgeInfo.Version, language = BridgeLocalization.Language }, BridgeJson.Options));
 
             case "/api/import":
+                BridgeLocalization.Refresh();
                 return await HandleImportAsync(request);
 
             default:
@@ -167,7 +170,7 @@ internal sealed class BridgeHost : IDisposable
 
         if (req == null || req.AppId <= 0)
         {
-            BridgeLog.Write($"收到非法入库请求，原始正文: {request.Body}");
+            BridgeLog.Write(L.Get("Bridge_LogInvalidRequest", request.Body));
             return Task.FromResult((400, JsonSerializer.Serialize(
                 new { ok = false, error = "invalid_appid" }, BridgeJson.Options)));
         }
@@ -182,7 +185,12 @@ internal sealed class BridgeHost : IDisposable
             }
         }
 
-        var job = new ImportJob(req.AppId, req.Name ?? string.Empty);
+        // A Store page can use a different language from the app. Keep its name
+        // only when the caller identifies it as matching the selected language.
+        var pageLanguage = req.NameLanguage?.Split('-')[0].ToLowerInvariant();
+        var pageName = pageLanguage == BridgeLocalization.Language
+            ? BridgeGameNameResolver.Validate(req.Name, BridgeLocalization.Language) : null;
+        var job = new ImportJob(req.AppId, pageName ?? string.Empty);
         _jobs[job.Id] = job;
 
         // 窗口属于 UI 线程，这里从网络线程切过去创建
@@ -195,7 +203,7 @@ internal sealed class BridgeHost : IDisposable
 
         dispatcher.Invoke(() =>
         {
-            var win = new ImportProgressWindow(job);
+            var win = new ImportProgressWindow(job, _services!.GetRequiredService<BridgeGameNameResolver>());
             // 窗口关闭即释放任务：常驻进程要连续接收多次入库，
             // 旧任务连同步骤集合必须及时脱钩，否则内存会随次数持续上涨
             win.Closed += (_, _) => EvictJob(job.Id);
@@ -228,10 +236,10 @@ internal sealed class BridgeHost : IDisposable
         }
         catch (Exception ex)
         {
-            BridgeLog.Write("释放密钥缓存失败: " + ex.Message);
+            BridgeLog.Write(L.Get("Bridge_LogCacheReleaseFailed", ex.Message));
         }
 
-        MemoryTrimmer.Trim("窗口关闭");
+        MemoryTrimmer.Trim(L.Get("Bridge_LogWindowClosed"));
 
         // 兜底：异常情况下窗口没关（比如进程假死），仍然限制留存数量
         if (_jobs.Count > MaxRetainedJobs)
@@ -318,6 +326,7 @@ internal sealed class ImportRequest
 {
     public int AppId { get; set; }
     public string? Name { get; set; }
+    public string? NameLanguage { get; set; }
 }
 
 internal static class BridgeInfo
@@ -341,7 +350,7 @@ internal static class BridgeDiagnostics
     public static void ReportStartupFailure(Exception ex)
     {
         var detail = $"[{ex.GetType().FullName}] {ex.Message}";
-        var message = $"桥接服务启动失败：端口 {BridgeConstants.Port} 可能已被占用。\n{detail}";
+        var message = L.Get("Bridge_StartupFailure", BridgeConstants.Port, detail);
         try
         {
             MessageBox.Show(message, "Fluent Steam Lua", MessageBoxButton.OK, MessageBoxImage.Error);

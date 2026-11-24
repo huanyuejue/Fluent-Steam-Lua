@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "Fluent Steam Lua 一键入库",
+  "name": "__MSG_extensionName__",
   "version": "1.0.0",
-  "description": "在 Steam 商店游戏页面直接生成 Lua 入库文件，需要配合 FluentLuaBridge 常驻服务使用。",
+  "description": "__MSG_extensionDescription__",
+  "default_locale": "en",
   "minimum_chrome_version": "102",
   "permissions": [
     "storage"
